@@ -21,7 +21,39 @@ import {
 } from "./app/render.ts";
 import { parseRoute, type Route } from "./app/router.ts";
 
-const root = document.querySelector("#app");
+type InboxBadgeElement = Pick<HTMLElement, "hidden" | "textContent">;
+
+export type InboxBadgeRefreshOptions = {
+  fetchUnreadCount: () => Promise<number>;
+  queryBadge: () => InboxBadgeElement | null;
+  writeUnreadCount: (count: number) => void;
+  logError?: (message: string) => void;
+};
+
+function applyInboxBadgeCount(badge: InboxBadgeElement, count: number): void {
+  badge.textContent = count > 0 ? String(count) : "";
+  badge.hidden = count === 0;
+}
+
+export async function refreshInboxBadgeState({
+  fetchUnreadCount,
+  queryBadge,
+  writeUnreadCount,
+  logError,
+}: InboxBadgeRefreshOptions): Promise<void> {
+  try {
+    const count = await fetchUnreadCount();
+    writeUnreadCount(count);
+    const badge = queryBadge();
+    if (badge) {
+      applyInboxBadgeCount(badge, count);
+    }
+  } catch (error) {
+    logError?.(`Inbox unread count failed to load: ${messageFor(error)}`);
+  }
+}
+
+const root = typeof document === "undefined" ? null : document.querySelector("#app");
 let navCollapsed = false;
 let paletteQuery = "";
 let paletteActiveIndex = 0;
@@ -107,6 +139,10 @@ async function paint(): Promise<void> {
     }
 
     renderShell(module.render(data));
+    await refreshInboxBadge();
+    if (sequence !== paintSequence) {
+      return;
+    }
     bindPage(module, data, sequence);
     void refreshHealth();
 
@@ -313,19 +349,17 @@ function activatePaletteSelection(): void {
 }
 
 async function refreshInboxBadge(): Promise<void> {
-  const badge = root?.querySelector<HTMLElement>("[data-inbox-badge]");
-  if (!badge) {
-    return;
-  }
-
-  try {
-    const payload = await getJson("/api/inbox/unread-count", inboxUnreadCountSchema);
-    inboxUnreadCount = payload.count;
-    badge.textContent = payload.count > 0 ? String(payload.count) : "";
-    badge.hidden = payload.count === 0;
-  } catch (error) {
-    console.error(`Inbox unread count failed to load: ${messageFor(error)}`);
-  }
+  await refreshInboxBadgeState({
+    fetchUnreadCount: async () => {
+      const payload = await getJson("/api/inbox/unread-count", inboxUnreadCountSchema);
+      return payload.count;
+    },
+    queryBadge: () => root?.querySelector<HTMLElement>("[data-inbox-badge]") ?? null,
+    writeUnreadCount: (count) => {
+      inboxUnreadCount = count;
+    },
+    logError: (message) => console.error(message),
+  });
 }
 
 async function refreshHealth(): Promise<void> {
@@ -350,43 +384,45 @@ async function refreshHealth(): Promise<void> {
   }
 }
 
-window.addEventListener("popstate", () => {
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => {
+    void paint();
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      setPalette(!paletteIsOpen());
+      return;
+    }
+
+    if (!paletteIsOpen()) {
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setPalette(false);
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      movePaletteSelection(1);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      movePaletteSelection(-1);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      activatePaletteSelection();
+    }
+  });
+
   void paint();
-});
-
-window.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-    event.preventDefault();
-    setPalette(!paletteIsOpen());
-    return;
-  }
-
-  if (!paletteIsOpen()) {
-    return;
-  }
-
-  if (event.key === "Escape") {
-    event.preventDefault();
-    setPalette(false);
-    return;
-  }
-
-  if (event.key === "ArrowDown") {
-    event.preventDefault();
-    movePaletteSelection(1);
-    return;
-  }
-
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    movePaletteSelection(-1);
-    return;
-  }
-
-  if (event.key === "Enter") {
-    event.preventDefault();
-    activatePaletteSelection();
-  }
-});
-
-void paint();
+}
