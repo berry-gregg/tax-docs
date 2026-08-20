@@ -12,4 +12,7 @@ export const config = {
   mongodbUri: readEnv("MONGODB_URI"),
   mongodbDbName: readEnv("MONGODB_DB") ?? DEFAULT_MONGODB_DB,
   isDev: (readEnv("NODE_ENV") ?? "development") === "development",
+  openrouterApiKey: readEnv("OPENROUTER_API_KEY"),
+  openrouterModel: readEnv("OPENROUTER_MODEL") ?? "google/gemini-3.7-flash",
+  uploadsDir: readEnv("UPLOADS_DIR") ?? "data/uploads",
 } as const;
