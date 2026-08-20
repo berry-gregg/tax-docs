@@ -198,10 +198,11 @@ function renderDocumentsTable(detail: EngagementDetail, documentTypes: DocumentT
   const rows = detail.documents.map((document) => {
     const documentTypeName = nameForDocument(document, typeById);
     const confidence = confidenceForDocument(document);
-    return `<tr>
-      <td><a href="/engagements/${encodeURIComponent(detail.engagement.id)}/review/${encodeURIComponent(
-        document.id,
-      )}" data-nav-link>${escapeHtml(document.filename)}</a>${renderFailure(document)}</td>
+    const reviewHref = `/engagements/${encodeURIComponent(detail.engagement.id)}/review/${encodeURIComponent(
+      document.id,
+    )}`;
+    return `<tr data-href="${escapeHtml(reviewHref)}" tabindex="0">
+      <td><a href="${escapeHtml(reviewHref)}" data-nav-link>${escapeHtml(document.filename)}</a>${renderFailure(document)}</td>
       <td>${escapeHtml(documentTypeName)}</td>
       <td>${pipelineChip(document.pipelineStatus)}</td>
       <td>${confidence}</td>
@@ -257,6 +258,32 @@ function renderActivity(detail: EngagementDetail, now: Date): string {
   </div>`;
 }
 
+function bindTableRows(root: HTMLElement, repaint: () => void): void {
+  root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("a,button,input,label")) {
+        return;
+      }
+
+      const href = row.getAttribute("data-href");
+      if (!href) {
+        return;
+      }
+
+      window.history.pushState({}, "", href);
+      repaint();
+    });
+
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        row.click();
+      }
+    });
+  });
+}
+
 export const engagementPage: PageModule<EngagementWorkspaceData> = {
   async load(route) {
     const engagementId = route.page === "engagement" ? route.id : "";
@@ -274,6 +301,8 @@ export const engagementPage: PageModule<EngagementWorkspaceData> = {
   },
   render: renderEngagementWorkspace,
   bind(root, data, repaint) {
+    bindTableRows(root, repaint);
+
     root.querySelectorAll<HTMLElement>("[data-dropzone]").forEach((dropzone) => {
       const input = dropzone.querySelector<HTMLInputElement>("[data-document-upload]");
       input?.addEventListener("change", () => {

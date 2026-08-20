@@ -152,7 +152,8 @@ function bindSettings(root: HTMLElement, data: SettingsData, repaint: () => void
 
   root.querySelectorAll<HTMLElement>("[data-document-type-row]").forEach((row) => {
     row.addEventListener("click", (event) => {
-      if (event.target instanceof HTMLInputElement) {
+      const target = event.target as Element | null;
+      if (target?.closest(".toggle-field")) {
         return;
       }
 

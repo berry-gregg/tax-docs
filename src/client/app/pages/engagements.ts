@@ -15,6 +15,7 @@ import {
 } from "../render.ts";
 import {
   bindNewEngagementModal,
+  clearNewEngagementDraft,
   initialNewEngagementState,
   loadNewEngagementState,
   renderNewEngagementModal,
@@ -97,11 +98,13 @@ function stageChip(status: EngagementListRow["status"]): string {
   return `<span class="chip chip-${stageTones[status]}">${escapeHtml(stageLabels[status])}</span>`;
 }
 
-function modalRequested(): { show: boolean; clientId?: string } {
+function modalRequested(): { show: boolean; clientId?: string; filingType?: "1120-S" | "1065" } {
   const search = globalThis.location?.search ?? "";
   const params = new URLSearchParams(search);
   const clientId = params.get("client") ?? undefined;
-  return { show: params.get("new") === "1", clientId };
+  const filingTypeParam = params.get("filingType");
+  const filingType = filingTypeParam === "1065" ? "1065" : filingTypeParam === "1120-S" ? "1120-S" : undefined;
+  return { show: params.get("new") === "1", clientId, filingType };
 }
 
 export const engagementsPage: PageModule<EngagementsData> = {
@@ -110,7 +113,11 @@ export const engagementsPage: PageModule<EngagementsData> = {
       getJson("/api/engagements", engagementListResponseSchema),
       (async () => {
         const requested = modalRequested();
-        return requested.show ? loadNewEngagementState(requested.clientId) : undefined;
+        if (!requested.show) {
+          clearNewEngagementDraft();
+          return undefined;
+        }
+        return loadNewEngagementState(requested.clientId, requested.filingType ?? "1120-S");
       })(),
     ]);
     return {

@@ -80,6 +80,21 @@ describe("schema builder", () => {
 
     expect(row.regexIssue.textContent).toContain("must compile");
   });
+
+  test("inactive draft stays inactive after builder save", () => {
+    const root = makeFakeSubmitRoot("false");
+    const saved: CreateDocumentTypeInput[] = [];
+    bindSchemaBuilder(root as unknown as HTMLElement, {
+      onSave(input) {
+        saved.push(input);
+      },
+      onClose() {},
+    });
+
+    root.form.dispatch("submit");
+
+    expect(saved[0]?.active).toBe(false);
+  });
 });
 
 type Listener = (event: { target: FakeElement; preventDefault(): void }) => void;
@@ -162,6 +177,64 @@ function makeFakeRoot(row: ReturnType<typeof makeFakeRow>) {
     },
     querySelector() {
       return null;
+    },
+    addEventListener() {},
+  };
+}
+
+function makeFakeSubmitRoot(active: "true" | "false") {
+  const form = new FakeElement("[data-schema-form]");
+  const name = new FakeElement('[data-schema-input="name"]');
+  const description = new FakeElement('[data-schema-input="description"]');
+  const activeInput = new FakeElement('[data-schema-input="active"]');
+  const row = new FakeElement("[data-field-row]");
+  const key = new FakeElement('[data-field-input="key"]');
+  const label = new FakeElement('[data-field-input="label"]');
+  const metadata = new FakeElement('[data-field-input="metadataType"]');
+  const dataType = new FakeElement('[data-field-input="dataType"]');
+  const required = new FakeElement('[data-field-input="required"]');
+  const regex = new FakeElement('[data-field-input="regex"]');
+  const fieldDescription = new FakeElement('[data-field-input="description"]');
+
+  name.value = "Inactive schedule";
+  description.value = "A disabled but editable schema.";
+  activeInput.value = active;
+  key.value = "state_code";
+  label.value = "State code";
+  metadata.value = "identifier";
+  dataType.value = "string";
+  required.checked = true;
+  fieldDescription.value = "Two-letter state abbreviation.";
+  row.children = [key, label, metadata, dataType, required, regex, fieldDescription];
+
+  return {
+    form,
+    querySelector(selector: string) {
+      if (selector === "[data-schema-form]") {
+        return form;
+      }
+      if (selector === '[data-schema-input="name"]') {
+        return name;
+      }
+      if (selector === '[data-schema-input="description"]') {
+        return description;
+      }
+      if (selector === '[data-schema-input="active"]') {
+        return activeInput;
+      }
+      return null;
+    },
+    querySelectorAll(selector: string) {
+      if (selector === "[data-field-row]") {
+        return [row];
+      }
+      if (selector === '[data-field-input="metadataType"]') {
+        return [metadata];
+      }
+      if (selector === '[data-field-input="regex"]') {
+        return [regex];
+      }
+      return [];
     },
     addEventListener() {},
   };

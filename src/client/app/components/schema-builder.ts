@@ -38,6 +38,7 @@ export function renderSchemaBuilder(draft: CreateDocumentTypeInput | null): stri
 
   return `<aside class="side-panel" aria-label="Document type schema builder">
     <form class="schema-builder" data-schema-form novalidate>
+      <input type="hidden" name="active" data-schema-input="active" value="${input.active ? "true" : "false"}" />
       <div class="side-panel-head">
         <div>
           <p class="eyebrow">Document type</p>
@@ -233,13 +234,17 @@ function readInput(root: ParentNode): unknown {
   return {
     name: readSchemaValue(root, "name"),
     description: readSchemaValue(root, "description"),
-    active: true,
+    active: readActive(root),
     fields: Array.from(root.querySelectorAll<HTMLElement>("[data-field-row]")).map(readField),
   };
 }
 
 function readSchemaValue(root: ParentNode, name: "name" | "description"): string {
   return root.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-schema-input="${name}"]`)?.value.trim() ?? "";
+}
+
+function readActive(root: ParentNode): boolean {
+  return root.querySelector<HTMLInputElement>('[data-schema-input="active"]')?.value !== "false";
 }
 
 function readField(row: HTMLElement): unknown {

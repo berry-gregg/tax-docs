@@ -71,6 +71,16 @@ const createEngagementWithItemsInputSchema = createEngagementInputSchema.extend(
   items: z.array(createRequestItemInputSchema),
 });
 
+let persistedDraft: NewEngagementModalState | undefined;
+
+export function rememberNewEngagementDraft(state: NewEngagementModalState): void {
+  persistedDraft = state;
+}
+
+export function clearNewEngagementDraft(): void {
+  persistedDraft = undefined;
+}
+
 function emptyItem(documentTypes: DocumentTypeOption[]): ChecklistItemDraft {
   return {
     title: "",
@@ -344,38 +354,60 @@ export function bindNewEngagementModal(
   let currentState = opts.state;
   const setState = (next: NewEngagementModalState) => {
     currentState = next;
+    rememberNewEngagementDraft(next);
     opts.setState(next);
   };
+  const renderCurrent = () => {
+    const currentModal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
+    if (currentModal) {
+      currentModal.outerHTML = renderNewEngagementModal(currentState);
+    }
+  };
 
-  modal.addEventListener("click", (event) => {
+  root.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
 
     if (target.matches("[data-new-engagement-next]")) {
       const form = target.closest("form");
       if (!form) return;
-      setState({ ...stateFromStepOne(currentState, new FormData(form)), step: 2 });
-      opts.repaint();
+      const next = stateFromStepOne(currentState, new FormData(form));
+      void loadTemplateItemsForFilingType(next.filingType)
+        .then((items) => {
+          setState({ ...next, step: 2, items });
+          writeModalQuery(next.filingType);
+          renderCurrent();
+        })
+        .catch((error: unknown) => {
+          setState({ ...next, error: error instanceof Error ? error.message : String(error) });
+          renderCurrent();
+        });
     }
 
     if (target.matches("[data-new-engagement-back]")) {
       setState({ ...currentState, step: 1 });
-      opts.repaint();
+      renderCurrent();
     }
 
     if (target.matches("[data-add-request-item]")) {
-      setState(addItem(stateFromStepTwo(currentState, modal)));
-      opts.repaint();
+      const currentModal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
+      if (!currentModal) return;
+      setState(addItem(stateFromStepTwo(currentState, currentModal)));
+      renderCurrent();
     }
 
     const removeIndex = target.getAttribute("data-remove-request-item");
     if (removeIndex !== null) {
-      setState(removeItem(stateFromStepTwo(currentState, modal), Number(removeIndex)));
-      opts.repaint();
+      const currentModal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
+      if (!currentModal) return;
+      setState(removeItem(stateFromStepTwo(currentState, currentModal), Number(removeIndex)));
+      renderCurrent();
     }
 
     if (target.matches("[data-create-engagement]")) {
-      void createEngagementFromState(stateFromStepTwo(currentState, modal))
+      const currentModal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
+      if (!currentModal) return;
+      void createEngagementFromState(stateFromStepTwo(currentState, currentModal))
         .then((engagement) => {
           setState({
             ...currentState,
@@ -383,14 +415,14 @@ export function bindNewEngagementModal(
             engagementId: engagement.id,
             portalToken: engagement.portalToken,
           });
-          opts.repaint();
+          renderCurrent();
         })
         .catch((error: unknown) => {
           setState({
             ...currentState,
             error: error instanceof Error ? error.message : String(error),
           });
-          opts.repaint();
+          renderCurrent();
         });
     }
 
@@ -399,6 +431,18 @@ export function bindNewEngagementModal(
       void navigator.clipboard?.writeText(new URL(portalHref, window.location.origin).toString());
     }
   });
+}
+
+function writeModalQuery(filingType: FilingType): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("new") !== "1") {
+    return;
+  }
+  params.set("filingType", filingType);
+  window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
 }
 
 async function createEngagementFromState(state: NewEngagementModalState): Promise<Engagement> {
@@ -418,17 +462,34 @@ async function createEngagementFromState(state: NewEngagementModalState): Promis
   return created.engagement;
 }
 
-export async function loadNewEngagementState(selectedClientId?: string): Promise<NewEngagementModalState> {
-  const [clients, documentTypes, templates] = await Promise.all([
+export async function loadTemplateItemsForFilingType(
+  filingType: FilingType,
+): Promise<ChecklistItemDraft[]> {
+  const templates = await getJson(
+    `/api/request-templates?filingType=${encodeURIComponent(filingType)}`,
+    requestTemplatesResponseSchema,
+  );
+  return templates.templates[0]?.items.map((item) => ({ ...item })) ?? [];
+}
+
+export async function loadNewEngagementState(
+  selectedClientId?: string,
+  filingType: FilingType = "1120-S",
+): Promise<NewEngagementModalState> {
+  if (persistedDraft) {
+    return persistedDraft;
+  }
+
+  const [clients, documentTypes, items] = await Promise.all([
     getJson("/api/clients", clientListResponseSchema),
     getJson("/api/document-types", documentTypesResponseSchema),
-    getJson("/api/request-templates?filingType=1120-S", requestTemplatesResponseSchema),
+    loadTemplateItemsForFilingType(filingType),
   ]);
 
-  return initialNewEngagementState({
+  const state = initialNewEngagementState({
     clients: clients.clients,
     documentTypes: documentTypes.documentTypes,
-    template: templates.templates[0],
     selectedClientId,
   });
+  return { ...state, filingType, items };
 }

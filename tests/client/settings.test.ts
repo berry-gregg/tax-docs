@@ -101,4 +101,95 @@ describe("settings page", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test("clicking the active label does not open the schema builder", () => {
+    const originalInput = globalThis.HTMLInputElement;
+    globalThis.HTMLInputElement = FakeSettingsInput as unknown as typeof HTMLInputElement;
+    const root = makeFakeSettingsRoot();
+
+    try {
+      settingsPage.bind?.(root as unknown as HTMLElement, data(), () => {});
+      root.row.dispatch("click", root.statusText);
+
+      expect(root.slot.innerHTML).toBe("");
+    } finally {
+      globalThis.HTMLInputElement = originalInput;
+    }
+  });
 });
+
+type SettingsListener = (event: {
+  target: FakeSettingsElement;
+  key?: string;
+  preventDefault(): void;
+}) => void;
+
+class FakeSettingsElement {
+  dataset: Record<string, string | undefined> = {};
+  innerHTML = "";
+  parent: FakeSettingsElement | null = null;
+  private readonly listeners = new Map<string, SettingsListener[]>();
+
+  constructor(readonly selector: string) {}
+
+  addEventListener(type: string, listener: SettingsListener): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  dispatch(type: string, target: FakeSettingsElement, key?: string): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener({ target, key, preventDefault() {} });
+    }
+  }
+
+  closest(selector: string): FakeSettingsElement | null {
+    if (selector === ".toggle-field" && this.parent?.selector === ".toggle-field") {
+      return this.parent;
+    }
+    return null;
+  }
+
+  querySelector(): FakeSettingsElement | null {
+    return null;
+  }
+
+  querySelectorAll(): FakeSettingsElement[] {
+    return [];
+  }
+}
+
+class FakeSettingsInput extends FakeSettingsElement {
+  checked = false;
+}
+
+function makeFakeSettingsRoot() {
+  const row = new FakeSettingsElement("[data-document-type-row]");
+  row.dataset.documentTypeRow = "dt-1";
+  const toggle = new FakeSettingsInput("[data-document-type-active]");
+  toggle.dataset.documentTypeActive = "dt-1";
+  const toggleLabel = new FakeSettingsElement(".toggle-field");
+  const statusText = new FakeSettingsElement("span");
+  statusText.parent = toggleLabel;
+  const slot = new FakeSettingsElement("[data-schema-panel-slot]");
+
+  return {
+    row,
+    slot,
+    statusText,
+    querySelector(selector: string) {
+      if (selector === "[data-schema-panel-slot]") {
+        return slot;
+      }
+      return null;
+    },
+    querySelectorAll(selector: string) {
+      if (selector === "[data-document-type-active]") {
+        return [toggle];
+      }
+      if (selector === "[data-document-type-row]") {
+        return [row];
+      }
+      return [];
+    },
+  };
+}

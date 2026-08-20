@@ -210,6 +210,13 @@ describe("engagement workspace", () => {
     expect(html).toContain("Retry");
   });
 
+  test("makes the whole document row navigable to review", () => {
+    const html = renderEngagementWorkspace(data());
+
+    expect(html).toContain('data-href="/engagements/eng-1/review/doc-trusted"');
+    expect(html).toContain('tabindex="0"');
+  });
+
   test("includes the CPA upload dropzone bound to the engagement", () => {
     const html = renderEngagementWorkspace(data());
 
