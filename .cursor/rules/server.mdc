@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Server (Hono + Bun)
 
-The API is a Hono app on Bun. `createApp()` in `src/server/app.ts` is the factory — tests call it with `app.request()`. Do not add Express or Fastify.
+The API is a Hono app on Bun. `createApp(opts?: { runner?: PipelineRunner })` in `src/server/app.ts` is the factory — tests call it with `app.request()`. Inject a recording `runner` in tests; omit it to use `noopRunner`. Do not add Express or Fastify.
 
 ## Routes
 
