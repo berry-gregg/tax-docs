@@ -58,6 +58,8 @@ describe("settings page", () => {
     expect(html).toContain('class="chip chip-processing">seed</span>');
     expect(html).toContain('data-document-type-active="dt-1"');
     expect(html).toContain("New document type");
+    expect(html).toContain("data-settings-error");
+    expect(html).not.toContain(">Edit</button>");
   });
 
   test("renders cpa-created definitions and escaped descriptions", () => {
@@ -139,6 +141,35 @@ describe("settings page", () => {
     }
   });
 
+  test("a failed Active toggle reverts and shows the ApiError inline", async () => {
+    const originalInput = globalThis.HTMLInputElement;
+    const originalFetch = globalThis.fetch;
+    globalThis.HTMLInputElement = FakeSettingsInput as unknown as typeof HTMLInputElement;
+    const root = makeFakeSettingsRoot();
+    root.toggle.checked = true;
+    const mockFetch: typeof fetch = Object.assign(
+      async () =>
+        new Response(JSON.stringify({ error: "Document type name is required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }),
+      { preconnect: originalFetch.preconnect },
+    );
+    globalThis.fetch = mockFetch;
+
+    try {
+      settingsPage.bind?.(root as unknown as HTMLElement, data(), () => {});
+      await root.toggle.dispatch("change", root.toggle);
+
+      expect(root.toggle.checked).toBe(false);
+      expect(root.error.hidden).toBe(false);
+      expect(root.error.textContent).toBe("Document type name is required");
+    } finally {
+      globalThis.HTMLInputElement = originalInput;
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("closing the schema builder allows a later open to mount a different draft", () => {
     const originalInput = globalThis.HTMLInputElement;
     globalThis.HTMLInputElement = FakeSettingsInput as unknown as typeof HTMLInputElement;
@@ -169,6 +200,8 @@ type SettingsListener = (event: {
 class FakeSettingsElement {
   dataset: Record<string, string | undefined> = {};
   innerHTML = "";
+  hidden = false;
+  textContent = "";
   parent: FakeSettingsElement | null = null;
   private readonly listeners = new Map<string, SettingsListener[]>();
 
@@ -178,10 +211,12 @@ class FakeSettingsElement {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
   }
 
-  dispatch(type: string, target: FakeSettingsElement, key?: string): void {
-    for (const listener of this.listeners.get(type) ?? []) {
-      listener({ target, key, preventDefault() {} });
-    }
+  dispatch(type: string, target: FakeSettingsElement, key?: string): Promise<void> {
+    return Promise.all(
+      (this.listeners.get(type) ?? []).map((listener) =>
+        Promise.resolve(listener({ target, key, preventDefault() {} })),
+      ),
+    ).then(() => undefined);
   }
 
   closest(selector: string): FakeSettingsElement | null {
@@ -217,18 +252,25 @@ function makeFakeSettingsRoot() {
   statusText.parent = toggleLabel;
   const slot = new FakeSettingsElement("[data-schema-panel-slot]");
   const newType = new FakeSettingsElement("[data-new-document-type]");
+  const error = new FakeSettingsElement("[data-settings-error]");
+  error.hidden = true;
 
   return {
     row,
     slot,
     statusText,
     newType,
+    toggle,
+    error,
     querySelector(selector: string) {
       if (selector === "[data-schema-panel-slot]") {
         return slot;
       }
       if (selector === "[data-new-document-type]") {
         return newType;
+      }
+      if (selector === "[data-settings-error]") {
+        return error;
       }
       return null;
     },

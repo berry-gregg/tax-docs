@@ -83,15 +83,15 @@ Collapsed: 60px column, labels/children/badges/search keys hidden, icons at 16px
 
 ## Page recipes
 
-Reuse the helpers in `render.ts` (`pageHeader`, `tabs`, `toolbar`, `dataTable`, `entityCell`, `renderDocumentRow`). Copying their markup into a new function is a fork.
+Reuse the helpers in `render.ts` (`pageHeader`, `tabs`, `dataTable`, `bindRowLinks`, `entityCell`, `renderDocumentRow`). Copying their markup into a new function is a fork.
 
 **Home** — scanning answer first. Time-of-day eyebrow (`greeting.ts`, never “Welcome back”). 28px/400 title with negative tracking stating the live queue count from `/api/metrics`. Wash card (`12px`, bone fill, no border) for the one-paragraph next step, with an honest empty variant when nothing is waiting. `.row-list` of dual-line rows (avatar, title, muted meta, pipeline chip) — the latest five documents, each deep-linking to its review page. `.ticker` product hairline band under them (transparent, `border-top` only — not the marketing inverted strip) for auto-processed / awaiting-review / straight-through. Right rail: stacked `.btn-block` (one primary, rest secondary) then `.rail-widget` links separated by hairline. No table on Home.
 
-**List** — this is Expenses/Accounting/People. Title + ash count on the left; optional secondary + **one** highlighter primary on the right when those actions are real. Do not emit a kebab, “Add filter”, or download until they do something. `toolbar()` is a no-op — list search is not shipped. Underline tabs (active = ink + 2px ink border; counts in ash). Table: ash 14px headers, dual-line primary cell (32px avatar + title + muted sub), hairline row rules, semantic status, “1–N of N” footer. Workspace stays full-bleed white — no card wrapping the table.
+**List** — this is Expenses/Accounting/People. Title + ash count on the left; optional secondary + **one** highlighter primary on the right when those actions are real. Do not emit a kebab, “Add filter”, toolbar, or download until they do something. List search is not shipped. Bind `[data-href]` rows with `bindRowLinks` (one helper beside `dataTable`). Underline tabs (active = ink + 2px ink border; counts in ash). Table: ash 14px headers, dual-line primary cell (32px avatar + title + muted sub), hairline row rules, semantic status, “1–N of N” footer. Workspace stays full-bleed white — no card wrapping the table.
 
 **Inbox** — header + `.row-list`. Skip tabs/table until the data needs filters.
 
-**Settings** — header, tabs, `.settings-block` max 720px, `.definition-grid` two-columns (dt ash, dd ink), secondary Edit. Health slots: `[data-api-status]` / `[data-db-status]`.
+**Settings** — header, tabs, `.settings-block` max 720px, `.definition-grid` two-columns (dt ash, dd ink). No Company-profile Edit control (there is no editor). Document-type writes surface `ApiError.message` on `[data-settings-error]` or `[data-schema-form-error]` and revert the Active toggle on failure. Health slots: `[data-api-status]` / `[data-db-status]`.
 
 **Review** — the split pane, analogous to Ramp's expense detail where the receipt sits beside the coded fields. `pageHeader` carries the filename with the document type as the ash count and a secondary link back to the engagement. `.review-split` is two equal columns: left is a sticky `.review-viewer` hairline frame around `<iframe src="/api/documents/:id/file">`, right is `.review-panel`. The panel leads with the type name, `pipelineChip`, classification confidence, and the reasoning line, then one `.review-field` per extracted field — label, `10px` ash `metadataType` caption, confidence badge from `formatConfidence` (success/warning/ash, never highlighter), value or a muted "Not found", a `.review-source` quote block, a warning chip when `regexPass === false`, and ghost Accept / Edit with an inline edit form. Validation warnings render through `.row-list` and stay advisory. `.review-foot` holds the one primary, disabled until `canTrust(fields)` — the same rule the trust endpoint enforces. Variant lanes replace the field list, never the split: `unclassified` offers the schema-builder side panel, `failed` and `rejected` show the stored cause with a rerun, in-pipeline states say so and let polling finish.
 
@@ -133,7 +133,7 @@ Favicon and sidebar brand: `design-system/gb-favicon.png`. Tab icon is linked fr
 | Path-only `Route` union | `?tab=` / `?new=1` are view state; putting them in the union makes every module re-parse | A query value changes which module loads |
 | Polling, not websockets | Pipeline progress is visible with one interval and no server push | Real-time volume outgrows `POLL_INTERVAL_MS` |
 | Palette index injected by the shell | Typing never fires a request; the shell fetches once on first open | Search needs server-side ranking |
-| No unbound list kebab / toolbar | Visible controls that do nothing are the loudest prototype signal; `toolbar()` stays empty until search is wired | A kebab, filter, download, or search is bound to a real action |
+| No unbound list kebab / toolbar | Visible controls that do nothing are the loudest prototype signal; do not emit a toolbar until search is wired | A kebab, filter, download, or search is bound to a real action |
 | Unmatched nav child: no punch-out | Falling back to index 0 punched "All" on `/documents?tab=trusted` | A child `href` equals `pathname + search` |
 
 ## Anti-patterns

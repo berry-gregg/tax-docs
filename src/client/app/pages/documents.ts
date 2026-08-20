@@ -6,6 +6,7 @@ import {
 import { getJson } from "../api.ts";
 import { formatRelativeTime } from "../format.ts";
 import {
+  bindRowLinks,
   dataTable,
   entityCell,
   escapeHtml,
@@ -13,7 +14,6 @@ import {
   pageHeader,
   pipelineChip,
   tabs,
-  toolbar,
 } from "../render.ts";
 import type { PageModule } from "./registry.ts";
 
@@ -106,33 +106,11 @@ export function renderDocuments(data: DocumentsData): string {
         href: "/documents?tab=all",
       },
     ])}
-    ${toolbar("Search documents…")}
     ${dataTable(
       ["Document", "Date", "Engagement", "Status"],
       visible.map((row) => renderDocumentRow(row, data.now)),
       tableFooter(visible.length),
     )}`;
-}
-
-function bindTableRows(root: HTMLElement, repaint: () => void): void {
-  root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
-    row.addEventListener("click", () => {
-      const href = row.getAttribute("data-href");
-      if (!href) {
-        return;
-      }
-
-      window.history.pushState({}, "", href);
-      repaint();
-    });
-
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        row.click();
-      }
-    });
-  });
 }
 
 export const documentsPage: PageModule<DocumentsData> = {
@@ -144,7 +122,7 @@ export const documentsPage: PageModule<DocumentsData> = {
   },
   render: renderDocuments,
   bind(root, _data, repaint) {
-    bindTableRows(root, repaint);
+    bindRowLinks(root, repaint);
   },
   pollMs: POLL_INTERVAL_MS,
 };

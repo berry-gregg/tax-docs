@@ -7,6 +7,7 @@ import {
   type Client,
 } from "../../shared/schemas/client.ts";
 import { engagementSchema } from "../../shared/schemas/engagement.ts";
+import { zodIssueSummary } from "../../shared/zod-issue-summary.ts";
 import { connectDb } from "../db/client.ts";
 import {
   clientsCollection,
@@ -18,10 +19,6 @@ import {
 export const clientRoutes = new Hono();
 
 const updateClientInputSchema = createClientInputSchema.partial();
-
-function zodIssueSummary(error: z.ZodError): string {
-  return error.issues.map((issue) => issue.message).join("; ");
-}
 
 clientRoutes.get("/", async (c) => {
   const db = await connectDb();

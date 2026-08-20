@@ -10,12 +10,12 @@ import {
 import { ApiError, getJson, sendJson } from "../api.ts";
 import { entityTypeLabels, newClientFields } from "../components/new-client-fields.ts";
 import {
+  bindRowLinks,
   dataTable,
   entityCell,
   escapeHtml,
   initialsFor,
   pageHeader,
-  toolbar,
 } from "../render.ts";
 import type { PageModule } from "./registry.ts";
 
@@ -68,7 +68,6 @@ export function renderClients(data: ClientsData): string {
   return `${pageHeader("Clients", String(data.clients.length), [
     { href: "/clients?new=1", label: "New client", kind: "primary" },
   ])}
-    ${toolbar("Filter clients…")}
     ${dataTable(
       ["Name", "Entity", "Contact", "Location"],
       data.clients.map(renderClientRow),
@@ -88,27 +87,6 @@ function readClientForm(form: HTMLFormElement) {
     contactEmail: String(data.get("contactEmail") ?? ""),
     city: String(data.get("city") ?? ""),
     state: String(data.get("state") ?? ""),
-  });
-}
-
-function bindTableRows(root: HTMLElement, repaint: () => void): void {
-  root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
-    row.addEventListener("click", () => {
-      const href = row.getAttribute("data-href");
-      if (!href) {
-        return;
-      }
-
-      window.history.pushState({}, "", href);
-      repaint();
-    });
-
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        row.click();
-      }
-    });
   });
 }
 
@@ -163,7 +141,7 @@ export const clientsPage: PageModule<ClientsData> = {
   },
   render: renderClients,
   bind(root, _data, repaint) {
-    bindTableRows(root, repaint);
+    bindRowLinks(root, repaint);
     bindNewClientModal(root, repaint);
   },
 };

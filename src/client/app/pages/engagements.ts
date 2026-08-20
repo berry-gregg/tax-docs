@@ -5,13 +5,13 @@ import {
 } from "../../../shared/schemas/api.ts";
 import { getJson } from "../api.ts";
 import {
+  bindRowLinks,
   dataTable,
   emptyState,
   entityCell,
   escapeHtml,
   initialsFor,
   pageHeader,
-  toolbar,
 } from "../render.ts";
 import {
   bindNewEngagementModal,
@@ -57,7 +57,6 @@ export function renderEngagements(data: EngagementsData): string {
     ${pageHeader("Engagements", String(data.engagements.length), [
       { href: "/engagements?new=1", label: "New engagement", kind: "primary" },
     ])}
-    ${toolbar("Search engagements")}
     ${
       rows.length === 0
         ? emptyState("No engagements yet. Create one to request client documents.")
@@ -98,27 +97,6 @@ function stageChip(status: EngagementListRow["status"]): string {
   return `<span class="chip chip-${stageTones[status]}">${escapeHtml(stageLabels[status])}</span>`;
 }
 
-function bindTableRows(root: HTMLElement, repaint: () => void): void {
-  root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
-    row.addEventListener("click", () => {
-      const href = row.getAttribute("data-href");
-      if (!href) {
-        return;
-      }
-
-      window.history.pushState({}, "", href);
-      repaint();
-    });
-
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        row.click();
-      }
-    });
-  });
-}
-
 function modalRequested(): { show: boolean; clientId?: string; filingType?: "1120-S" | "1065" } {
   const search = globalThis.location?.search ?? "";
   const params = new URLSearchParams(search);
@@ -149,7 +127,7 @@ export const engagementsPage: PageModule<EngagementsData> = {
   },
   render: renderEngagements,
   bind(root, data, repaint) {
-    bindTableRows(root, repaint);
+    bindRowLinks(root, repaint);
     if (!data.newEngagement) return;
 
     let modalState = data.newEngagement;

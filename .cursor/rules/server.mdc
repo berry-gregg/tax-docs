@@ -12,7 +12,7 @@ The API is a Hono app on Bun. `createApp(opts?: { runner?: PipelineRunner; ai?: 
 
 - One module per resource under `src/server/routes/`. Register with `app.route("/api/...", routes)`.
 - Register static path segments before parameterized ones (`GET /unread-count` before `POST /:id/read`) so the static name is not captured as an id.
-- Parse JSON with Zod `safeParse`. Invalid body → `400` + `{ error: "..." }`. Do not hand a raw body to Mongo.
+- Parse JSON with Zod `safeParse`. Invalid body → `400` + `{ error: zodIssueSummary(...) }` from `src/shared/zod-issue-summary.ts`. Do not return a flat `"Invalid request body"`. Do not hand a raw body to Mongo.
 - Map driver docs through the shared schema before `c.json`.
 - Response and list-row shapes live in `src/shared/schemas/api.ts` and are parsed on the way out (`documentListResponseSchema`, `engagementListResponseSchema`, `engagementDetailSchema`, `inboxListResponseSchema`, `metricsSchema`, `portalStateSchema`). The client parses the same schemas, so a row gains a field in exactly one place. Do not declare a row shape inside a route module.
 - `app.notFound` stays JSON `404`. Do not leak stack traces to clients; log the cause server-side.

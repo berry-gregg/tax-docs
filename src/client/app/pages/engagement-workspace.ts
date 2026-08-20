@@ -14,6 +14,7 @@ import {
 import { getJson, sendJson, uploadFile } from "../api.ts";
 import { formatConfidence, formatRelativeTime } from "../format.ts";
 import {
+  bindRowLinks,
   dataTable,
   emptyState,
   escapeHtml,
@@ -275,32 +276,6 @@ function showError(root: HTMLElement, message: string): void {
   slot.hidden = false;
 }
 
-function bindTableRows(root: HTMLElement, repaint: () => void): void {
-  root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
-    row.addEventListener("click", (event) => {
-      const target = event.target;
-      if (target instanceof HTMLElement && target.closest("a,button,input,label")) {
-        return;
-      }
-
-      const href = row.getAttribute("data-href");
-      if (!href) {
-        return;
-      }
-
-      window.history.pushState({}, "", href);
-      repaint();
-    });
-
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        row.click();
-      }
-    });
-  });
-}
-
 export const engagementPage: PageModule<EngagementWorkspaceData> = {
   async load(route) {
     const engagementId = route.page === "engagement" ? route.id : "";
@@ -318,7 +293,7 @@ export const engagementPage: PageModule<EngagementWorkspaceData> = {
   },
   render: renderEngagementWorkspace,
   bind(root, data, repaint) {
-    bindTableRows(root, repaint);
+    bindRowLinks(root, repaint);
 
     const startUpload = (file: File) => {
       void uploadFile("/api/documents", file, { engagementId: data.detail.engagement.id }, documentResponseSchema)

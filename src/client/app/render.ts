@@ -185,11 +185,6 @@ export function tabs(items: { label: string; count?: number; current: boolean; h
   </div>`;
 }
 
-/** Callers may keep invoking this; it stays empty until a real bound control exists. */
-export function toolbar(_placeholder: string): string {
-  return "";
-}
-
 export function dataTable(headers: string[], rows: string[], footer: string): string {
   return `<div class="table-wrap">
     <table class="data-table">
@@ -204,6 +199,47 @@ export function dataTable(headers: string[], rows: string[], footer: string): st
       <span class="muted">${escapeHtml(footer)}</span>
     </div>
   </div>`;
+}
+
+function closestOf(value: EventTarget | null, selector: string): unknown {
+  if (typeof value !== "object" || value === null || !("closest" in value)) {
+    return null;
+  }
+
+  const closest = value.closest;
+  if (typeof closest !== "function") {
+    return null;
+  }
+
+  return closest.call(value, selector);
+}
+
+/** Click/Enter/Space on `[data-href]` rows. Nested a/button/input/label keep their own handlers. */
+export function bindRowLinks(root: HTMLElement, repaint: () => void): void {
+  root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      if (closestOf(event.target, "a,button,input,label")) {
+        return;
+      }
+
+      const href = row.getAttribute("data-href");
+      if (!href) {
+        return;
+      }
+
+      globalThis.history.pushState({}, "", href);
+      repaint();
+    });
+
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+
+      event.preventDefault();
+      row.click();
+    });
+  });
 }
 
 export function entityCell(initials: string, title: string, detail: string): string {

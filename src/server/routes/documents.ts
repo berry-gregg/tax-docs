@@ -18,6 +18,7 @@ import {
   documentTypeSchema,
 } from "../../shared/schemas/document-type.ts";
 import { engagementSchema } from "../../shared/schemas/engagement.ts";
+import { zodIssueSummary } from "../../shared/zod-issue-summary.ts";
 import { defaultDataTypeFor } from "../../shared/schemas/metadata.ts";
 import type { OpenRouterClient } from "../ai/openrouter.ts";
 import { connectDb } from "../db/client.ts";
@@ -48,10 +49,6 @@ const fieldActionSchema = z.discriminatedUnion("action", [
 type PipelineStatus = TaxDocument["pipelineStatus"];
 
 const RERUN_STATUSES = new Set<PipelineStatus>(["failed", "unclassified", "rejected"]);
-
-function zodIssueSummary(error: z.ZodError): string {
-  return error.issues.map((issue) => issue.message).join("; ");
-}
 
 function isPdfFile(file: File): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");

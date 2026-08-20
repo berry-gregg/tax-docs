@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { greetingFor } from "../../src/client/app/greeting.ts";
 import { navItems } from "../../src/client/app/nav.ts";
-import { pageHeader, renderApp, renderLoadError, renderPageSkeleton, toolbar } from "../../src/client/app/render.ts";
+import {
+  bindRowLinks,
+  pageHeader,
+  renderApp,
+  renderLoadError,
+  renderPageSkeleton,
+} from "../../src/client/app/render.ts";
 
 describe("home greeting", () => {
   test("uses time of day without a welcome-back line", () => {
@@ -188,11 +194,52 @@ describe("app shell chrome", () => {
     expect(html).not.toContain('aria-label="More actions"');
   });
 
-  test("toolbar does not emit inert Add filter or download chrome", () => {
-    const html = toolbar("Search documents…");
+  test("list chrome does not emit a toolbar or unbound filter controls", () => {
+    const html = pageHeader("Documents", "4", [
+      { href: "/documents", label: "Upload", kind: "primary" },
+    ]);
 
     expect(html).not.toContain("Add filter");
     expect(html).not.toContain('aria-label="Export"');
+    expect(html).not.toContain('class="toolbar"');
+  });
+});
+
+describe("bindRowLinks", () => {
+  test("activates data-href rows on click and Enter without stacking on interactive children", () => {
+    const pushed: string[] = [];
+    const previousHistory = Object.getOwnPropertyDescriptor(globalThis, "history");
+    Object.defineProperty(globalThis, "history", {
+      configurable: true,
+      value: {
+        pushState(_data: unknown, _unused: string, url?: string | URL | null) {
+          if (typeof url === "string") {
+            pushed.push(url);
+          }
+        },
+      },
+    });
+
+    try {
+      const root = makeFakeRowRoot();
+      let paints = 0;
+      bindRowLinks(root as unknown as HTMLElement, () => {
+        paints += 1;
+      });
+
+      root.row.dispatch("click", root.row);
+      root.row.dispatch("keydown", root.row, "Enter");
+      root.row.dispatch("click", root.button);
+
+      expect(pushed).toEqual(["/engagements/eng-1", "/engagements/eng-1"]);
+      expect(paints).toBe(2);
+    } finally {
+      if (previousHistory) {
+        Object.defineProperty(globalThis, "history", previousHistory);
+      } else {
+        Reflect.deleteProperty(globalThis, "history");
+      }
+    }
   });
 });
 
@@ -271,6 +318,61 @@ describe("shell.css page furniture", () => {
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });
+
+type RowListener = (event: {
+  target: FakeRowElement;
+  key?: string;
+  preventDefault(): void;
+}) => void;
+
+class FakeRowElement {
+  parent: FakeRowElement | null = null;
+  private readonly listeners = new Map<string, RowListener[]>();
+
+  constructor(
+    readonly selector: string,
+    readonly attributes: Record<string, string> = {},
+  ) {}
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
+  }
+
+  addEventListener(type: string, listener: RowListener): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  closest(selector: string): FakeRowElement | null {
+    if (selector === "a,button,input,label" && this.selector === "button") {
+      return this;
+    }
+    return this.parent?.closest(selector) ?? null;
+  }
+
+  click(): void {
+    this.dispatch("click", this);
+  }
+
+  dispatch(type: string, target: FakeRowElement, key?: string): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener({ target, key, preventDefault() {} });
+    }
+  }
+}
+
+function makeFakeRowRoot() {
+  const row = new FakeRowElement("tr", { "data-href": "/engagements/eng-1" });
+  const button = new FakeRowElement("button");
+  button.parent = row;
+
+  return {
+    row,
+    button,
+    querySelectorAll(selector: string) {
+      return selector === "[data-href]" ? [row] : [];
+    },
+  };
+}
 
 describe("favicon", () => {
   test("index.html points at the design-system GB mark", async () => {

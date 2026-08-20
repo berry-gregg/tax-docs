@@ -56,7 +56,37 @@ describe("document-types routes", () => {
     });
 
     expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).not.toBe("Invalid request body");
+    expect(body.error).toContain("at least");
 
+    await disconnectDb();
+  });
+
+  test("PATCH returns the Zod issue text instead of a flat invalid-body line", async () => {
+    await connectDb();
+    const app = createApp();
+
+    const createResponse = await app.request("/api/document-types", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(createPayload),
+    });
+    const { documentType } = await createResponse.json();
+
+    const response = await app.request(`/api/document-types/${documentType.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "" }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).not.toBe("Invalid request body");
+    expect(body.error).toContain("at least");
+
+    const db = await connectDb();
+    await documentTypesCollection(db).deleteMany({});
     await disconnectDb();
   });
 

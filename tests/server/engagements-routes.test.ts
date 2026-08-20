@@ -142,6 +142,34 @@ describe("engagement routes", () => {
     });
   });
 
+  test("does not claim a request was sent when the checklist is empty", async () => {
+    const app = createApp();
+
+    const createResponse = await app.request("/api/engagements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: client.id,
+        taxYear: 2026,
+        filingType: "1065",
+        items: [],
+      }),
+    });
+    const createBody = await createResponse.json();
+    expect(createResponse.status).toBe(201);
+
+    const detailResponse = await app.request(`/api/engagements/${createBody.engagement.id}`);
+    const detailBody = await detailResponse.json();
+
+    expect(detailBody.requestItems).toHaveLength(0);
+    expect(detailBody.activity[0]).toMatchObject({
+      action: "engagement-created",
+      detail: "Engagement created",
+    });
+    expect(detailBody.activity[0].detail).not.toContain("items requested");
+    expect(detailBody.activity[0].action).not.toBe("request-sent");
+  });
+
   test("lists engagement rows with client names, document counts, and open item counts", async () => {
     const app = createApp();
 

@@ -38,6 +38,7 @@ import {
   getLatestExportForEngagement,
 } from "./exports.ts";
 import { computeValidations } from "../validation/checks.ts";
+import { zodIssueSummary } from "../../shared/zod-issue-summary.ts";
 
 export const engagementRoutes = new Hono();
 
@@ -55,10 +56,6 @@ const updateRequestItemInputSchema = z.object({
   description: createRequestItemInputSchema.shape.description.optional(),
   required: createRequestItemInputSchema.shape.required.optional(),
 });
-
-function zodIssueSummary(error: z.ZodError): string {
-  return error.issues.map((issue) => issue.message).join("; ");
-}
 
 async function findEngagement(id: string) {
   const db = await connectDb();
@@ -165,8 +162,8 @@ engagementRoutes.post("/", async (c) => {
     id: randomUUID(),
     engagementId: engagement.id,
     actor: "cpa",
-    action: "request-sent",
-    detail: `${requestItems.length} items requested`,
+    action: requestItems.length > 0 ? "request-sent" : "engagement-created",
+    detail: requestItems.length > 0 ? `${requestItems.length} items requested` : "Engagement created",
     direction: "outbound",
     createdAt: now,
   });

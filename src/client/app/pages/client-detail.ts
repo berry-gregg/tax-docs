@@ -5,7 +5,7 @@ import {
   type Engagement,
 } from "../../../shared/schemas/engagement.ts";
 import { getJson } from "../api.ts";
-import { dataTable, escapeHtml, pageHeader } from "../render.ts";
+import { bindRowLinks, dataTable, escapeHtml, pageHeader } from "../render.ts";
 import type { Route } from "../router.ts";
 import type { PageModule } from "./registry.ts";
 
@@ -68,27 +68,6 @@ export function renderClientDetail(data: ClientDetailData): string {
     )}`;
 }
 
-function bindTableRows(root: HTMLElement, repaint: () => void): void {
-  root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
-    row.addEventListener("click", () => {
-      const href = row.getAttribute("data-href");
-      if (!href) {
-        return;
-      }
-
-      window.history.pushState({}, "", href);
-      repaint();
-    });
-
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        row.click();
-      }
-    });
-  });
-}
-
 export const clientDetailPage: PageModule<ClientDetailData> = {
   async load(route: Route) {
     if (route.page !== "client") {
@@ -99,6 +78,6 @@ export const clientDetailPage: PageModule<ClientDetailData> = {
   },
   render: renderClientDetail,
   bind(root, _data, repaint) {
-    bindTableRows(root, repaint);
+    bindRowLinks(root, repaint);
   },
 };

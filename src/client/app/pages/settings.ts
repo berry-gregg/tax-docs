@@ -66,7 +66,6 @@ export function renderSettings(data: SettingsData): string {
           <dd>Document collection and review</dd>
         </div>
       </dl>
-      <button class="btn-secondary" type="button">Edit</button>
     </section>
     <section class="settings-block" data-settings-panel="document-types" ${documentTypesCurrent ? "" : "hidden"}>
       <div class="settings-section-head">
@@ -76,6 +75,7 @@ export function renderSettings(data: SettingsData): string {
         </div>
         <button class="btn-primary" type="button" data-new-document-type>New document type</button>
       </div>
+      <p class="modal-error" data-settings-error hidden></p>
       ${
         data.documentTypes.length === 0
           ? emptyState("No document types yet. Create one before classifying custom client uploads.")
@@ -145,8 +145,14 @@ function bindSettings(root: HTMLElement, data: SettingsData, repaint: () => void
         return;
       }
       const body: UpdateDocumentTypeInput = { active: toggle.checked };
-      await sendJson("PATCH", `/api/document-types/${encodeURIComponent(id)}`, body, documentTypeResponseSchema);
-      repaint();
+      try {
+        await sendJson("PATCH", `/api/document-types/${encodeURIComponent(id)}`, body, documentTypeResponseSchema);
+        clearSettingsError(root);
+        repaint();
+      } catch (error) {
+        toggle.checked = !toggle.checked;
+        showSettingsError(root, error);
+      }
     });
   });
 
@@ -214,11 +220,43 @@ function openBuilder(
       slot.innerHTML = "";
     },
     onSave(input) {
-      void onSave(input).then(() => {
-        slot.innerHTML = "";
-      });
+      void onSave(input)
+        .then(() => {
+          slot.innerHTML = "";
+        })
+        .catch((error: unknown) => {
+          const formError = panel.querySelector<HTMLElement>("[data-schema-form-error]");
+          if (formError) {
+            formError.hidden = false;
+            formError.textContent = settingsErrorMessage(error);
+          }
+        });
     },
   });
+}
+
+function settingsErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function showSettingsError(root: ParentNode, error: unknown): void {
+  const slot = root.querySelector<HTMLElement>("[data-settings-error]");
+  if (!slot) {
+    return;
+  }
+
+  slot.hidden = false;
+  slot.textContent = settingsErrorMessage(error);
+}
+
+function clearSettingsError(root: ParentNode): void {
+  const slot = root.querySelector<HTMLElement>("[data-settings-error]");
+  if (!slot) {
+    return;
+  }
+
+  slot.hidden = true;
+  slot.textContent = "";
 }
 
 function toBuilderInput(documentType: DocumentType): CreateDocumentTypeInput {

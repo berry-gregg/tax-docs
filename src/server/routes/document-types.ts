@@ -6,6 +6,7 @@ import {
   updateDocumentTypeInputSchema,
   type DocumentType,
 } from "../../shared/schemas/document-type.ts";
+import { zodIssueSummary } from "../../shared/zod-issue-summary.ts";
 import { connectDb } from "../db/client.ts";
 import { documentTypesCollection, fromStored, toStored } from "../db/collections.ts";
 
@@ -28,7 +29,7 @@ documentTypeRoutes.post("/", async (c) => {
   const parsed = createDocumentTypeInputSchema.safeParse(body);
 
   if (!parsed.success) {
-    return c.json({ error: "Invalid request body" }, 400);
+    return c.json({ error: zodIssueSummary(parsed.error) }, 400);
   }
 
   const db = await connectDb();
@@ -67,7 +68,7 @@ documentTypeRoutes.patch("/:id", async (c) => {
   const parsed = updateDocumentTypeInputSchema.safeParse(body);
 
   if (!parsed.success) {
-    return c.json({ error: "Invalid request body" }, 400);
+    return c.json({ error: zodIssueSummary(parsed.error) }, 400);
   }
 
   const db = await connectDb();
