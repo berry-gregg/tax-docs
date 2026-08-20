@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createApp } from "../../src/server/app.ts";
 import { connectDb, disconnectDb } from "../../src/server/db/client.ts";
-import { clientsCollection, engagementsCollection } from "../../src/server/db/collections.ts";
+import {
+  activitiesCollection,
+  clientsCollection,
+  engagementsCollection,
+  requestItemsCollection,
+  requestTemplatesCollection,
+  toStored,
+} from "../../src/server/db/collections.ts";
+import { seedRequestTemplates } from "../../src/server/seed/definitions.ts";
 
 const clientInput = {
   legalName: "Bluebird Robotics LLC",
@@ -16,8 +24,11 @@ const clientInput = {
 async function clearCollections() {
   const db = await connectDb();
   await Promise.all([
+    activitiesCollection(db).deleteMany({}),
     clientsCollection(db).deleteMany({}),
     engagementsCollection(db).deleteMany({}),
+    requestItemsCollection(db).deleteMany({}),
+    requestTemplatesCollection(db).deleteMany({}),
   ]);
 }
 
@@ -70,6 +81,51 @@ describe("clients routes", () => {
     expect(patchResponse.status).toBe(200);
     expect(patchBody.client.city).toBe("Boulder");
     expect(patchBody.client.legalName).toBe(clientInput.legalName);
+  });
+
+  test("joins engagements created via POST onto client detail", async () => {
+    const app = createApp();
+    const db = await connectDb();
+    await requestTemplatesCollection(db).insertMany(
+      seedRequestTemplates.map((template) => toStored(template)),
+    );
+
+    const createClientResponse = await app.request("/api/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(clientInput),
+    });
+    const createClientBody = await createClientResponse.json();
+
+    expect(createClientResponse.status).toBe(201);
+
+    const createEngagementResponse = await app.request("/api/engagements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: createClientBody.client.id,
+        taxYear: 2026,
+        filingType: "1120-S",
+      }),
+    });
+    const createEngagementBody = await createEngagementResponse.json();
+
+    expect(createEngagementResponse.status).toBe(201);
+    expect(createEngagementBody.engagement.clientId).toBe(createClientBody.client.id);
+
+    const detailResponse = await app.request(`/api/clients/${createClientBody.client.id}`);
+    const detailBody = await detailResponse.json();
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailBody.client.id).toBe(createClientBody.client.id);
+    expect(detailBody.engagements).toHaveLength(1);
+    expect(detailBody.engagements[0]).toMatchObject({
+      id: createEngagementBody.engagement.id,
+      clientId: createClientBody.client.id,
+      taxYear: 2026,
+      filingType: "1120-S",
+      status: "collecting",
+    });
   });
 
   test("returns 400 for invalid client bodies and 404 for missing ids", async () => {

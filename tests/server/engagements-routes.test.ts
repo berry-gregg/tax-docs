@@ -208,6 +208,87 @@ describe("engagement routes", () => {
     expect(itemBody.item.status).toBe("waived");
   });
 
+  test("creates and deletes request items scoped to the engagement", async () => {
+    const app = createApp();
+    const extraItem = {
+      documentTypeId: "dt-balance-sheet",
+      title: "Year-end balance sheet",
+      description: "Statement of financial position as of year end.",
+      required: true,
+    } as const;
+
+    const createHomeResponse = await app.request("/api/engagements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: client.id,
+        taxYear: 2026,
+        filingType: "1065",
+        items: [explicitItem],
+      }),
+    });
+    const createHomeBody = await createHomeResponse.json();
+    const createForeignResponse = await app.request("/api/engagements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: client.id,
+        taxYear: 2025,
+        filingType: "1065",
+        items: [explicitItem],
+      }),
+    });
+    const createForeignBody = await createForeignResponse.json();
+
+    expect(createHomeResponse.status).toBe(201);
+    expect(createForeignResponse.status).toBe(201);
+
+    const createItemResponse = await app.request(
+      `/api/engagements/${createHomeBody.engagement.id}/request-items`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(extraItem),
+      },
+    );
+    const createItemBody = await createItemResponse.json();
+
+    expect(createItemResponse.status).toBe(201);
+    expect(createItemBody.item).toMatchObject({
+      ...extraItem,
+      engagementId: createHomeBody.engagement.id,
+      status: "open",
+      matchedDocumentIds: [],
+    });
+    expect(createItemBody.item.id).toBeString();
+
+    const foreignDeleteResponse = await app.request(
+      `/api/engagements/${createForeignBody.engagement.id}/request-items/${createItemBody.item.id}`,
+      { method: "DELETE" },
+    );
+    const foreignDeleteBody = await foreignDeleteResponse.json();
+
+    expect(foreignDeleteResponse.status).toBe(404);
+    expect(foreignDeleteBody).toEqual({ error: "Not found" });
+
+    const deleteResponse = await app.request(
+      `/api/engagements/${createHomeBody.engagement.id}/request-items/${createItemBody.item.id}`,
+      { method: "DELETE" },
+    );
+
+    expect(deleteResponse.status).toBe(204);
+    expect(await deleteResponse.text()).toBe("");
+
+    const missingDeleteResponse = await app.request(
+      `/api/engagements/${createHomeBody.engagement.id}/request-items/${createItemBody.item.id}`,
+      { method: "DELETE" },
+    );
+    const missingDeleteBody = await missingDeleteResponse.json();
+
+    expect(missingDeleteResponse.status).toBe(404);
+    expect(missingDeleteBody).toEqual({ error: "Not found" });
+  });
+
   test("returns 404 for unknown engagement ids and 400 for invalid filing types", async () => {
     const app = createApp();
 
@@ -216,6 +297,20 @@ describe("engagement routes", () => {
 
     expect(missingResponse.status).toBe(404);
     expect(missingBody).toEqual({ error: "Not found" });
+
+    const unknownClientResponse = await app.request("/api/engagements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: "missing-client",
+        taxYear: 2026,
+        filingType: "1120-S",
+      }),
+    });
+    const unknownClientBody = await unknownClientResponse.json();
+
+    expect(unknownClientResponse.status).toBe(404);
+    expect(unknownClientBody).toEqual({ error: "Not found" });
 
     const invalidResponse = await app.request("/api/engagements", {
       method: "POST",
