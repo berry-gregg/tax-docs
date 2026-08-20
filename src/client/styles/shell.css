@@ -1171,3 +1171,113 @@
 .data-table tr[data-href]:hover {
   background: var(--surface-wash);
 }
+
+/* Settings document-type library and schema builder controls. */
+.settings-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+  margin-bottom: var(--spacing-16);
+}
+
+.form-field {
+  display: grid;
+  gap: var(--spacing-8);
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: var(--spacing-8) var(--spacing-12);
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.form-field textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.field-issue {
+  min-height: var(--leading-micro);
+  color: var(--color-warning);
+  font-size: var(--text-micro);
+  font-weight: var(--font-weight-light);
+  line-height: var(--leading-micro);
+}
+
+.schema-builder {
+  display: contents;
+}
+
+.schema-fields {
+  display: grid;
+  gap: var(--spacing-12);
+}
+
+.schema-fields-head,
+.schema-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-12);
+}
+
+.schema-field-row {
+  display: grid;
+  gap: var(--spacing-12);
+  margin: 0 0 var(--spacing-16);
+  padding: var(--spacing-16);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-cards);
+}
+
+.schema-field-row legend {
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+}
+
+.schema-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-12);
+}
+
+.check-field,
+.toggle-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+}
+
+.toggle-field {
+  color: var(--color-ash);
+}
+
+.schema-form-issue {
+  margin-right: auto;
+}
+
+@media (max-width: 960px) {
+  .settings-section-head,
+  .schema-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-section-head {
+    display: grid;
+  }
+}

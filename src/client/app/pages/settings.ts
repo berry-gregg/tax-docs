@@ -1,0 +1,230 @@
+import { z } from "zod";
+import { FIRM_NAME } from "../../../shared/constants.ts";
+import {
+  documentTypeSchema,
+  type CreateDocumentTypeInput,
+  type DocumentType,
+  type UpdateDocumentTypeInput,
+} from "../../../shared/schemas/document-type.ts";
+import { getJson, sendJson } from "../api.ts";
+import { bindSchemaBuilder, renderSchemaBuilder } from "../components/schema-builder.ts";
+import {
+  dataTable,
+  emptyState,
+  escapeHtml,
+  pageHeader,
+  tabs,
+} from "../render.ts";
+import type { PageModule } from "./registry.ts";
+
+export type SettingsData = {
+  documentTypes: DocumentType[];
+  tab?: SettingsTab;
+};
+
+type SettingsTab = "company" | "document-types";
+
+const documentTypesResponseSchema = z.object({
+  documentTypes: z.array(documentTypeSchema),
+});
+
+const documentTypeResponseSchema = z.object({
+  documentType: documentTypeSchema,
+});
+
+export function renderSettings(data: SettingsData): string {
+  const current = data.tab ?? "document-types";
+  const companyCurrent = current === "company";
+  const documentTypesCurrent = current === "document-types";
+
+  return `${pageHeader("Settings")}
+    ${tabs([
+      { label: "Company profile", current: companyCurrent, href: "/settings?tab=company" },
+      {
+        label: "Document types",
+        count: data.documentTypes.length,
+        current: documentTypesCurrent,
+        href: "/settings?tab=document-types",
+      },
+    ])}
+    <section class="settings-block" data-settings-panel="company" ${companyCurrent ? "" : "hidden"}>
+      <dl class="definition-grid">
+        <div>
+          <dt>Firm</dt>
+          <dd>${escapeHtml(FIRM_NAME)}</dd>
+        </div>
+        <div>
+          <dt>API status</dt>
+          <dd><span data-api-status data-state="idle">Not checked</span></dd>
+        </div>
+        <div>
+          <dt>Database</dt>
+          <dd><span data-db-status>Not checked</span></dd>
+        </div>
+        <div>
+          <dt>Workspace</dt>
+          <dd>Document collection and review</dd>
+        </div>
+      </dl>
+      <button class="btn-secondary" type="button">Edit</button>
+    </section>
+    <section class="settings-block" data-settings-panel="document-types" ${documentTypesCurrent ? "" : "hidden"}>
+      <div class="settings-section-head">
+        <div>
+          <h2 class="section-title">Document types</h2>
+          <p class="muted">Definitions the classifier and extractor use to understand client uploads.</p>
+        </div>
+        <button class="btn-primary" type="button" data-new-document-type>New document type</button>
+      </div>
+      ${
+        data.documentTypes.length === 0
+          ? emptyState("No document types yet. Create one before classifying custom client uploads.")
+          : dataTable(
+              ["Name", "Description", "Fields", "Created by", "Status"],
+              data.documentTypes.map(renderDocumentTypeRow),
+              `1-${data.documentTypes.length} of ${data.documentTypes.length}`,
+            )
+      }
+      <div data-schema-panel-slot></div>
+    </section>`;
+}
+
+export const settingsPage: PageModule<SettingsData> = {
+  async load() {
+    const payload = await getJson("/api/document-types", documentTypesResponseSchema);
+    return { ...payload, tab: currentSettingsTab() };
+  },
+  render: renderSettings,
+  bind(root, data, repaint) {
+    bindSettings(root, data, repaint);
+  },
+};
+
+function currentSettingsTab(): SettingsTab {
+  if (typeof window === "undefined") {
+    return "document-types";
+  }
+
+  const tab = new URLSearchParams(window.location.search).get("tab");
+  return tab === "company" ? "company" : "document-types";
+}
+
+function renderDocumentTypeRow(documentType: DocumentType): string {
+  const status = documentType.active ? "Active" : "Inactive";
+  return `<tr data-document-type-row="${escapeHtml(documentType.id)}" tabindex="0">
+    <td>${escapeHtml(documentType.name)}</td>
+    <td>${escapeHtml(documentType.description)}</td>
+    <td>${documentType.fields.length} ${documentType.fields.length === 1 ? "field" : "fields"}</td>
+    <td>${createdByChip(documentType.createdBy)}</td>
+    <td>
+      <label class="toggle-field">
+        <input type="checkbox" data-document-type-active="${escapeHtml(documentType.id)}" ${documentType.active ? "checked" : ""} />
+        <span>${status}</span>
+      </label>
+    </td>
+  </tr>`;
+}
+
+function createdByChip(createdBy: DocumentType["createdBy"]): string {
+  const tone = createdBy === "cpa" ? "success" : "processing";
+  return `<span class="chip chip-${tone}">${escapeHtml(createdBy)}</span>`;
+}
+
+function bindSettings(root: HTMLElement, data: SettingsData, repaint: () => void): void {
+  root.querySelector("[data-new-document-type]")?.addEventListener("click", () => {
+    openBuilder(root, null, async (input) => {
+      await sendJson("POST", "/api/document-types", input, documentTypeResponseSchema);
+      repaint();
+    });
+  });
+
+  root.querySelectorAll<HTMLInputElement>("[data-document-type-active]").forEach((toggle) => {
+    toggle.addEventListener("change", async () => {
+      const id = toggle.dataset.documentTypeActive;
+      if (!id) {
+        return;
+      }
+      const body: UpdateDocumentTypeInput = { active: toggle.checked };
+      await sendJson("PATCH", `/api/document-types/${encodeURIComponent(id)}`, body, documentTypeResponseSchema);
+      repaint();
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>("[data-document-type-row]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      if (event.target instanceof HTMLInputElement) {
+        return;
+      }
+
+      const documentType = data.documentTypes.find((entry) => entry.id === row.dataset.documentTypeRow);
+      if (documentType) {
+        openBuilder(root, documentType, async (input) => {
+          await sendJson(
+            "PATCH",
+            `/api/document-types/${encodeURIComponent(documentType.id)}`,
+            input,
+            documentTypeResponseSchema,
+          );
+          repaint();
+        });
+      }
+    });
+
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+
+      const documentType = data.documentTypes.find((entry) => entry.id === row.dataset.documentTypeRow);
+      if (documentType) {
+        openBuilder(root, documentType, async (input) => {
+          await sendJson(
+            "PATCH",
+            `/api/document-types/${encodeURIComponent(documentType.id)}`,
+            input,
+            documentTypeResponseSchema,
+          );
+          repaint();
+        });
+      }
+    });
+  });
+}
+
+function openBuilder(
+  root: HTMLElement,
+  draft: DocumentType | null,
+  onSave: (input: CreateDocumentTypeInput) => Promise<void>,
+): void {
+  const slot = root.querySelector<HTMLElement>("[data-schema-panel-slot]");
+  if (!slot) {
+    return;
+  }
+
+  const input = draft ? toBuilderInput(draft) : null;
+  slot.innerHTML = renderSchemaBuilder(input);
+  const panel = slot.querySelector<HTMLElement>(".side-panel");
+  if (!panel) {
+    return;
+  }
+
+  bindSchemaBuilder(panel, {
+    onClose() {
+      slot.innerHTML = "";
+    },
+    onSave(input) {
+      void onSave(input).then(() => {
+        slot.innerHTML = "";
+      });
+    },
+  });
+}
+
+function toBuilderInput(documentType: DocumentType): CreateDocumentTypeInput {
+  return {
+    name: documentType.name,
+    description: documentType.description,
+    active: documentType.active,
+    fields: documentType.fields,
+  };
+}
