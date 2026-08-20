@@ -1,0 +1,29 @@
+---
+description: Ramp design-system tokens are the visual SSOT — no ad-hoc colors, type, or spacing
+globs: design-system/**,src/styles/**,src/**/*.{html,css,js,jsx,ts,tsx}
+alwaysApply: false
+---
+
+# Design system
+
+`design-system/` is the visual SSOT. App CSS consumes tokens; it does not reinvent them. Source: `design-system/tokens/design-tokens.json` → `design-system/css/tokens.css`. Rationale: `design-system/docs/DESIGN.md`.
+
+## Tokens to use
+
+- **Surfaces:** `--surface-canvas` (bone), `--surface-card` (paper), `--surface-inverted` (obsidian), `--surface-action` (highlighter).
+- **Ink:** `--color-ink` primary text, `--color-ash` secondary, `--color-hairline` / `--color-smoke` borders. Cards elevate with 1px hairline, not drop shadows.
+- **Type:** `--font-lausanne` (Inter fallback), weight 400 only. Hierarchy is size + tracking, not weight. Use `--text-*` / `--leading-*` scale.
+- **Space:** 4px base; named `--spacing-8` … `--spacing-64`. Round to the scale — no `13px` padding.
+- **Radius:** `--radius-buttons` 6px, `--radius-inputs` 10px, `--radius-cards` 16px.
+
+## Highlighter is scarce
+
+`--color-highlighter-yellow` / `--surface-action` marks money-moving or primary action only. Do not tint links, chips, or status with it. Status uses semantic meaning (review needed / trusted / failed) without consuming the brand accent.
+
+## SSOT for repeating visuals
+
+One card treatment, one status-pill treatment, one empty-state treatment. If two screens show "needs review," they share a component or a documented class string. Do not fork a local copy that will drift.
+
+## Anti-patterns
+
+Hardcoded `#e4f222` or `#0c0a08` in app CSS. `font-weight: 700`. New typeface. Box shadows for elevation. Arbitrary spacing (`padding: 13px`). A second token file beside `design-tokens.json`.

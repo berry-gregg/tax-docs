@@ -1,14 +1,29 @@
 {
   "name": "tax-docs",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "bun run scripts/dev.ts",
+    "dev:server": "bun --watch src/server/index.ts",
+    "dev:client": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d mongodb",
+    "db:down": "docker compose down"
+  },
+  "dependencies": {
+    "hono": "^4.7.2",
+    "mongodb": "^6.15.0",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/bun": "^1.2.5",
+    "bun-types": "^1.2.5",
+    "mongodb-memory-server": "^10.1.4",
+    "typescript": "^5.8.2",
     "vite": "^6.2.0"
   }
 }

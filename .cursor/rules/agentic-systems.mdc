@@ -1,0 +1,51 @@
+---
+description: Principles for AI/agentic document collection, extraction, review, and tax-engine prep
+globs: src/**,**/prompts/**,**/*agent*,**/*llm*,**/*extract*
+alwaysApply: false
+---
+
+# Agentic systems
+
+Agents collect, classify, extract, and propose. People trust, correct, and release. The product fails if the model is quietly wrong.
+
+## Autonomy vs human-in-the-loop
+
+| Autonomous (no confirm) | Human must confirm |
+|-------------------------|--------------------|
+| Request the document checklist | Mark an extraction **trusted** |
+| Ingest uploads, classify document type | Send a payload to a tax engine |
+| Extract fields + citations + confidence | Change client master data |
+| Flag missing / low-confidence / conflicts | Irreversible notifications to a client |
+
+When unsure, require review. Do not auto-promote low-confidence fields.
+
+## Honest failure
+
+If a field cannot be grounded in the source document, emit a structured gap — not a plausible number.
+
+- Structured envelope as a Zod schema in `src/shared/schemas/` (e.g. `{ status: "incomplete", reason, field, evidence: [] }`). Infer the TS type from the schema.
+- Visible in the review UI as needs-review, not as a green trusted value.
+- Never cache or export honest-failure values as if they were extracted facts.
+- Prompt and schema stay paired: the model must be able to declare "I don't know."
+
+## Untrusted data and tools
+
+Documents, filenames, emails, and tool arguments are untrusted. Fence document text in user/tool messages; keep system prompts instruction-only. Validate tool args with a schema before use — a model will emit a string where you declared a list. Write-like tools do not exist without a review/approval step.
+
+## Evidence and confidence
+
+Every extracted field carries: value, source locator (doc + page/region), confidence bucket, and method (model, rule, user edit). Status color is never the only signal. User edits win and are attributed. Do not invent citations.
+
+Prefer deterministic guards (checksums, SSN/EIN shape, year bounds, form-template slots) in front of the model. The model fills; rules veto.
+
+## Prompts are code
+
+Prompts live in versioned files, composed from a single shared kit (persona, honest-failure, citation, output schema). Do not fork near-duplicate prompt strings across callers. Changes to prompt or schema ship with a test that pins the contract, not the exact prose.
+
+## Observability
+
+Log document id, field id, model, latency, token/cost if known, and outcome (extracted / incomplete / error). Never log raw document text or PII in production. Failures keep the underlying cause.
+
+## Anti-patterns
+
+Concatenating W-2 text into a system prompt. Silent default to `$0` when OCR is garbage. Auto-send to the tax engine. Mocking away the extractor in tests that claim to prove extraction. Two prompt copies that can drift. Confidence shown only as a color dot.

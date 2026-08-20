@@ -1,0 +1,31 @@
+---
+description: TypeScript + Bun conventions — strict types, .ts imports, path aliases, no Node/npm/vitest
+globs: "**/*.{ts,tsx}", "tsconfig.json", "package.json", "vite.config.ts"
+alwaysApply: false
+---
+
+# TypeScript + Bun
+
+Runtime, package manager, and test runner are **Bun**. Language is **TypeScript**, `strict: true`. Do not add Node as a runtime, npm/yarn/pnpm, Jest, or Vitest.
+
+## Modules
+
+- ESM only (`"type": "module"`). Keep the `.ts` extension on relative imports (`../config.ts`) — `verbatimModuleSyntax` + `allowImportingTsExtensions` require it.
+- Path aliases: `@shared/*`, `@server/*`, `@client/*`. Use them for cross-layer imports; relative is fine inside a folder.
+- `import type` for type-only imports.
+
+## Types
+
+- No `any`. No `as` casts to silence the checker. Prefer `unknown` + narrowing.
+- Zod schemas in `src/shared/schemas/` are the SSOT. Export `type X = z.infer<typeof xSchema>` — do not declare a parallel interface that can drift.
+- `tsconfig.json` `include` must cover every new `.ts` path (including `tests/`). `bun run typecheck` (`tsc --noEmit`) is part of the gate.
+
+## Bun
+
+- Install/run with `bun` (`bun install`, `bun run dev`, `bun test`). Do not create `package-lock.json`.
+- Prefer `bun:test` and Bun APIs (`Bun.file`, `Bun.serve`) over Node equivalents when both work.
+- New dependencies: `bun add` / `bun add -d`. Commit the Bun lockfile.
+
+## Anti-patterns
+
+`require()`. New `.js` app files. `process.env` outside `src/server/config.ts`. `@ts-ignore` / `@ts-expect-error` without a one-line reason. Adding Express, Prisma, or Drizzle.

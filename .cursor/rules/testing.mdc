@@ -1,0 +1,39 @@
+---
+description: bun:test, real MongoDB, real Zod — mock only HTTP/time/fs; TDD for every behavior change
+globs: tests/**,src/**/*.ts,package.json
+alwaysApply: false
+---
+
+# Testing
+
+Tests verify **real behavior**. Runner is `bun:test` (`bun test`). Do not add Jest or Vitest.
+
+## Mock only at system boundaries
+
+Do not mock internal modules, Zod schemas, Hono routes, or the MongoDB driver.
+
+| Boundary | What to stub |
+|----------|----------------|
+| External HTTP | LLM / tax-engine / third-party APIs |
+| Time | Clock injection when the assertion depends on it |
+| Filesystem | Specific file reads, not the whole module |
+
+Persistence tests use the real driver via `connectDb()` (in-memory Mongo when `MONGODB_URI` is unset). Clean up documents you insert. Do not `vi.fn()` — if you must stub a seam, use `mock` from `bun:test`.
+
+## What to test
+
+Always: Zod valid/invalid/edges, route status + JSON shape, Mongo round-trip through the schema, review accept/reject/edit, empty/loading/error UI, client-scoped reads, honest-failure envelopes.
+
+Skip: trivial getters, generated code, thin third-party wrappers.
+
+## Assertions
+
+Assert on status, bodies, persisted docs, rendered UI. Never "mock was called" as the only assertion. Do not pin exact LLM prose — pin structure (status, fields, citations, confidence, incomplete envelope).
+
+## TDD
+
+Red (right reason) → green (minimum) → refactor. See `.cursor/skills/red-green-tdd/SKILL.md`. Gate: `bun run typecheck && bun test && bun run build`.
+
+## Anti-patterns
+
+Mocking `MongoClient` or `recordsCollection`. Tests that pass if errors are swallowed. Fixtures that skip `schema.parse`. Claiming done without exercising the review flow the user sees.

@@ -11,12 +11,17 @@ desktop.ini
 # Secrets and local env
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 
-# Node / web build
+# Node / Bun / web build
 node_modules/
 dist/
+bun.lockb
+
+# Local database files (if using file-backed stores later)
+data/
 
 # Common tax/doc working files
 *.tmp

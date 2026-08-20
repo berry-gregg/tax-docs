@@ -29,13 +29,30 @@
           Editorial finance desk for your documents.
         </h1>
         <p style="font-size: var(--text-subheading); color: var(--color-ash); max-width: 48ch;">
-          Design tokens and styles are wired from <code>design-system/</code>.
+          Bun + TypeScript API with MongoDB. Design tokens live in <code>design-system/</code>.
         </p>
-        <div>
-          <button class="btn-primary" type="button">Get started</button>
-        </div>
+        <p data-api-status data-state="loading" style="color: var(--color-ash);">Checking API…</p>
+        <div data-records data-state="loading" style="display: grid; gap: var(--spacing-8);"></div>
+        <form data-record-form style="display: flex; gap: var(--spacing-8);">
+          <input
+            data-record-title
+            type="text"
+            placeholder="Sample record title"
+            aria-label="Record title"
+            style="
+              flex: 1;
+              border: 1px solid var(--color-hairline);
+              border-radius: var(--radius-inputs);
+              padding: var(--spacing-12) var(--spacing-16);
+              background: var(--surface-card);
+              color: var(--color-ink);
+              font: inherit;
+            "
+          />
+          <button class="btn-primary" type="submit">Add record</button>
+        </form>
       </section>
     </main>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/client/main.ts"></script>
   </body>
 </html>

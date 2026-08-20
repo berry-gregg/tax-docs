@@ -1,0 +1,24 @@
+---
+description: Hono API factory, route shape, and config SSOT for the Bun server
+globs: src/server/**/*.ts,scripts/**/*.ts
+alwaysApply: false
+---
+
+# Server (Hono + Bun)
+
+The API is a Hono app on Bun. `createApp()` in `src/server/app.ts` is the factory — tests call it with `app.request()`. Do not add Express or Fastify.
+
+## Routes
+
+- One module per resource under `src/server/routes/`. Register with `app.route("/api/...", routes)`.
+- Parse JSON with Zod `safeParse`. Invalid body → `400` + `{ error: "..." }`. Do not hand a raw body to Mongo.
+- Map driver docs through the shared schema before `c.json`.
+- `app.notFound` stays JSON `404`. Do not leak stack traces to clients; log the cause server-side.
+
+## Config
+
+`src/server/config.ts` is the only module that reads `process.env`. Feature code imports `config`. New env vars: add to `config`, `.env.example`, and `keeping-docs-fresh` in the same change.
+
+## Anti-patterns
+
+Reading `process.env` in a route. A second HTTP framework. Side-effecting DB connects at import time in a way tests cannot isolate. Swallowing driver errors into a generic 200.

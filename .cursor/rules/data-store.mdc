@@ -1,0 +1,37 @@
+---
+description: MongoDB document-store patterns — collections SSOT, Zod at the document boundary, no SQL/ORM
+globs: src/server/db/**,src/server/**/*.ts,src/shared/schemas/**,docker-compose.yml
+alwaysApply: false
+---
+
+# Data store (MongoDB)
+
+This is a **document** store, not a relational database. Do not add SQL, Prisma, Drizzle, or SQLite. Access goes through `src/server/db/client.ts` + `src/server/db/collections.ts`.
+
+## Documents
+
+- Model what is read together as one document (embed extracted fields on a document; do not join them at read time).
+- Reference (`id`) only when the related record is loaded independently (client, engagement).
+- `$lookup` / application-level joins are a smell — denormalize or fetch in a repository helper that returns an already-shaped DTO.
+- Collection name strings live only in `collectionNames`. New collections get a typed helper in `collections.ts` in the same change.
+
+## Schema lives in the app
+
+Mongo will store whatever you insert. **Zod is the schema.**
+
+- `safeParse` on HTTP input before write.
+- `.parse` (or `safeParse` + 5xx) on documents after read — never return a raw driver doc to a route or the client.
+- Infer TS types from those schemas (`src/shared/schemas/`). Do not keep a second Mongo-only type that diverges.
+
+## Tenant / client scope
+
+When records are client-scoped, every query includes `clientId` (or equivalent). Missing filter is a bug. Cross-client reads return 404, not 403.
+
+## Indexes and env
+
+- A new query predicate gets an index defined in the same change (helper or documented setup).
+- URI and db name come from `config` (`MONGODB_URI`, `MONGODB_DB`). Empty URI → in-memory server (dev/test). Do not hardcode hosts.
+
+## Anti-patterns
+
+`find({})` on a client-scoped collection. Returning `_id` ObjectIds through the API (this app uses string ids). Trusting stored JSON without Zod. SQL-shaped table-per-field models. Mocking `MongoClient` in tests that claim to prove persistence.

@@ -1,0 +1,46 @@
+---
+description: How to organize AGENTS.md, Cursor rules, and skills so guidance stays loadable and does not bloat context
+globs: AGENTS.md,CLAUDE.md,.cursor/**/*.md,.cursor/**/*.mdc,docs/**/*.md
+alwaysApply: false
+---
+
+# Docs + rules discipline
+
+Every piece of project guidance lives at exactly one rung. Mixing rungs is the dominant source of context bloat.
+
+| Rung | Where | When it loads | Use for |
+|------|-------|---------------|---------|
+| **AGENTS.md** | repo root | every Cursor session | universal core: 7 rules, commit hygiene, cross-cutting invariants, index. Target: ≤200 lines. |
+| **Path-scoped rule** | `.cursor/rules/<name>.mdc` with `globs:` / `alwaysApply:` | matching files, or always if `alwaysApply: true` | area contracts: web UI, tests, agentic systems, design tokens |
+| **Skill** | `.cursor/skills/<name>/SKILL.md` with `name:` + `description:` | description match | workflows, decision logs, rejected-alternatives history |
+
+Cursor frontmatter is `globs:` and `alwaysApply:` — not Claude Code's `paths:`. A rule with neither `globs` nor `alwaysApply: true` will not load reliably.
+
+## Rule vs skill
+
+- **Rule** when the trigger is "the agent is editing files in area X."
+- **Skill** when the trigger is "the agent is reasoning about subject Y."
+
+Decision logs and "why we chose A over B" belong in skills. Component vocabularies, anti-patterns, and token contracts belong in path-scoped rules.
+
+## AGENTS.md trim
+
+- **Religious core** stays in AGENTS.md.
+- **Area-specific** (moves to a `.mdc` rule). Tied to TypeScript, Hono, MongoDB, tests, web UI, agentic extract/review, etc.
+- **Long-tail prose** moves to a skill.
+
+If an AGENTS.md edit would push past ~200 lines, extract a section to a rule. Do not duplicate a content block across AGENTS.md and a rule — pick one rung and reference the other.
+
+## Skill descriptions
+
+`description` MUST say when to use the skill, not just what it is. Write in third person. Include trigger conditions.
+
+- BAD: `Decision log for the review UI.`
+- GOOD: `Chronological decision log for the review UI. Use when making a new review-flow architectural decision or when proposing to reverse an existing one.`
+
+## Anti-patterns
+
+- Same content duplicated in AGENTS.md and a rule.
+- Skill `description` that is a noun phrase rather than a trigger sentence.
+- Rule glob so broad it matches everything.
+- Broken cross-references — grep old paths in the same change.

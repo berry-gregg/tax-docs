@@ -1,0 +1,47 @@
+---
+description: CPA/tax review UI principles — trust, density, states, affordances — using the Ramp design system
+globs: "**/*.{html,css,js,jsx,ts,tsx,vue}"
+alwaysApply: false
+---
+
+# Web UI
+
+This product is a **review console for CPAs**, not a marketing site. The reviewer has a few seconds to trust a number or reject it. Visual tokens live in `design-system/`; this rule is the interaction contract. Token values: `.cursor/rules/design-system.mdc`. Client code is TypeScript in `src/client/` — do not add new `.js` UI files.
+
+## Density and hierarchy
+
+Comfortable Ramp spacing, not cramped. Density comes from smaller controls and visible affordances — not from dropping actions. One primary CTA per page. Highlighter yellow (`--color-highlighter-yellow`) is only for primary action, live money signals, and active state. Inline links stay ink + underline. In-row actions are quiet (ghost), not filled.
+
+## Sentence case
+
+Headings, buttons, labels, pills: sentence case. Proper nouns keep their case (Ramp, Intuit, W-2). No SHOUTY labels. No exclamation marks. No emoji in reviewer-facing copy.
+
+## Progressive disclosure
+
+Show the scanning answer immediately; investigation is one click away. Stat / exception summary first, table second, document viewer + field detail on select. Do not mix a 4-card overview with an exhaustive dump on the same view.
+
+## Five states
+
+Every list, table, and detail pane handles: empty (no data), empty (filters match nothing), loading (skeleton, not the string "Loading..."), partial (show what landed + flag the gap), error (inline if blocking, toast if transient). Success is the data itself — no celebration banners.
+
+## Modal vs toast vs inline
+
+| Situation | Surface |
+|-----------|---------|
+| Destructive or "send to tax engine" | Modal, explicit confirm |
+| Structured create (new request, new client) | Modal |
+| More detail on an existing row | Drawer, split pane, or detail route — not a modal |
+| Transient feedback | Toast |
+| Persistent / blocking error | Inline alert next to the field |
+
+## Accessibility and platform
+
+Keyboard-activatable controls (`<button>` / `<a>`, never `<div onclick>`). Status color is never the only signal. Contrast AA. First paint is useful without JS. Prefer the design-system CSS; do not add a second component library without an explicit decision.
+
+## Voice
+
+Terse, declarative, specific. "3 fields need review." not "We couldn't quite verify everything — want to take a look?" No "Welcome back." Destructive success is usually silent because the row state changed.
+
+## Anti-patterns
+
+Two primary CTAs. Highlighter yellow on every interactive. Modal for read-only document detail. Toast for form validation. Missing empty or error states. Inventing hex colors instead of tokens.
