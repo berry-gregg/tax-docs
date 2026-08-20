@@ -24,13 +24,13 @@ Cursor loads `.mdc` files using `globs:` and `alwaysApply:` (not Claude's `paths
 | `docs-discipline.mdc` | `AGENTS.md`, `.cursor/**`, `docs/**` | Three-rung ladder: AGENTS.md / rule / skill |
 | `typescript.mdc` | `*.ts`, tsconfig, package.json | Strict TS, Bun, `.ts` imports, Zod-inferred types |
 | `server.mdc` | `src/server/**`, `scripts/**` | Hono factory, Zod on entry, config SSOT |
-| `data-store.mdc` | db + schemas | MongoDB documents, collection helpers, parse on read |
+| `data-store.mdc` | db + schemas | MongoDB documents, `collectionNames` SSOT, parse on read, auto-seed |
 | `security.mdc` | always | Secrets, prompt fences, 404-not-403, HITL writes |
 | `testing.mdc` | tests + src | `bun:test`, real Mongo, no internal mocks, TDD |
 | `web-ui.mdc` | HTML/CSS/TS | CPA review console: states, CTAs, voice, a11y |
 | `product-shell.mdc` | `src/client/**`, `tests/client/**` | Ramp chrome composition: layout, nav nesting, page recipes, API-driven page registry |
 | `design-system.mdc` | design-system + styles | Ramp tokens are the visual SSOT |
-| `agentic-systems.mdc` | agent/LLM/extract/review paths | Honest failure, evidence, autonomy vs confirm |
+| `agentic-systems.mdc` | agent/LLM/extract/review paths | Honest failure, `fences.ts`, pipeline stages, autonomy vs confirm |
 
 ## Skills (`.cursor/skills/`)
 
@@ -41,6 +41,8 @@ Cursor loads `.mdc` files using `globs:` and `alwaysApply:` (not Claude's `paths
 | `implement-plan-task` | Executing a written plan item |
 | `parallelizing-dev-work` | Planning waves or dispatching parallel Task subagents |
 | `building-product-ui` | Adding or changing product pages, nav, tables, icons, or matching try.ramp.com |
+
+`bun run smoke` (`scripts/smoke-llm.ts`) is a live OpenRouter pipeline check. It is not part of `bun test` or the pre-commit gate.
 
 ## Adding new components
 

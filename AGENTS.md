@@ -79,6 +79,9 @@ bun install
 bun run dev          # Hono API (:3000) + Vite client (:5173)
 bun run dev:server   # API only
 bun run dev:client   # Vite only
+bun run seed         # seed the demo book if empty (`-- --reset` to rebuild)
+bun run demo-docs    # regenerate tracked demo-docs/
+bun run smoke        # live OpenRouter pipeline check — not in bun test
 bun test             # Bun test suite
 bun run typecheck    # TypeScript check
 bun run build        # production client build — must pass before claiming UI work done
@@ -86,4 +89,4 @@ bun run preview
 bun run db:up        # optional persistent MongoDB via Docker
 ```
 
-The pre-commit gate is currently `bun run typecheck`, `bun test`, and `bun run build`. When lint commands exist, they join this gate and this section updates in the same change.
+The pre-commit gate is currently `bun run typecheck`, `bun test`, and `bun run build`. `bun run smoke` is manual and stays out of that gate. When lint commands exist, they join this gate and this section updates in the same change.

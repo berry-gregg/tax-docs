@@ -30,7 +30,7 @@ If a field cannot be grounded in the source document, emit a structured gap — 
 
 ## Untrusted data and tools
 
-Documents, filenames, emails, and tool arguments are untrusted. Fence document text in user/tool messages; keep system prompts instruction-only. Validate tool args with a schema before use — a model will emit a string where you declared a list. Write-like tools do not exist without a review/approval step.
+Documents, filenames, emails, and tool arguments are untrusted. Fence them with `fenceUntrusted` in `src/server/ai/fences.ts` — user/tool messages only; keep system prompts instruction-only. Validate tool args with a schema before use — a model will emit a string where you declared a list. Write-like tools do not exist without a review/approval step.
 
 ## Evidence and confidence
 
@@ -40,7 +40,7 @@ Prefer deterministic guards (checksums, SSN/EIN shape, year bounds, form-templat
 
 ## Prompts are code
 
-Prompts live in versioned files, composed from a single shared kit (persona, honest-failure, citation, output schema). Do not fork near-duplicate prompt strings across callers. Changes to prompt or schema ship with a test that pins the contract, not the exact prose.
+Prompts live in `src/server/pipeline/stages.ts` (quality, classify, extract, draft-type), composed from a single shared kit (persona, honest-failure, citation, output schema). Do not fork near-duplicate prompt strings across callers. Changes to prompt or schema ship with a test that pins the contract, not the exact prose. The live pipeline is quality → classify → extract; a miss lands in `unclassified` rather than a forced type. `documentsAutoProcessed` / straight-through count **trusted** only — not `needs-review`.
 
 ## Observability
 

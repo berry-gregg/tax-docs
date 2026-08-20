@@ -13,7 +13,7 @@ This is a **document** store, not a relational database. Do not add SQL, Prisma,
 - Model what is read together as one document (embed extracted fields on a document; do not join them at read time).
 - Reference (`id`) only when the related record is loaded independently (client, engagement).
 - `$lookup` / application-level joins are a smell — denormalize or fetch in a repository helper that returns an already-shaped DTO.
-- Collection name strings live only in `collectionNames`. New collections get a typed helper in `collections.ts` in the same change.
+- Collection name strings live only in `collectionNames`: `records`, `clients`, `engagements`, `documentTypes`, `requestTemplates`, `requestItems`, `documents` (`taxDocuments`), `activity`, `exports`. New collections get a typed helper in `collections.ts` in the same change.
 
 ## Schema lives in the app
 
@@ -32,6 +32,7 @@ When records are client-scoped, every query includes `clientId` (or equivalent).
 
 - A new query predicate gets an index defined in the same change (helper or documented setup).
 - URI and db name come from `config` (`MONGODB_URI`, `MONGODB_DB`). Empty URI → in-memory server (dev/test). Do not hardcode hosts.
+- An empty database auto-seeds the demo book (`seedIfEmpty` on API boot; `bun run seed` / `bun run seed -- --reset` from the CLI). Seed reads `demo-docs/figures.json` so extracted figures match the tracked PDFs.
 
 ## Anti-patterns
 

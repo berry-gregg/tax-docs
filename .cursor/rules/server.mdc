@@ -20,7 +20,15 @@ The API is a Hono app on Bun. `createApp(opts?: { runner?: PipelineRunner; ai?: 
 
 ## Config
 
-`src/server/config.ts` is the only module that reads `process.env`. Feature code imports `config`. New env vars: add to `config`, `.env.example`, and `keeping-docs-fresh` in the same change.
+`src/server/config.ts` is the only module that reads `process.env`. Feature code imports `config`. New env vars: add to `config`, `.env.example`, and `keeping-docs-fresh` in the same change. OpenRouter key and model live there (`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`).
+
+## Pipeline
+
+`createRunner({ ai })` fires `runPipeline` in the background. Stages are quality → classify → extract (`src/server/pipeline/stages.ts`). Unclassified documents can `POST /api/documents/:id/draft-type` for a non-persisted schema proposal. Production `src/server/index.ts` wires the real OpenRouter client; tests inject a stub `ai` / recording `runner`.
+
+## Scripts
+
+`scripts/seed.ts` seeds or `--reset`s the demo book. `scripts/generate-demo-docs.ts` regenerates `demo-docs/`. `scripts/smoke-llm.ts` (`bun run smoke`) boots the real app + OpenRouter client and is **not** in the bun test gate.
 
 ## Anti-patterns
 
