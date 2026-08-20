@@ -52,7 +52,7 @@ describe("refreshBadgeState", () => {
 });
 
 describe("dialogOpen", () => {
-  test("is true for the four live dialog hosts and false when they are hidden or absent", () => {
+  test("is true for the live dialog hosts and false when they are hidden or absent", () => {
     const openModal = new FakeWorkspace();
     openModal.openSelectors.push("[data-new-engagement-modal]:not([hidden])");
     const portalWaive = new FakeWorkspace();
@@ -70,6 +70,13 @@ describe("dialogOpen", () => {
     expect(dialogOpen(exportConfirm)).toBe(true);
     expect(dialogOpen(hiddenModal)).toBe(false);
     expect(dialogOpen(new FakeWorkspace())).toBe(false);
+  });
+
+  test("is true while focus sits inside a data-preserve-focus container (compose boxes)", () => {
+    const composeFocused = new FakeWorkspace();
+    composeFocused.openSelectors.push("[data-preserve-focus]:focus-within");
+
+    expect(dialogOpen(composeFocused)).toBe(true);
   });
 });
 
@@ -337,6 +344,17 @@ describe("replaceWorkspaceBody", () => {
 
     expect(result.changed).toBe(false);
     expect(result.workspace).toBe(workspace);
+  });
+
+  test("skips replace while a message compose box holds focus so typing survives the poll", () => {
+    const workspace = new FakeWorkspace();
+    workspace.openSelectors.push("[data-preserve-focus]:focus-within");
+
+    const result = replaceWorkspaceBody(workspace, "<p>old thread</p>", "<p>new message arrived</p>");
+
+    expect(result.changed).toBe(false);
+    expect(result.workspace).toBe(workspace);
+    expect(workspace.replaced).toBe(false);
   });
 
   test("replaces on the next tick after the dialog closes", () => {

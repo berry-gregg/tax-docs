@@ -57,6 +57,8 @@ describe("settings page", () => {
     expect(html).toContain("2 fields");
     expect(html).toContain('class="chip chip-processing">Seed</span>');
     expect(html).toContain('data-document-type-active="dt-1"');
+    expect(html).toContain('class="checkbox toggle-field"');
+    expect(html).toContain('class="visually-hidden-input" type="checkbox" data-document-type-active="dt-1"');
     expect(html).toContain("New document type");
     expect(html).toContain("data-settings-error");
     expect(html).not.toContain(">Edit</button>");

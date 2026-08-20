@@ -7,6 +7,7 @@ import { extractionFieldSchema, taxDocumentSchema, type ExtractionField, type Ta
 import { documentTypeSchema, type DocumentType } from "../../shared/schemas/document-type.ts";
 import { engagementSchema, type Engagement } from "../../shared/schemas/engagement.ts";
 import { exportLineSchema, exportSchema, type EngineExport, type ExportLine } from "../../shared/schemas/export.ts";
+import { messageSchema, type Message } from "../../shared/schemas/message.ts";
 import { requestItemSchema, requestTemplateSchema, type RequestItem, type RequestTemplate } from "../../shared/schemas/request.ts";
 import {
   activitiesCollection,
@@ -15,6 +16,7 @@ import {
   documentTypesCollection,
   engagementsCollection,
   engineExportsCollection,
+  messagesCollection,
   requestItemsCollection,
   requestTemplatesCollection,
   taxDocumentsCollection,
@@ -180,6 +182,10 @@ function activity(params: Omit<Activity, "id" | "createdAt"> & { id: string; cre
     ...params,
     createdAt: params.createdAt ?? SEED_CREATED_AT,
   });
+}
+
+function message(params: Message): Message {
+  return messageSchema.parse(params);
 }
 
 function buildExportLines(engagement: Engagement, documents: TaxDocument[]): ExportLine[] {
@@ -400,7 +406,7 @@ async function buildSeedBook() {
       direction: "outbound",
       readAt: SEED_CREATED_AT,
     }),
-    ...heroDocuments.flatMap((document, index) => [
+    ...heroDocuments.flatMap((document) => [
       activity({
         id: `act-${document.id}-uploaded`,
         engagementId: heroEngagement.id,
@@ -409,7 +415,8 @@ async function buildSeedBook() {
         detail: `${document.filename} uploaded from portal`,
         direction: "inbound",
         documentId: document.id,
-        readAt: index === 0 ? SEED_CREATED_AT : undefined,
+        // Read: the demo's one unread item is the hero client's question message.
+        readAt: SEED_CREATED_AT,
       }),
       activity({
         id: `act-${document.id}-extracted`,
@@ -431,7 +438,7 @@ async function buildSeedBook() {
       direction: "outbound",
       readAt: SEED_CREATED_AT,
     }),
-    ...spareDocuments.flatMap((document, index) => [
+    ...spareDocuments.flatMap((document) => [
       activity({
         id: `act-${document.id}-uploaded`,
         engagementId: spareEngagement.id,
@@ -440,7 +447,7 @@ async function buildSeedBook() {
         detail: `${document.filename} uploaded from portal`,
         direction: "inbound",
         documentId: document.id,
-        readAt: index < 2 ? undefined : SEED_CREATED_AT,
+        readAt: SEED_CREATED_AT,
       }),
       activity({
         id: `act-${document.id}-extracted`,
@@ -450,7 +457,7 @@ async function buildSeedBook() {
         detail: `${document.filename} — ${document.extraction?.fields.length ?? 0} fields extracted`,
         direction: "inbound",
         documentId: document.id,
-        readAt: document.pipelineStatus === "needs-review" ? undefined : SEED_CREATED_AT,
+        readAt: SEED_CREATED_AT,
       }),
     ]),
     activity({
@@ -465,6 +472,62 @@ async function buildSeedBook() {
     }),
   ];
 
+  /**
+   * Seeded conversations, ascending createdAt within each thread. Hero: the request plus an
+   * UNREAD client question, left unanswered so the operator can reply live in the demo. Spare:
+   * a short fully-read exchange. Background: the request message only.
+   */
+  const messages = [
+    message({
+      id: "msg-northgate-request",
+      engagementId: heroEngagement.id,
+      sender: "cpa",
+      body: `Hi ${heroClient.contactName} — we've opened your ${heroEngagement.taxYear} ${heroEngagement.filingType} engagement and requested ${heroItems.length} documents. Upload them through your portal link anytime, and reply here with any questions.`,
+      createdAt: "2026-01-02T00:01:00.000Z",
+      readAt: "2026-01-02T08:00:00.000Z",
+    }),
+    message({
+      id: "msg-northgate-question",
+      engagementId: heroEngagement.id,
+      sender: "client",
+      body: "Quick question — our December bank statement is still with the bookkeeper. Is it OK if that one comes in next week?",
+      createdAt: "2026-01-05T16:30:00.000Z",
+      // Unread: this is the thread the inbox badge points at.
+    }),
+    message({
+      id: "msg-alder-request",
+      engagementId: spareEngagement.id,
+      sender: "cpa",
+      body: `Hi ${spareClient.contactName} — we've opened your ${spareEngagement.taxYear} ${spareEngagement.filingType} engagement and requested ${spareItems.length} documents. Upload them through your portal link anytime, and reply here with any questions.`,
+      createdAt: "2026-01-02T00:02:00.000Z",
+      readAt: "2026-01-02T09:00:00.000Z",
+    }),
+    message({
+      id: "msg-alder-reply",
+      engagementId: spareEngagement.id,
+      sender: "client",
+      body: "All uploaded — each partner's K-1 is a separate PDF. Let me know if anything else is missing.",
+      createdAt: "2026-01-03T10:00:00.000Z",
+      readAt: "2026-01-03T10:30:00.000Z",
+    }),
+    message({
+      id: "msg-alder-ack",
+      engagementId: spareEngagement.id,
+      sender: "cpa",
+      body: "Perfect, everything came through — we'll take it from here and reach out if review turns anything up.",
+      createdAt: "2026-01-03T11:00:00.000Z",
+      readAt: "2026-01-03T12:00:00.000Z",
+    }),
+    message({
+      id: "msg-summit-request",
+      engagementId: backgroundEngagement.id,
+      sender: "cpa",
+      body: `Hi ${backgroundClient.contactName} — we've opened your ${backgroundEngagement.taxYear} ${backgroundEngagement.filingType} engagement. Upload documents through your portal link anytime, and reply here with any questions.`,
+      createdAt: "2026-01-02T00:03:00.000Z",
+      readAt: "2026-01-02T10:00:00.000Z",
+    }),
+  ];
+
   return {
     clients: [heroClient, spareClient, backgroundClient],
     engagements: [heroEngagement, spareEngagement, backgroundEngagement],
@@ -473,6 +536,7 @@ async function buildSeedBook() {
     requestItems: [...heroItems, ...spareItems],
     documents: [...heroDocuments, ...spareDocuments],
     activities,
+    messages,
     exports: [draftExport, backgroundExport],
   };
 }
@@ -496,6 +560,7 @@ async function insertSeedBook(db: Db): Promise<void> {
     seedBook.documents.map((item) => toStored(taxDocumentSchema.parse(item))),
   );
   await activitiesCollection(db).insertMany(seedBook.activities.map((item) => toStored(activitySchema.parse(item))));
+  await messagesCollection(db).insertMany(seedBook.messages.map((item) => toStored(messageSchema.parse(item))));
   await engineExportsCollection(db).insertMany(seedBook.exports.map((item) => toStored(exportSchema.parse(item))));
 }
 

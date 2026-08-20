@@ -1,44 +1,67 @@
 import { z } from "zod";
-import { requestItemStatusSchema } from "./request.ts";
+import { filingTypeSchema } from "./engagement.ts";
+import { messageSchema, messageSenderSchema } from "./message.ts";
 
 /**
- * Thread-shaped inbox wire contract: one thread per engagement's outbound request, with one line
- * per request item — never one line per uploaded file. The server builds `/api/inbox` through
- * these schemas and the inbox page parses the same objects back out.
+ * Conversation-shaped inbox wire contract: one thread per engagement, keyed by engagementId.
+ * Messages (the messages collection) are the primary object; visible activities project into
+ * quiet single-line `event` entries so uploads and matches read inside the conversation.
+ * The server builds `/api/inbox` through these schemas and the inbox page parses them back out.
  */
 
 const countSchema = z.number().int().nonnegative();
 
-export const inboxThreadItemSchema = z.object({
-  /** Request item id. */
+export const inboxMessageEntrySchema = z.object({
+  kind: z.literal("message"),
+  /** Message id from the messages collection. */
   id: z.string().min(1),
-  title: z.string().min(1),
-  status: requestItemStatusSchema,
-  waiveNote: z.string().max(500).optional(),
-  /** Latest linked document when received/needs-attention — the `/documents/:id` deep link. */
-  documentId: z.string().min(1).optional(),
-  documentFilename: z.string().min(1).optional(),
-  lastUpdateAt: z.string().datetime(),
+  sender: messageSenderSchema,
+  body: messageSchema.shape.body,
+  createdAt: z.string().datetime(),
 });
-export type InboxThreadItem = z.infer<typeof inboxThreadItemSchema>;
+export type InboxMessageEntry = z.infer<typeof inboxMessageEntrySchema>;
+
+export const inboxEventEntrySchema = z.object({
+  kind: z.literal("event"),
+  /** Activity id the event was projected from. */
+  id: z.string().min(1),
+  /** Compact system line, e.g. "Client uploaded balance-sheet.pdf". */
+  text: z.string().min(1),
+  /** Present on document lifecycle events — the `/documents/:id` deep link. */
+  documentId: z.string().min(1).optional(),
+  createdAt: z.string().datetime(),
+});
+export type InboxEventEntry = z.infer<typeof inboxEventEntrySchema>;
+
+export const inboxTimelineEntrySchema = z.discriminatedUnion("kind", [
+  inboxMessageEntrySchema,
+  inboxEventEntrySchema,
+]);
+export type InboxTimelineEntry = z.infer<typeof inboxTimelineEntrySchema>;
 
 export const inboxThreadSchema = z.object({
   engagementId: z.string().min(1),
   clientName: z.string().min(1),
-  /** "{filingType} · {taxYear}" — display-ready so the page never re-derives it. */
-  engagementLabel: z.string().min(1),
+  taxYear: z.number().int(),
+  filingType: filingTypeSchema,
   portalToken: z.string().min(1),
-  /** The request-sent activity time, falling back to engagement creation. */
-  requestSentAt: z.string().datetime(),
-  /** True when any of the engagement's visible (non-internal) activities lacks a readAt. */
+  /** True when any client message or inbound activity is unread. Outbound never counts. */
   unread: z.boolean(),
+  /** Unread client messages + unread inbound (client/agent) events. */
   unreadCount: countSchema,
-  items: z.array(inboxThreadItemSchema),
-  /** Latest sent-to-engine activity time — the compact thread footer line. */
-  sentToEngineAt: z.string().datetime().optional(),
+  /** Chronological, oldest first: messages interleaved with quiet system events. */
+  timeline: z.array(inboxTimelineEntrySchema),
 });
 export type InboxThread = z.infer<typeof inboxThreadSchema>;
 
 export const inboxThreadsResponseSchema = z.object({
   threads: z.array(inboxThreadSchema),
+});
+
+/** POST /api/inbox/threads/:engagementId/messages body — the CPA compose box. */
+export const createInboxMessageInputSchema = messageSchema.pick({ body: true });
+export type CreateInboxMessageInput = z.infer<typeof createInboxMessageInputSchema>;
+
+export const inboxMessageResponseSchema = z.object({
+  message: messageSchema,
 });

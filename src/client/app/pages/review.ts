@@ -24,7 +24,6 @@ import {
   confidenceChip,
   emptyState,
   escapeHtml,
-  pageHeader,
   pipelineChip,
 } from "../render.ts";
 import type { Route } from "../router.ts";
@@ -222,35 +221,11 @@ function renderFieldsVariant(data: ReviewData, fields: ExtractionField[]): strin
 
   return `${
     fields.length === 0
-      ? emptyState("Extraction returned no fields for this document type.")
+      ? `${emptyState("Extraction returned no fields for this document type.")}
+    <p class="muted">This document cannot be marked trusted.</p>`
       : `<div class="review-fields">${fields.map((field) => renderFieldRow(field, interactive)).join("")}</div>`
   }
-    ${renderValidationChecks(data.validations, data.document.id)}
-    ${interactive ? renderTrustFooter(fields) : renderTrustedFooter(data)}`;
-}
-
-function trustFooterCopy(fields: ExtractionField[]): string {
-  if (fields.length === 0) {
-    return "Extraction returned no fields. This document cannot be marked trusted.";
-  }
-
-  return "Edit anything that is wrong, then mark trusted — the human confirmation step. Unedited values are accepted as extracted.";
-}
-
-function renderTrustFooter(fields: ExtractionField[]): string {
-  const ready = canTrust(fields);
-
-  return `<footer class="review-foot">
-    <span class="muted">${trustFooterCopy(fields)}</span>
-    <button class="btn-primary" type="button" data-mark-trusted${ready ? "" : " disabled"}>Mark trusted</button>
-  </footer>`;
-}
-
-function renderTrustedFooter(data: ReviewData): string {
-  return `<footer class="review-foot">
-    <span class="muted">Trusted. These values are ready for the engine export.</span>
-    <a class="btn-secondary" href="/engagements/${encodeURIComponent(data.engagementId)}/export" data-nav-link>Open export</a>
-  </footer>`;
+    ${renderValidationChecks(data.validations, data.document.id)}`;
 }
 
 function renderUnclassifiedVariant(): string {
@@ -319,19 +294,38 @@ function renderVariant(data: ReviewData): string {
   }
 }
 
+/**
+ * The trust decision lives in the page header, top right — Mark trusted while the document is
+ * under review, the export link once it is trusted. Other pipeline states carry no header action.
+ * Markup mirrors the shared pageHeader helper, which only supports link actions.
+ */
+function headerActions(data: ReviewData): string {
+  const status = data.document.pipelineStatus;
+
+  if (status === "needs-review") {
+    const ready = canTrust(data.document.extraction?.fields ?? []);
+    return `<div class="page-actions"><button class="btn-primary" type="button" data-mark-trusted${ready ? "" : " disabled"}>Mark trusted</button></div>`;
+  }
+
+  if (status === "trusted") {
+    return `<div class="page-actions"><a class="btn-secondary" href="/engagements/${encodeURIComponent(data.engagementId)}/export" data-nav-link>Open export</a></div>`;
+  }
+
+  return "";
+}
+
 export function renderReview(data: ReviewData): string {
   const typeName = data.documentType?.name ?? "Unclassified";
   const fileHref = `/api/documents/${encodeURIComponent(data.document.id)}/file`;
 
   return `<div class="review-page" data-review-document="${escapeHtml(data.document.id)}">
     ${breadcrumbs([{ label: "Documents", href: "/documents" }, { label: data.document.filename }])}
-    ${pageHeader(data.document.filename, typeName, [
-      {
-        href: `/engagements/${encodeURIComponent(data.engagementId)}`,
-        label: "Engagement workspace",
-        kind: "secondary",
-      },
-    ])}
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">${escapeHtml(data.document.filename)} <span class="count">${escapeHtml(typeName)}</span></h1>
+      </div>
+      ${headerActions(data)}
+    </header>
     <div class="review-split">
       <section class="review-viewer" aria-label="Document preview">
         <iframe class="review-frame" src="${fileHref}" title="${escapeHtml(data.document.filename)}"></iframe>

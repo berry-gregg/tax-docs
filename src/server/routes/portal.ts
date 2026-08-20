@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import { FIRM_NAME } from "../../shared/constants.ts";
 import {
+  portalMessageInputSchema,
+  portalMessageResponseSchema,
   portalStateSchema,
   portalWaiveInputSchema,
   portalWaiveResponseSchema,
@@ -27,6 +29,7 @@ import {
   taxDocumentsCollection,
   toStored,
 } from "../db/collections.ts";
+import { insertMessage, listMessages, markMessagesRead } from "../db/messages.ts";
 import { readStoredFile } from "../files/storage.ts";
 import type { PipelineRunner } from "../pipeline/runner.ts";
 import { ingestUploadedFile } from "./documents.ts";
@@ -116,8 +119,12 @@ async function loadPortalEngagement(token: string) {
     return null;
   }
   const client = fromStored(clientSchema, clientDoc);
+  // Required items bubble to the top of the client's checklist; titles break ties.
   const [itemDocs, documentDocs] = await Promise.all([
-    requestItemsCollection(db).find({ engagementId: engagement.id }).sort({ title: 1 }).toArray(),
+    requestItemsCollection(db)
+      .find({ engagementId: engagement.id })
+      .sort({ required: -1, title: 1 })
+      .toArray(),
     taxDocumentsCollection(db).find({ engagementId: engagement.id }).toArray(),
   ]);
   const items = itemDocs.map((doc) => fromStored(requestItemSchema, doc));
@@ -152,6 +159,11 @@ export function createPortalRoutes(runner: PipelineRunner) {
       return c.json({ error: "Not found" }, 404);
     }
 
+    const db = await connectDb();
+    const messages = await listMessages(db, loaded.engagement.id);
+    // Serving the portal means the client has seen the firm's messages.
+    await markMessagesRead(db, loaded.engagement.id, "cpa");
+
     const payload = portalStateSchema.parse({
       firmName: FIRM_NAME,
       clientName: loaded.client.legalName,
@@ -161,8 +173,29 @@ export function createPortalRoutes(runner: PipelineRunner) {
       unmatched: unmatchedDocuments(loaded.items, loaded.documents).map((document) =>
         toPortalDocument(document, loaded.typeNameById),
       ),
+      messages,
     });
     return c.json(payload);
+  });
+
+  portalRoutes.post("/:token/messages", async (c) => {
+    const loaded = await loadPortalEngagement(c.req.param("token"));
+    if (!loaded) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    const parsed = portalMessageInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: zodIssueSummary(parsed.error) }, 400);
+    }
+
+    const db = await connectDb();
+    const message = await insertMessage(db, {
+      engagementId: loaded.engagement.id,
+      sender: "client",
+      body: parsed.data.body,
+    });
+    return c.json(portalMessageResponseSchema.parse({ message }), 201);
   });
 
   portalRoutes.post("/:token/upload", async (c) => {

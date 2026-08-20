@@ -55,6 +55,8 @@ const OPEN_DIALOG_SELECTORS = [
   "[data-export-confirm-modal]:not([hidden])",
   // Portal waive note: a poll repaint while the client types would steal focus mid-note.
   "[data-portal-waive-form]:not([hidden])",
+  // Message compose boxes (inbox + portal): pause repaints while the user is typing in one.
+  "[data-preserve-focus]:focus-within",
 ] as const;
 
 /** Poll must not swap `.workspace` while a modal or side panel holds focus. */

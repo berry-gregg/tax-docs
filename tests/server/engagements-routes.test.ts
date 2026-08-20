@@ -5,6 +5,8 @@ import {
   activitiesCollection,
   clientsCollection,
   engagementsCollection,
+  fromStored,
+  messagesCollection,
   requestItemsCollection,
   requestTemplatesCollection,
   taxDocumentsCollection,
@@ -17,6 +19,7 @@ import {
 } from "../../src/shared/schemas/api.ts";
 import type { Client } from "../../src/shared/schemas/client.ts";
 import { engagementSchema, type Engagement } from "../../src/shared/schemas/engagement.ts";
+import { messageSchema } from "../../src/shared/schemas/message.ts";
 
 const client: Client = {
   id: "client-bluebird",
@@ -96,6 +99,7 @@ async function clearCollections() {
     activitiesCollection(db).deleteMany({}),
     clientsCollection(db).deleteMany({}),
     engagementsCollection(db).deleteMany({}),
+    messagesCollection(db).deleteMany({}),
     requestItemsCollection(db).deleteMany({}),
     requestTemplatesCollection(db).deleteMany({}),
     taxDocumentsCollection(db).deleteMany({}),
@@ -162,6 +166,20 @@ describe("engagement routes", () => {
         direction: "outbound",
       }),
     );
+
+    // The very first thread message is the request itself, grounded in real fields.
+    const db = await connectDb();
+    const messageDocs = await messagesCollection(db)
+      .find({ engagementId: createBody.engagement.id })
+      .toArray();
+    expect(messageDocs).toHaveLength(1);
+    const requestMessage = fromStored(messageSchema, messageDocs[0]!);
+    expect(requestMessage.sender).toBe("cpa");
+    expect(requestMessage.readAt).toBeUndefined();
+    expect(requestMessage.body).toContain(client.contactName);
+    expect(requestMessage.body).toContain("2026");
+    expect(requestMessage.body).toContain("1120-S");
+    expect(requestMessage.body).toContain(`${template?.items.length ?? 0} documents`);
   });
 
   test("uses explicit request items instead of template items", async () => {
@@ -222,6 +240,12 @@ describe("engagement routes", () => {
     });
     expect(detailBody.activity[0].detail).not.toContain("items requested");
     expect(detailBody.activity[0].action).not.toBe("request-sent");
+
+    // No request went out, so no request message may claim one did.
+    const db = await connectDb();
+    expect(
+      await messagesCollection(db).countDocuments({ engagementId: createBody.engagement.id }),
+    ).toBe(0);
   });
 
   test("lists engagement rows with client names, document counts, and open item counts", async () => {

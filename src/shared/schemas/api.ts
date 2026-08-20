@@ -5,6 +5,7 @@ import { clientSchema } from "./client.ts";
 import { pipelineStatusSchema, taxDocumentSchema } from "./document.ts";
 import { documentTypeSchema } from "./document-type.ts";
 import { engagementSchema, filingTypeSchema } from "./engagement.ts";
+import { messageSchema } from "./message.ts";
 import { requestItemSchema, requestItemStatusSchema } from "./request.ts";
 
 /**
@@ -118,6 +119,8 @@ export const portalStateSchema = z.object({
   items: z.array(portalItemSchema),
   /** Client portal uploads not (yet) matched to any item — in-flight, unclassified, or rejected. */
   unmatched: z.array(portalDocumentSchema),
+  /** Full CPA↔client thread, oldest first. Serving this state marks the firm's messages read. */
+  messages: z.array(messageSchema),
 });
 export type PortalState = z.infer<typeof portalStateSchema>;
 
@@ -125,6 +128,15 @@ export const portalWaiveInputSchema = z.object({
   note: z.string().max(500).optional(),
 });
 export type PortalWaiveInput = z.infer<typeof portalWaiveInputSchema>;
+
+export const portalMessageInputSchema = z.object({
+  body: z.string().trim().min(1).max(2000),
+});
+export type PortalMessageInput = z.infer<typeof portalMessageInputSchema>;
+
+export const portalMessageResponseSchema = z.object({
+  message: messageSchema,
+});
 
 export const portalWaiveResponseSchema = z.object({
   item: portalItemSchema,

@@ -97,17 +97,27 @@ async function setRequestItemStatus(
   return next;
 }
 
-/** `_id` breaks ties so a checklist created in one batch still resolves to a stable item. */
-async function findOldestOpenItem(
+/**
+ * The oldest open item of the type wins; with none open, an already-received item keeps
+ * collecting further files of its type (an item can be satisfied by n documents). Waived and
+ * needs-attention items never collect. `_id` breaks ties so a checklist created in one batch
+ * still resolves to a stable item.
+ */
+async function findMatchableItem(
   db: Db,
   engagementId: string,
   documentTypeId: string,
 ): Promise<RequestItem | null> {
-  const stored = await requestItemsCollection(db).findOne(
-    { engagementId, documentTypeId, status: "open" },
-    { sort: { createdAt: 1, _id: 1 } },
-  );
-  return stored ? fromStored(requestItemSchema, stored) : null;
+  for (const status of ["open", "received"] as const) {
+    const stored = await requestItemsCollection(db).findOne(
+      { engagementId, documentTypeId, status },
+      { sort: { createdAt: 1, _id: 1 } },
+    );
+    if (stored) {
+      return fromStored(requestItemSchema, stored);
+    }
+  }
+  return null;
 }
 
 async function findRequestItem(
@@ -179,8 +189,9 @@ async function markUnclassified(
 
 /**
  * Links the document to a checklist item — the one it was uploaded against, or the oldest open
- * match. A document that was uploaded against the wrong item is left for the CPA to reconcile:
- * satisfying a "Form 941" request with a bank statement would report the checklist complete.
+ * (falling back to received) match. A document that was uploaded against the wrong item is left
+ * for the CPA to reconcile: satisfying a "Form 941" request with a bank statement would report
+ * the checklist complete.
  */
 async function linkChecklistItem(
   db: Db,
@@ -189,7 +200,7 @@ async function linkChecklistItem(
 ): Promise<TaxDocument> {
   const candidate = document.requestItemId
     ? await findRequestItem(db, document.requestItemId, document.engagementId)
-    : await findOldestOpenItem(db, document.engagementId, documentTypeId);
+    : await findMatchableItem(db, document.engagementId, documentTypeId);
   if (!candidate || candidate.documentTypeId !== documentTypeId) return document;
 
   const item = await setRequestItemStatus(db, candidate.id, "received", document.id);

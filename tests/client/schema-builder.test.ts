@@ -55,6 +55,10 @@ describe("schema builder", () => {
     expect(html).toContain('value="dollar-amount" selected');
     expect(html).toContain('value="double" selected');
     expect(html).toContain("snake_case");
+    // Required uses the shared drawn-checkbox recipe, not a bare native checkbox.
+    expect(html).toContain('class="checkbox"');
+    expect(html).toContain('class="checkbox-box"');
+    expect(html).not.toContain('class="check-field"');
   });
 
   test("metadataType changes re-default the dataType while still allowing overrides", () => {

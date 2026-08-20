@@ -166,11 +166,14 @@ describe("review page", () => {
     expect(html).toMatch(/class="breadcrumb-current"[^>]*>profit-loss\.pdf</);
   });
 
-  test("keeps a quiet secondary link to the engagement workspace", () => {
+  test("the header hosts the trust action instead of an engagement workspace link", () => {
     const html = renderReview(data());
 
-    expect(html).toContain('href="/engagements/eng-1"');
-    expect(html).toContain("Engagement workspace");
+    expect(html).not.toContain("Engagement workspace");
+    expect(html).not.toContain('href="/engagements/eng-1"');
+    expect(html).toMatch(
+      /<div class="page-actions"><button class="btn-primary" type="button" data-mark-trusted>Mark trusted<\/button><\/div>/,
+    );
   });
 
   test("each field is one compact row: label, always-editable input, confidence chip", () => {
@@ -237,6 +240,8 @@ describe("review page", () => {
 
     expect(html).toContain("data-mark-trusted");
     expect(html).not.toContain("data-mark-trusted disabled");
+    expect(html).not.toContain("Edit anything that is wrong");
+    expect(html).not.toContain("review-foot");
   });
 
   test("Trust stays disabled when extraction returned no fields", () => {
@@ -381,9 +386,12 @@ describe("review page", () => {
     );
 
     expect(html).toContain("Trusted");
-    expect(html).toContain('href="/engagements/eng-1/export"');
+    expect(html).toMatch(
+      /<div class="page-actions"><a class="btn-secondary" href="\/engagements\/eng-1\/export" data-nav-link>Open export<\/a><\/div>/,
+    );
     expect(html).toMatch(/data-field-input="gross_receipts"[^>]*disabled/);
     expect(html).not.toContain("data-mark-trusted");
+    expect(html).not.toContain("ready for the engine export");
   });
 
   test("polls on the shared live interval so the fail-soft rerun lands on its own", () => {

@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { POLL_INTERVAL_MS } from "../../../shared/constants.ts";
 import {
+  inboxMessageResponseSchema,
   inboxThreadsResponseSchema,
   type InboxThread,
-  type InboxThreadItem,
+  type InboxTimelineEntry,
 } from "../../../shared/schemas/inbox.ts";
 import { getJson, sendJson } from "../api.ts";
 import { formatRelativeTime } from "../format.ts";
@@ -27,37 +28,14 @@ export type InboxData = {
  */
 export const openThreadIds = new Set<string>();
 
-/** Attention first, then fresh arrivals, then what is still owed; waived is closed business. */
-const itemOrder: Record<InboxThreadItem["status"], number> = {
-  "needs-attention": 0,
-  received: 1,
-  open: 2,
-  waived: 3,
-};
+/**
+ * Unsent compose text keyed by engagementId. The compose form is `data-preserve-focus`, so a
+ * poll never repaints while the CPA is typing — this map restores drafts when a repaint does
+ * happen with focus elsewhere.
+ */
+export const composeDrafts = new Map<string, string>();
 
-/** The shared `.chip` recipe — status is never highlighter, labels are sentence case. */
-const itemChips: Record<InboxThreadItem["status"], string> = {
-  open: `<span class="chip chip-processing">Open</span>`,
-  received: `<span class="chip chip-success">Received</span>`,
-  "needs-attention": `<span class="chip chip-warning">Needs attention</span>`,
-  waived: `<span class="chip chip-processing">Waived</span>`,
-};
-
-function itemPhrase(item: InboxThreadItem): string {
-  switch (item.status) {
-    case "received":
-      return item.documentFilename ? `Received · ${item.documentFilename}` : "Received";
-    case "needs-attention":
-      return item.documentFilename
-        ? `Needs attention · ${item.documentFilename}`
-        : "Needs attention";
-    case "waived":
-      // A note only exists when the client waived from the portal; CPA waives carry none.
-      return item.waiveNote ? `Waived by client — ${item.waiveNote}` : "Waived";
-    case "open":
-      return "Waiting on client";
-  }
-}
+const PREVIEW_MAX_CHARS = 96;
 
 function relativeTime(iso: string, now: Date, extraClass: string): string {
   return `<time class="muted ${extraClass}" datetime="${escapeHtml(iso)}">${escapeHtml(
@@ -65,55 +43,85 @@ function relativeTime(iso: string, now: Date, extraClass: string): string {
   )}</time>`;
 }
 
-function renderThreadItem(item: InboxThreadItem, now: Date): string {
-  const inner = `${itemChips[item.status]}
-    <span class="inbox-item-title">${escapeHtml(item.title)}</span>
-    <span class="muted inbox-item-phrase">${escapeHtml(itemPhrase(item))}</span>
-    ${relativeTime(item.lastUpdateAt, now, "inbox-item-time")}`;
-
-  if (item.documentId) {
-    return `<a class="inbox-item-row" href="/documents/${escapeHtml(item.documentId)}" data-nav-link>${inner}</a>`;
+function truncate(value: string): string {
+  if (value.length <= PREVIEW_MAX_CHARS) {
+    return value;
   }
-
-  return `<div class="inbox-item-row">${inner}</div>`;
+  return `${value.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd()}…`;
 }
 
-function threadSummary(thread: InboxThread, now: Date): string {
-  const received = thread.items.filter((item) => item.status === "received").length;
-  const sent = formatRelativeTime(thread.requestSentAt, now);
-  return `Request sent ${sent} · ${received} of ${thread.items.length} items received`;
+/** Latest message wins the row preview; an event-only thread previews its latest system line. */
+function previewFor(thread: InboxThread): string {
+  const lastMessage = [...thread.timeline]
+    .reverse()
+    .find((entry): entry is Extract<InboxTimelineEntry, { kind: "message" }> => entry.kind === "message");
+  if (lastMessage) {
+    const prefix = lastMessage.sender === "cpa" ? "You: " : "";
+    return truncate(`${prefix}${lastMessage.body}`);
+  }
+
+  const lastEvent = thread.timeline.at(-1);
+  return lastEvent && lastEvent.kind === "event" ? truncate(lastEvent.text) : "No messages yet";
+}
+
+function renderTimelineEntry(entry: InboxTimelineEntry, thread: InboxThread, now: Date): string {
+  if (entry.kind === "message") {
+    const isCpa = entry.sender === "cpa";
+    return `<div class="inbox-msg inbox-msg-${isCpa ? "cpa" : "client"}" data-message-id="${escapeHtml(entry.id)}">
+      <span class="inbox-msg-meta muted"><span class="inbox-msg-sender">${escapeHtml(
+        isCpa ? "You" : thread.clientName,
+      )}</span> ${relativeTime(entry.createdAt, now, "inbox-msg-time")}</span>
+      <p class="inbox-msg-body">${escapeHtml(entry.body)}</p>
+    </div>`;
+  }
+
+  const text = entry.documentId
+    ? `<a class="inbox-event-link" href="/documents/${escapeHtml(entry.documentId)}" data-nav-link>${escapeHtml(entry.text)}</a>`
+    : `<span>${escapeHtml(entry.text)}</span>`;
+
+  return `<div class="inbox-event">
+    ${text}
+    ${relativeTime(entry.createdAt, now, "inbox-event-time")}
+  </div>`;
+}
+
+function renderCompose(thread: InboxThread): string {
+  const draft = composeDrafts.get(thread.engagementId) ?? "";
+
+  return `<form class="inbox-compose" data-preserve-focus data-compose data-engagement-id="${escapeHtml(thread.engagementId)}">
+    <textarea class="inbox-compose-input" data-compose-input rows="2" placeholder="Reply to ${escapeHtml(thread.clientName)}…" aria-label="Reply to ${escapeHtml(thread.clientName)}">${escapeHtml(draft)}</textarea>
+    <div class="inbox-compose-foot">
+      <span class="inbox-compose-error" data-compose-error hidden></span>
+      <button class="btn-primary inbox-compose-send" type="submit" data-compose-send>Send</button>
+    </div>
+  </form>`;
 }
 
 function renderThread(thread: InboxThread, now: Date): string {
   const open = openThreadIds.has(thread.engagementId);
-  const items = [...thread.items].sort(
-    (a, b) => itemOrder[a.status] - itemOrder[b.status] || (a.lastUpdateAt < b.lastUpdateAt ? 1 : -1),
-  );
+  const latestAt = thread.timeline.at(-1)?.createdAt;
 
   return `<section class="inbox-thread${open ? " is-open" : ""}" data-thread data-engagement-id="${escapeHtml(thread.engagementId)}">
     <div class="inbox-thread-head${thread.unread ? " is-unread" : ""}" data-thread-toggle data-engagement-id="${escapeHtml(thread.engagementId)}" role="button" tabindex="0" aria-expanded="${open ? "true" : "false"}"${thread.unread ? ' data-unread="true"' : ""}>
       <span class="unread-dot" aria-hidden="true"></span>
       <span class="inbox-thread-title">
         <span class="inbox-thread-client">${escapeHtml(thread.clientName)}</span>
-        <span class="muted">${escapeHtml(thread.engagementLabel)}</span>
+        <span class="muted">${escapeHtml(`${thread.filingType} · ${thread.taxYear}`)}</span>
       </span>
-      <span class="muted inbox-thread-summary">${escapeHtml(threadSummary(thread, now))}</span>
+      <span class="muted inbox-thread-preview">${escapeHtml(previewFor(thread))}</span>
+      ${latestAt ? relativeTime(latestAt, now, "inbox-thread-time") : ""}
       ${portalLinkControl(`/portal/${thread.portalToken}`)}
       <span class="inbox-thread-chevron" aria-hidden="true">${icons.chevron}</span>
     </div>
     <div class="inbox-thread-body" data-thread-body${open ? "" : " hidden"}>
       ${
-        items.length === 0
-          ? `<p class="muted inbox-thread-empty">No items on this request yet.</p>`
-          : `<div class="inbox-thread-items">${items.map((item) => renderThreadItem(item, now)).join("")}</div>`
+        thread.timeline.length === 0
+          ? `<p class="muted inbox-thread-empty">No messages on this engagement yet.</p>`
+          : `<div class="inbox-conversation">${thread.timeline
+              .map((entry) => renderTimelineEntry(entry, thread, now))
+              .join("")}</div>`
       }
-      ${
-        thread.sentToEngineAt
-          ? `<div class="muted inbox-thread-foot">Sent to tax engine ${escapeHtml(
-              formatRelativeTime(thread.sentToEngineAt, now),
-            )}</div>`
-          : ""
-      }
+      ${renderCompose(thread)}
     </div>
   </section>`;
 }
@@ -125,7 +133,7 @@ export function renderInbox(data: InboxData): string {
     ${pageHeader("Inbox", unreadThreads > 0 ? String(unreadThreads) : undefined)}
     ${
       data.threads.length === 0
-        ? `<p class="muted">No document requests yet. Send a checklist from an engagement and its thread will appear here.</p>`
+        ? `<p class="muted">No conversations yet. Create an engagement and its request message will open the thread here.</p>`
         : `<div class="inbox-threads">${data.threads
             .map((thread) => renderThread(thread, data.now))
             .join("")}</div>`
@@ -202,15 +210,91 @@ function bindThreadToggles(root: HTMLElement): void {
   });
 }
 
+type ComposeForm = {
+  form: HTMLElement;
+  engagementId: string;
+  input: HTMLTextAreaElement;
+  errorSlot: HTMLElement | null;
+  sendButton: HTMLButtonElement | null;
+};
+
+async function submitCompose(compose: ComposeForm, repaint: () => void): Promise<void> {
+  const body = compose.input.value.trim();
+  if (body.length === 0) {
+    return;
+  }
+
+  if (compose.sendButton) {
+    compose.sendButton.disabled = true;
+  }
+  if (compose.errorSlot) {
+    compose.errorSlot.hidden = true;
+    compose.errorSlot.textContent = "";
+  }
+
+  try {
+    await sendJson(
+      "POST",
+      `/api/inbox/threads/${compose.engagementId}/messages`,
+      { body },
+      inboxMessageResponseSchema,
+    );
+    composeDrafts.delete(compose.engagementId);
+    compose.input.value = "";
+    if (compose.sendButton) {
+      compose.sendButton.disabled = false;
+    }
+    repaint();
+  } catch (error) {
+    // The server's own message, verbatim — a generic apology would hide the cause.
+    if (compose.sendButton) {
+      compose.sendButton.disabled = false;
+    }
+    if (compose.errorSlot) {
+      compose.errorSlot.textContent = error instanceof Error ? error.message : String(error);
+      compose.errorSlot.hidden = false;
+    }
+  }
+}
+
+/** Direct per-form binding: bind() re-runs after every repaint, so handlers never go stale. */
+function bindComposeForms(root: HTMLElement, repaint: () => void): void {
+  root.querySelectorAll<HTMLElement>("[data-compose]").forEach((form) => {
+    const engagementId = form.getAttribute("data-engagement-id");
+    const input = form.querySelector<HTMLTextAreaElement>("[data-compose-input]");
+    if (!engagementId || !input) {
+      return;
+    }
+
+    const compose: ComposeForm = {
+      form,
+      engagementId,
+      input,
+      errorSlot: form.querySelector<HTMLElement>("[data-compose-error]"),
+      sendButton: form.querySelector<HTMLButtonElement>("[data-compose-send]"),
+    };
+
+    input.addEventListener("input", () => {
+      composeDrafts.set(engagementId, input.value);
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void submitCompose(compose, repaint);
+    });
+  });
+}
+
 export const inboxPage: PageModule<InboxData> = {
   async load() {
     const { threads } = await getJson("/api/inbox", inboxThreadsResponseSchema);
     return { threads, now: new Date() };
   },
   render: renderInbox,
-  bind(root) {
+  bind(root, _data, repaint) {
     bindPortalLinkControls(root);
     bindThreadToggles(root);
+    bindComposeForms(root, repaint);
   },
   pollMs: POLL_INTERVAL_MS,
 };

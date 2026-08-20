@@ -245,14 +245,15 @@ describe("new-engagement modal", () => {
     expect(renderClients({ clients: [], modalOpen: true, modalError: null })).toContain(newClientFields());
   });
 
-  test("step 2 keeps Cancel and the shared form field vocabulary", () => {
+  test("step 2 keeps Cancel inside the widened panel; step 1 stays narrow", () => {
     const html = renderNewEngagementModal(state({ step: 2 }));
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain('class="form-grid"');
-    expect(html).toContain('class="form-field"');
+    expect(html).toContain('class="modal-panel modal-panel-wide"');
     expect(html).toContain("data-close-new-engagement");
     expect(html).toContain("Cancel");
+    expect(renderNewEngagementModal(state())).not.toContain("modal-panel-wide");
   });
 
   test("step 2 renders the editable template checklist and active document-type choices", () => {
@@ -266,6 +267,21 @@ describe("new-engagement modal", () => {
     expect(html).toContain("Add item");
     expect(html).toContain("K-1 (1120-S)");
     expect(html).not.toContain("Old worksheet");
+  });
+
+  test("each checklist row is one compact line with a drawn checkbox, not stacked fields", () => {
+    const html = renderNewEngagementModal(state({ step: 2 }));
+
+    expect(html).toMatch(
+      /<div class="checklist-row" data-checklist-index="0">\s*<input name="title-0" value="Schedule K-1" aria-label="Title" \/>\s*<input name="description-0" value="Upload every shareholder K-1\." aria-label="Description" \/>\s*<select name="documentTypeId-0" aria-label="Document type">/,
+    );
+    expect(html).toContain(
+      '<label class="checkbox"><input class="visually-hidden-input" type="checkbox" name="required-0" aria-label="Required" checked /><span class="checkbox-box" aria-hidden="true"></span></label>',
+    );
+    expect(html).toContain('class="checklist-head"');
+    // Column labels replace the three stacked per-field labels of the old tall rows.
+    expect(html).not.toContain('class="form-field"');
+    expect(html).not.toContain('class="list-row"');
   });
 
   test("checklist editor functions add, remove, and update without mutating state", () => {

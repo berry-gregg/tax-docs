@@ -128,6 +128,22 @@ function portalState(overrides: Partial<PortalState> = {}): PortalState {
         uploadedAt: "2026-04-03T00:00:00.000Z",
       },
     ],
+    messages: [
+      {
+        id: "msg-cpa-1",
+        engagementId: "eng-1",
+        sender: "cpa",
+        body: "Please include the December bank statement",
+        createdAt: "2026-04-01T09:00:00.000Z",
+      },
+      {
+        id: "msg-client-1",
+        engagementId: "eng-1",
+        sender: "client",
+        body: "Uploading everything this week",
+        createdAt: "2026-04-01T10:00:00.000Z",
+      },
+    ],
     ...overrides,
   });
 }
@@ -225,8 +241,11 @@ function makePortalRoot() {
   const waiveToggle = new FakePortalNode();
   waiveToggle.attributes.set("data-portal-waive", "item-open");
 
-  const docsPanel = new FakePortalNode();
-  docsPanel.attributes.set("data-portal-docs", "item-recv");
+  const itemPanel = new FakePortalNode();
+  itemPanel.attributes.set("data-portal-panel", "item-recv");
+
+  const composeInput = new FakePortalNode();
+  const composeForm = new FakePortalNode({ "[data-portal-compose-body]": composeInput });
 
   const root = new FakePortalNode({
     "[data-portal-dropzone]": dropzone,
@@ -234,7 +253,8 @@ function makePortalRoot() {
     "[data-portal-error]": errorSlot,
     "[data-portal-waive]": [waiveToggle],
     '[data-portal-waive-form="item-open"]': waiveForm,
-    "[data-portal-docs]": [docsPanel],
+    "[data-portal-panel]": [itemPanel],
+    "[data-portal-compose]": composeForm,
   });
 
   return Object.assign(root, {
@@ -244,7 +264,9 @@ function makePortalRoot() {
     errorSlot,
     waiveForm,
     waiveToggle,
-    docsPanel,
+    itemPanel,
+    composeForm,
+    composeInput,
     noteInput: waiveForm.querySelector("[data-portal-waive-note]") as FakePortalNode,
     cancelButton: waiveForm.querySelector("[data-portal-waive-cancel]") as FakePortalNode,
   });
@@ -260,15 +282,22 @@ describe("portal layout", () => {
     );
   });
 
-  test("checklist sits in a left column beside one common drop zone", () => {
+  test("checklist, drop zone, and messages panel share the three-column layout", () => {
     const html = renderPortal(validData());
 
     expect(html).toContain("portal-layout");
     expect(html).toContain("portal-checklist");
     expect(html).toContain("portal-main");
+    expect(html).toContain("portal-messages");
     expect(html.split("data-portal-dropzone").length - 1).toBe(1);
     expect(html).toContain('accept="application/pdf,.pdf"');
     expect(html).toContain("multiple");
+  });
+
+  test("primary content sits on white card surfaces over the wash", () => {
+    const html = renderPortal(validData());
+
+    expect(html.split("portal-card").length - 1).toBe(3);
   });
 
   test("no per-item dropzones or request item upload params remain", () => {
@@ -319,17 +348,43 @@ describe("portal checklist items", () => {
     expect(html).not.toContain("reason");
   });
 
-  test("open items render an open circle mark and required marker", () => {
+  test("open items render an open circle mark and a visible Required badge", () => {
     const html = renderPortal(validData());
 
     expect(html).toContain("portal-mark-open");
-    expect(html).toContain("Required");
+    expect(html).toContain('<span class="portal-required">Required</span>');
   });
 
-  test("matched documents nest in a collapsible section with a view link", () => {
+  test("rows are compact: one summary line, details behind progressive disclosure", () => {
     const html = renderPortal(validData());
 
-    expect(html).toContain('<details class="portal-item-docs" data-portal-docs="item-recv"');
+    const summaries = html.match(/<summary class="portal-item-summary">[\s\S]*?<\/summary>/g) ?? [];
+    expect(summaries).toHaveLength(5);
+    for (const summary of summaries) {
+      expect(summary).not.toContain("portal-item-description");
+      expect(summary).not.toContain("portal-doc-list");
+      expect(summary).not.toContain("portal-waive");
+    }
+    // Required badge sits on the summary line of exactly the required items.
+    expect(summaries.filter((s) => s.includes('class="portal-required"')).length).toBe(3);
+    // File count is visible without expanding.
+    expect(summaries.some((s) => s.includes(">1 file<"))).toBe(true);
+    // Descriptions still exist, inside the expandable body.
+    expect(html).toContain("portal-item-description");
+    expect(html).toContain("Every W-2 issued by the entity.");
+  });
+
+  test("items render collapsed by default", () => {
+    const html = renderPortal(validData());
+
+    expect(html).toContain('data-portal-panel="item-recv"');
+    expect(html).not.toMatch(/data-portal-panel="item-recv"[^>]*\sopen/);
+  });
+
+  test("matched documents nest under the expanded item with a view link", () => {
+    const html = renderPortal(validData());
+
+    expect(html).toContain("portal-doc-list");
     expect(html).toContain("balance-sheet.pdf");
     expect(html).toContain('href="/api/portal/portal-tok/documents/doc-1/file"');
     expect(html).toContain('target="_blank"');
@@ -346,20 +401,30 @@ describe("portal checklist items", () => {
     expect(html).toContain(">Classifying<");
   });
 
-  test("collapsible open state survives a re-render", () => {
+  test("expanded state survives a re-render", () => {
     const data = validData();
-    expect(renderPortal(data)).not.toMatch(/data-portal-docs="item-recv"[^>]*\sopen/);
+    expect(renderPortal(data)).not.toMatch(/data-portal-panel="item-recv"[^>]*\sopen/);
 
     const root = makePortalRoot();
     portalPage.bind?.(root as unknown as HTMLElement, data, () => {});
-    root.docsPanel.open = true;
-    root.docsPanel.dispatch("toggle");
+    root.itemPanel.open = true;
+    root.itemPanel.dispatch("toggle");
 
-    expect(renderPortal(data)).toMatch(/data-portal-docs="item-recv"[^>]*\sopen/);
+    expect(renderPortal(data)).toMatch(/data-portal-panel="item-recv"[^>]*\sopen/);
 
-    root.docsPanel.open = false;
-    root.docsPanel.dispatch("toggle");
-    expect(renderPortal(data)).not.toMatch(/data-portal-docs="item-recv"[^>]*\sopen/);
+    root.itemPanel.open = false;
+    root.itemPanel.dispatch("toggle");
+    expect(renderPortal(data)).not.toMatch(/data-portal-panel="item-recv"[^>]*\sopen/);
+  });
+
+  test("an open waive form keeps its item panel expanded across repaints", () => {
+    const data = validData();
+    const root = makePortalRoot();
+    portalPage.bind?.(root as unknown as HTMLElement, data, () => {});
+
+    root.waiveToggle.dispatch("click");
+
+    expect(renderPortal(data)).toMatch(/data-portal-panel="item-open"[^>]*\sopen/);
   });
 });
 
@@ -457,6 +522,117 @@ describe("portal waive", () => {
 
     expect(root.errorSlot.hidden).toBe(false);
     expect(root.errorSlot.textContent).toBe('Item is not open — current status is "received"');
+  });
+});
+
+describe("portal messages", () => {
+  test("renders the thread with the firm name for CPA rows and You for client rows", () => {
+    const html = renderPortal(validData());
+
+    expect(html).toContain("data-portal-messages");
+    expect(html).toContain(">Messages</h2>");
+    expect(html).toContain("Please include the December bank statement");
+    expect(html).toContain("Uploading everything this week");
+    expect(html).toContain(`<span class="portal-message-sender">${FIRM_NAME}</span>`);
+    expect(html).toContain('<span class="portal-message-sender">You</span>');
+  });
+
+  test("an empty thread renders a quiet empty row, never a blank panel", () => {
+    const html = renderPortal(validData(portalState({ messages: [] })));
+
+    expect(html).toContain("portal-messages-empty");
+  });
+
+  test("compose form is wrapped in data-preserve-focus with a bounded textarea", () => {
+    const html = renderPortal(validData());
+
+    expect(html).toContain("data-portal-compose");
+    expect(html).toContain("data-preserve-focus");
+    expect(html).toContain("data-portal-compose-body");
+    expect(html).toContain('maxlength="2000"');
+    expect(html).toContain(">Send</button>");
+  });
+
+  test("the draft survives a repaint", () => {
+    const data = validData();
+    const root = makePortalRoot();
+    portalPage.bind?.(root as unknown as HTMLElement, data, () => {});
+
+    root.composeInput.value = "Half-typed question";
+    root.composeInput.dispatch("input");
+
+    expect(renderPortal(data)).toContain("Half-typed question");
+  });
+
+  test("send posts the trimmed body, clears the draft, and repaints", async () => {
+    const calls: Array<{ url: string; body: string }> = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), body: String(init?.body ?? "") });
+      return jsonResponse(
+        {
+          message: {
+            id: "msg-new",
+            engagementId: "eng-1",
+            sender: "client",
+            body: "Is the K-1 needed?",
+            createdAt: "2026-04-02T00:00:00.000Z",
+          },
+        },
+        201,
+      );
+    }) as typeof fetch;
+
+    let repaints = 0;
+    const root = makePortalRoot();
+    portalPage.bind?.(root as unknown as HTMLElement, validData(), () => {
+      repaints += 1;
+    });
+
+    root.composeInput.value = "  Is the K-1 needed?  ";
+    root.composeInput.dispatch("input");
+    root.composeForm.dispatch("submit");
+
+    await waitUntil(() => repaints > 0);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("/api/portal/portal-tok/messages");
+    expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({ body: "Is the K-1 needed?" });
+    expect(root.composeInput.value).toBe("");
+    expect(renderPortal(validData())).not.toContain("Is the K-1 needed?  ");
+  });
+
+  test("an empty draft never posts", () => {
+    let fetched = 0;
+    globalThis.fetch = (async () => {
+      fetched += 1;
+      return jsonResponse({});
+    }) as unknown as typeof fetch;
+
+    const root = makePortalRoot();
+    portalPage.bind?.(root as unknown as HTMLElement, validData(), () => {});
+
+    root.composeInput.value = "   ";
+    root.composeInput.dispatch("input");
+    root.composeForm.dispatch("submit");
+
+    expect(fetched).toBe(0);
+  });
+
+  test("a failed send restores the draft and surfaces the server's message", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse({ error: "body: too long" }, 400)) as unknown as typeof fetch;
+
+    const root = makePortalRoot();
+    portalPage.bind?.(root as unknown as HTMLElement, validData(), () => {});
+
+    root.composeInput.value = "A question";
+    root.composeInput.dispatch("input");
+    root.composeForm.dispatch("submit");
+
+    await waitUntil(() => !root.errorSlot.hidden);
+
+    expect(root.errorSlot.textContent).toBe("body: too long");
+    expect(root.composeInput.value).toBe("A question");
   });
 });
 
@@ -605,6 +781,15 @@ describe("portal page module", () => {
             },
           ],
           unmatched: [],
+          messages: [
+            {
+              id: "msg-x",
+              engagementId: "eng-1",
+              sender: "cpa",
+              body: '<script>alert("msg")</script>',
+              createdAt: "2026-04-01T09:00:00.000Z",
+            },
+          ],
         }),
       ),
     );
@@ -612,6 +797,7 @@ describe("portal page module", () => {
     expect(html).not.toContain("<script>");
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;script&gt;title&lt;/script&gt;");
+    expect(html).toContain("&lt;script&gt;alert(&quot;msg&quot;)&lt;/script&gt;");
   });
 
   test("uses product chrome only — no marketing band, highlighter, or uppercase", () => {

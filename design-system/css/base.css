@@ -123,6 +123,11 @@ img {
   background: var(--surface-nav-active);
 }
 
+/* .badge sets display, which beats the UA [hidden] rule — a zero count must fully disappear. */
+.badge[hidden] {
+  display: none;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

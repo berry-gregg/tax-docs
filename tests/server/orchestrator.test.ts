@@ -462,6 +462,111 @@ describe("runPipeline happy path", () => {
   });
 });
 
+describe("runPipeline multi-file matching", () => {
+  test("a second file of the same type appends to the already-received item", async () => {
+    const db = await connectDb();
+    await requestItemsCollection(db).insertOne(
+      toStored(
+        requestItem({
+          id: "item-multi",
+          status: "received",
+          matchedDocumentIds: ["doc-first"],
+        }),
+      ),
+    );
+    const document = await seedDocument({ id: "doc-second", filename: "form-941-q2.pdf" });
+
+    const { ai } = scriptedAi(
+      [
+        { relevant: true, legible: true, confidence: 0.9, reason: "Payroll return" },
+        { documentTypeId: form941.id, confidence: 0.92, reasoning: "Form 941" },
+        { fields: [] },
+      ],
+      document.id,
+    );
+
+    await runPipeline(document.id, { ai });
+
+    expect((await loadDocument(document.id)).requestItemId).toBe("item-multi");
+    expect(await loadItem("item-multi")).toMatchObject({
+      status: "received",
+      matchedDocumentIds: ["doc-first", document.id],
+    });
+
+    const matched = (await loadActivities()).find(
+      (entry) => entry.action === "checklist-item-matched",
+    );
+    expect(matched).toMatchObject({ requestItemId: "item-multi", direction: "inbound" });
+    expect(matched?.detail).toContain("form-941-q2.pdf");
+  });
+
+  test("an open item still wins over an older received item of the same type", async () => {
+    const db = await connectDb();
+    await requestItemsCollection(db).insertOne(
+      toStored(
+        requestItem({
+          id: "item-full",
+          status: "received",
+          matchedDocumentIds: ["doc-first"],
+          createdAt: "2026-01-05T00:00:00.000Z",
+        }),
+      ),
+    );
+    await requestItemsCollection(db).insertOne(
+      toStored(requestItem({ id: "item-still-open", createdAt: "2026-02-05T00:00:00.000Z" })),
+    );
+    const document = await seedDocument({ id: "doc-prefers-open" });
+
+    const { ai } = scriptedAi(
+      [
+        { relevant: true, legible: true, confidence: 0.9, reason: "Payroll return" },
+        { documentTypeId: form941.id, confidence: 0.92, reasoning: "Form 941" },
+        { fields: [] },
+      ],
+      document.id,
+    );
+
+    await runPipeline(document.id, { ai });
+
+    expect((await loadDocument(document.id)).requestItemId).toBe("item-still-open");
+    expect(await loadItem("item-still-open")).toMatchObject({
+      status: "received",
+      matchedDocumentIds: [document.id],
+    });
+    expect(await loadItem("item-full")).toMatchObject({
+      matchedDocumentIds: ["doc-first"],
+    });
+  });
+
+  test("a waived item never collects files", async () => {
+    const db = await connectDb();
+    await requestItemsCollection(db).insertOne(
+      toStored(requestItem({ id: "item-waived", status: "waived" })),
+    );
+    const document = await seedDocument({ id: "doc-vs-waived" });
+
+    const { ai } = scriptedAi(
+      [
+        { relevant: true, legible: true, confidence: 0.9, reason: "Payroll return" },
+        { documentTypeId: form941.id, confidence: 0.92, reasoning: "Form 941" },
+        { fields: [] },
+      ],
+      document.id,
+    );
+
+    await runPipeline(document.id, { ai });
+
+    const finished = await loadDocument(document.id);
+    expect(finished.pipelineStatus).toBe("needs-review");
+    expect(finished.requestItemId).toBeUndefined();
+    expect(await loadItem("item-waived")).toMatchObject({
+      status: "waived",
+      matchedDocumentIds: [],
+    });
+    expect(await actionsLogged()).not.toContain("checklist-item-matched");
+  });
+});
+
 describe("runPipeline rejection lane", () => {
   test("an irrelevant document is rejected and flips its checklist item to needs-attention", async () => {
     const db = await connectDb();

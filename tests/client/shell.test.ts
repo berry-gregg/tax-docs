@@ -528,6 +528,24 @@ describe("shell.css page furniture", () => {
     expect(css).toContain(".load-error");
   });
 
+  test("the wide modal modifier only widens the panel — one panel recipe", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).toMatch(
+      /\.modal-panel-wide \{[^}]*width:\s*min\(840px, calc\(100vw - var\(--spacing-48\)\)\)/s,
+    );
+  });
+
+  test("one drawn 16px checkbox recipe replaces native checkboxes everywhere", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).toMatch(/\.checkbox-box \{[^}]*width:\s*16px/s);
+    expect(css).toMatch(/\.checkbox-box \{[^}]*border:\s*1px solid var\(--color-input-hairline\)/s);
+    expect(css).toMatch(/\.checkbox:has\(input:checked\) \.checkbox-box \{[^}]*background:\s*var\(--color-ink\)/s);
+    // The recipe is the single source of truth — the old ad-hoc class is gone.
+    expect(css).not.toContain(".check-field");
+  });
+
   test("confidence tiers are modifiers of the one .chip recipe, not a duplicate block", async () => {
     const css = await Bun.file("src/client/styles/shell.css").text();
 
@@ -576,6 +594,12 @@ describe("token and base hygiene", () => {
     expect(tokens).not.toContain("--color-banner");
     expect(tokens).not.toContain("--surface-banner");
     expect(tokens).not.toContain("--radius-tags");
+  });
+
+  test("a zero-count badge fully disappears — hidden must beat the badge display", async () => {
+    const css = await Bun.file("design-system/css/base.css").text();
+
+    expect(css).toMatch(/\.badge\[hidden\] \{[^}]*display:\s*none/s);
   });
 
   test("marketing-era .page and .card primitives are gone from base.css", async () => {

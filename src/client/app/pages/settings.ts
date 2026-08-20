@@ -114,8 +114,9 @@ function renderDocumentTypeRow(documentType: DocumentType): string {
     <td>${documentType.fields.length} ${documentType.fields.length === 1 ? "field" : "fields"}</td>
     <td>${createdByChip(documentType.createdBy)}</td>
     <td>
-      <label class="toggle-field">
-        <input type="checkbox" data-document-type-active="${escapeHtml(documentType.id)}" ${documentType.active ? "checked" : ""} />
+      <label class="checkbox toggle-field">
+        <input class="visually-hidden-input" type="checkbox" data-document-type-active="${escapeHtml(documentType.id)}" ${documentType.active ? "checked" : ""} />
+        <span class="checkbox-box" aria-hidden="true"></span>
         <span>${status}</span>
       </label>
     </td>

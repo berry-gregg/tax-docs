@@ -90,11 +90,11 @@ Amber steps need a person. Everything else runs on its own.
 
 **2. Documents** - the review queue at `?tab=needs-review`. Three seeded Alder Creek documents are waiting: a P&L and two Schedule K-1s.
 
-**3. Review** - open `alder-creek-profit-and-loss-2025.pdf`. Every field carries a value, a confidence bucket, and a citation. Accept or edit each one; **Mark trusted** stays disabled until all are resolved. The model proposes, a person decides.
+**3. Review** - open `alder-creek-profit-and-loss-2025.pdf`. Every field carries a value, a confidence bucket, and a citation in an editable input. Fix anything that is wrong, then **Mark trusted** (top right); unedited values are accepted as extracted. The model proposes, a person decides.
 
 **4. Engagement workspace** - **Engagements > Northgate Millwork, Inc.** (1120-S, 2025). Seven-item checklist, two trusted documents, validation summary, **Copy portal link**.
 
-**5. Client portal** - <http://localhost:5173/portal/portal-northgate-millwork-inc-2025>. Deliberately chromeless: no sidebar, no other clients. An unknown token returns 404, not 403.
+**5. Client portal** - <http://localhost:5173/portal/portal-northgate-millwork-inc-2025>. Deliberately chromeless: no sidebar, no other clients. An unknown token returns 404, not 403. The Messages panel on the right carries the same thread as the firm's Inbox.
 
 Drop `demo-docs/northgate-profit-and-loss-2025.pdf` on it. Watch the status advance; the checklist item flips to `received` and the document joins the review queue.
 
@@ -109,7 +109,7 @@ Drop `demo-docs/northgate-profit-and-loss-2025.pdf` on it. Watch the status adva
 
 **8. Export** - a draft built from the trusted documents is already seeded, so go straight to **Confirm & send to tax engine**. The engagement moves to `exported` and the JSON payload becomes downloadable. Nothing reaches an engine without this click.
 
-**9. Inbox and Settings** - the inbound activity ledger, and the eight seeded document types plus anything you drafted in step 6.
+**9. Inbox and Settings** - the client conversation threads (reply to Northgate's unread question live from the compose box), and the eight seeded document types plus anything you drafted in step 6.
 
 **10. Verify the live pipeline** - `bun run smoke` pushes the P&L, the lease, and the apportionment schedule through the real pipeline and asserts all three outcomes. It spends real tokens, so it stays out of `bun test`.
 
@@ -291,17 +291,18 @@ Tests run on `bun:test` and mock only at system boundaries. Persistence tests us
 
 **Portal**
 
-- `GET /api/portal/:token` - checklist state with per-item nested `documents` and top-level `unmatched` uploads, 404 on unknown token
+- `GET /api/portal/:token` - checklist state (items required-first, then title) with per-item nested `documents`, top-level `unmatched` uploads, and the full `messages` thread oldest-first; serving it marks the firm's messages read; 404 on unknown token
 - `POST /api/portal/:token/upload`
 - `POST /api/portal/:token/items/:itemId/waive` - client marks an item not needed, optional note (409 unless the item is open)
+- `POST /api/portal/:token/messages` - client sends a message `{ body }` (1-2000 chars), 201 with the created message
 - `GET /api/portal/:token/documents/:documentId/file` - token-scoped PDF, 404 outside the token's engagement
 
 **Inbox and metrics**
 
-- `GET /api/inbox` - request threads (one per engagement with visible activity): head fields + per-request-item status lines
-- `GET /api/inbox/unread-count` - count of unread threads
-- `POST /api/inbox/threads/:engagementId/read` - marks all of a thread's visible activity read, 204
-- `POST /api/inbox/:id/read` - single activity, 204
+- `GET /api/inbox` - conversation threads (one per engagement with messages or visible activity): client/engagement head fields plus a chronological timeline of messages interleaved with quiet system events
+- `GET /api/inbox/unread-count` - count of threads with unread client messages or unread inbound activity (the CPA's own outbound never counts)
+- `POST /api/inbox/threads/:engagementId/messages` - CPA sends a message `{ body }`, 201 with the created message
+- `POST /api/inbox/threads/:engagementId/read` - marks the thread's client messages and visible activity read, 204
 - `GET /api/metrics` - `documentsAutoProcessed`, `fieldsAwaitingReview`, `straightThroughRate`, `needsReviewCount`, `outstandingRequests`, `activeClients`
 
 `documentsAutoProcessed` and `straightThroughRate` count **trusted** documents only. Straight-through is `round(100 * trusted / terminal-ish)`, and `0` on an empty denominator; terminal-ish is `needs-review`, `trusted`, `rejected`, `unclassified`, `failed`.

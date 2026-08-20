@@ -13,7 +13,7 @@ This is a **document** store, not a relational database. Do not add SQL, Prisma,
 - Model what is read together as one document (embed extracted fields on a document; do not join them at read time).
 - Reference (`id`) only when the related record is loaded independently (client, engagement).
 - `$lookup` / application-level joins are a smell — denormalize or fetch in a repository helper that returns an already-shaped DTO.
-- Collection name strings live only in `collectionNames`: `records`, `clients`, `engagements`, `documentTypes`, `requestTemplates`, `requestItems`, `documents` (`taxDocuments`), `activity`, `exports`. New collections get a typed helper in `collections.ts` in the same change.
+- Collection name strings live only in `collectionNames`: `records`, `clients`, `engagements`, `documentTypes`, `requestTemplates`, `requestItems`, `documents` (`taxDocuments`), `activity`, `messages`, `exports`. New collections get a typed helper in `collections.ts` in the same change. `messages` writes go through the helpers in `src/server/db/messages.ts`, never raw inserts.
 
 ## Schema lives in the app
 

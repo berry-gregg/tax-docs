@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { POLL_INTERVAL_MS } from "../../../shared/constants.ts";
 import {
+  portalMessageResponseSchema,
   portalStateSchema,
   portalWaiveResponseSchema,
   type PortalDocument,
   type PortalItem,
   type PortalState,
 } from "../../../shared/schemas/api.ts";
+import type { Message } from "../../../shared/schemas/message.ts";
 import { taxDocumentSchema, type TaxDocument } from "../../../shared/schemas/document.ts";
 import { ApiError, getJson, sendJson, uploadFile } from "../api.ts";
 import { icons } from "../icons.ts";
@@ -26,9 +28,10 @@ export type PortalData =
  * View state that must survive the 2s poll repaint (main.ts swaps the whole `.workspace` node,
  * so DOM state dies with it). Render reads these; bind writes them.
  */
-const openDocPanels = new Set<string>();
+const openItemPanels = new Set<string>();
 const openWaiveForms = new Set<string>();
 const waiveDrafts = new Map<string, string>();
+let messageDraft = "";
 
 type PendingUpload = {
   id: string;
@@ -45,9 +48,10 @@ let uploadSequence = 0;
 
 /** Test seam: module view state would otherwise leak between test cases. */
 export function resetPortalViewState(): void {
-  openDocPanels.clear();
+  openItemPanels.clear();
   openWaiveForms.clear();
   waiveDrafts.clear();
+  messageDraft = "";
   pendingUploads = [];
   uploadSequence = 0;
 }
@@ -126,12 +130,16 @@ function renderItemDocuments(item: PortalItem, token: string): string {
       </li>`,
     )
     .join("");
-  const count = item.documents.length === 1 ? "1 file" : `${item.documents.length} files`;
 
-  return `<details class="portal-item-docs" data-portal-docs="${escapeHtml(item.id)}"${openDocPanels.has(item.id) ? " open" : ""}>
-    <summary class="portal-item-docs-summary">${escapeHtml(count)}</summary>
-    <ul class="portal-doc-list">${rows}</ul>
-  </details>`;
+  return `<ul class="portal-doc-list">${rows}</ul>`;
+}
+
+function fileCount(item: PortalItem): string {
+  if (item.documents.length === 0) {
+    return "";
+  }
+  const count = item.documents.length === 1 ? "1 file" : `${item.documents.length} files`;
+  return `<span class="portal-item-count">${escapeHtml(count)}</span>`;
 }
 
 function renderWaiveControl(item: PortalItem): string {
@@ -156,21 +164,28 @@ function renderWaiveControl(item: PortalItem): string {
   </div>`;
 }
 
+/**
+ * One compact summary line per item — mark, title, Required badge, file count. Description,
+ * nested files, the waived note, and the waive control live behind the disclosure. An open
+ * waive form pins its panel open so a repaint cannot fold the form away mid-note.
+ */
 function renderChecklistItem(item: PortalItem, token: string): string {
   const waivedNote =
     item.status === "waived"
       ? `<p class="portal-waived-note muted">Not needed${item.waiveNote ? ` — ${escapeHtml(item.waiveNote)}` : ""}</p>`
       : "";
+  const expanded = openItemPanels.has(item.id) || openWaiveForms.has(item.id);
 
   return `<li class="portal-item" data-portal-item="${escapeHtml(item.id)}">
-    ${itemMark(item)}
-    <div class="portal-item-body">
-      <p class="portal-item-title">${escapeHtml(item.title)}${item.required ? `<span class="portal-required">Required</span>` : ""}</p>
-      <p class="portal-item-description muted">${escapeHtml(item.description)}</p>
-      ${waivedNote}
-      ${renderItemDocuments(item, token)}
-      ${renderWaiveControl(item)}
-    </div>
+    <details class="portal-item-panel" data-portal-panel="${escapeHtml(item.id)}"${expanded ? " open" : ""}>
+      <summary class="portal-item-summary">${itemMark(item)}<span class="portal-item-title">${escapeHtml(item.title)}</span>${item.required ? `<span class="portal-required">Required</span>` : ""}${fileCount(item)}</summary>
+      <div class="portal-item-body">
+        <p class="portal-item-description muted">${escapeHtml(item.description)}</p>
+        ${waivedNote}
+        ${renderItemDocuments(item, token)}
+        ${renderWaiveControl(item)}
+      </div>
+    </details>
   </li>`;
 }
 
@@ -231,6 +246,33 @@ function renderDropzone(): string {
   </div>`;
 }
 
+function renderMessageRow(message: Message, firmName: string): string {
+  const sender = message.sender === "cpa" ? firmName : "You";
+  return `<li class="portal-message portal-message-${message.sender}">
+    <span class="portal-message-sender">${escapeHtml(sender)}</span>
+    <p class="portal-message-body">${escapeHtml(message.body)}</p>
+  </li>`;
+}
+
+function renderMessagesPanel(state: PortalState): string {
+  const rows =
+    state.messages.length > 0
+      ? state.messages.map((message) => renderMessageRow(message, state.firmName)).join("")
+      : `<li class="portal-messages-empty muted">No messages yet — questions about this request start here</li>`;
+
+  return `<aside class="portal-messages portal-card" aria-label="Messages">
+    <h2 class="portal-section-title">Messages</h2>
+    <p class="portal-messages-hint muted">Questions for ${escapeHtml(state.firmName)} about this request</p>
+    <ul class="portal-message-list" data-portal-messages aria-live="polite">${rows}</ul>
+    <form class="portal-compose" data-portal-compose data-preserve-focus>
+      <textarea class="portal-compose-input" data-portal-compose-body maxlength="2000" rows="3" placeholder="Write a message" aria-label="Write a message">${escapeHtml(messageDraft)}</textarea>
+      <div class="portal-compose-actions">
+        <button type="submit" class="btn-secondary">Send</button>
+      </div>
+    </form>
+  </aside>`;
+}
+
 function renderValidPortal(data: Extract<PortalData, { kind: "valid" }>): string {
   const { state, token } = data;
   prunePendingAgainst(state);
@@ -242,19 +284,20 @@ function renderValidPortal(data: Extract<PortalData, { kind: "valid" }>): string
     </header>
     <p class="load-error-message" data-portal-error hidden></p>
     <div class="portal-layout">
-      <aside class="portal-checklist" aria-label="Requested documents">
+      <aside class="portal-checklist portal-card" aria-label="Requested documents">
         <h2 class="portal-section-title">Requested documents</h2>
         <ul class="portal-item-list">
           ${state.items.map((item) => renderChecklistItem(item, token)).join("")}
         </ul>
       </aside>
-      <section class="portal-main">
+      <section class="portal-main portal-card">
         ${renderDropzone()}
         <section class="portal-uploads">
           <h2 class="portal-section-title">Recent uploads</h2>
           <ul class="portal-upload-list" data-portal-uploads aria-live="polite">${renderUploadRows(state)}</ul>
         </section>
       </section>
+      ${renderMessagesPanel(state)}
     </div>
   </div>`;
 }
@@ -385,20 +428,58 @@ function bindUploads(root: HTMLElement, token: string, state: PortalState): void
   bindDismiss();
 }
 
-function bindDocPanels(root: HTMLElement): void {
-  root.querySelectorAll<HTMLDetailsElement>("[data-portal-docs]").forEach((details) => {
-    const itemId = details.getAttribute("data-portal-docs");
+function bindItemPanels(root: HTMLElement): void {
+  root.querySelectorAll<HTMLDetailsElement>("[data-portal-panel]").forEach((details) => {
+    const itemId = details.getAttribute("data-portal-panel");
     if (!itemId) {
       return;
     }
 
     details.addEventListener("toggle", () => {
       if (details.open) {
-        openDocPanels.add(itemId);
+        openItemPanels.add(itemId);
       } else {
-        openDocPanels.delete(itemId);
+        openItemPanels.delete(itemId);
       }
     });
+  });
+}
+
+function bindMessages(root: HTMLElement, token: string, repaint: () => void): void {
+  const form = root.querySelector<HTMLFormElement>("[data-portal-compose]");
+  const input = form?.querySelector<HTMLTextAreaElement>("[data-portal-compose-body]");
+  if (!form || !input) {
+    return;
+  }
+
+  input.addEventListener("input", () => {
+    messageDraft = input.value;
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const body = input.value.trim();
+    if (body.length === 0) {
+      return;
+    }
+
+    // Optimistic clear; the repaint pulls the fresh thread. A failure restores the draft.
+    messageDraft = "";
+    input.value = "";
+    void sendJson(
+      "POST",
+      `/api/portal/${encodeURIComponent(token)}/messages`,
+      { body },
+      portalMessageResponseSchema,
+    )
+      .then(() => {
+        repaint();
+      })
+      .catch((error: unknown) => {
+        messageDraft = body;
+        input.value = body;
+        showPortalError(root, messageFor(error));
+      });
   });
 }
 
@@ -479,14 +560,15 @@ export const portalPage: PageModule<PortalData> = {
     }
   },
   render: renderPortal,
-  bind(root, data) {
+  bind(root, data, repaint) {
     if (data.kind !== "valid") {
       return;
     }
 
     bindUploads(root, data.token, data.state);
-    bindDocPanels(root);
+    bindItemPanels(root);
     bindWaiveControls(root, data.token);
+    bindMessages(root, data.token, repaint);
   },
   pollMs: POLL_INTERVAL_MS,
 };

@@ -34,6 +34,7 @@ import {
   taxDocumentsCollection,
   toStored,
 } from "../db/collections.ts";
+import { insertMessage } from "../db/messages.ts";
 import {
   buildDraftExportForEngagement,
   getLatestExportForEngagement,
@@ -208,6 +209,17 @@ engagementRoutes.post("/", async (c) => {
     await requestItemsCollection(db).insertMany(requestItems.map((item) => toStored(item)));
   }
   await activitiesCollection(db).insertOne(toStored(activity));
+
+  // The request IS the first thread message: the conversation opens with what was asked for.
+  if (requestItems.length > 0) {
+    const client = fromStored(clientSchema, clientDoc);
+    const documentsPhrase = `${requestItems.length} ${requestItems.length === 1 ? "document" : "documents"}`;
+    await insertMessage(db, {
+      engagementId: engagement.id,
+      sender: "cpa",
+      body: `Hi ${client.contactName} — we've opened your ${engagement.taxYear} ${engagement.filingType} engagement and requested ${documentsPhrase}. Upload them through your portal link anytime, and reply here with any questions.`,
+    });
+  }
 
   return c.json({ engagement }, 201);
 });

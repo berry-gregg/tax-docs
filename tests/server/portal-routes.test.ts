@@ -8,10 +8,13 @@ import {
   documentTypesCollection,
   engagementsCollection,
   fromStored,
+  messagesCollection,
   requestItemsCollection,
   taxDocumentsCollection,
   toStored,
 } from "../../src/server/db/collections.ts";
+import { insertMessage, listMessages } from "../../src/server/db/messages.ts";
+import { messageSchema, type Message } from "../../src/shared/schemas/message.ts";
 import { portalStateSchema, type PortalState } from "../../src/shared/schemas/api.ts";
 import { requestItemSchema, type RequestItem } from "../../src/shared/schemas/request.ts";
 import type { Client } from "../../src/shared/schemas/client.ts";
@@ -77,6 +80,7 @@ async function clearCollections() {
     engagementsCollection(db).deleteMany({}),
     requestItemsCollection(db).deleteMany({}),
     taxDocumentsCollection(db).deleteMany({}),
+    messagesCollection(db).deleteMany({}),
     documentTypesCollection(db).deleteMany({ _id: portalDocType.id }),
   ]);
 }
@@ -87,7 +91,10 @@ async function seedClientAndType() {
   await documentTypesCollection(db).insertOne(toStored(portalDocType));
 }
 
-async function createEngagement(app: ReturnType<typeof createApp>) {
+async function createEngagement(
+  app: ReturnType<typeof createApp>,
+  items: ReadonlyArray<Record<string, unknown>> = [explicitItem],
+) {
   const response = await app.request("/api/engagements", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -95,7 +102,7 @@ async function createEngagement(app: ReturnType<typeof createApp>) {
       clientId: client.id,
       taxYear: 2026,
       filingType: "1065",
-      items: [explicitItem],
+      items,
     }),
   });
   const body = await response.json() as { engagement: Engagement };
@@ -288,6 +295,125 @@ describe("portal state", () => {
     expect(response.status).toBe(404);
     expect(response.status).not.toBe(403);
     expect(body).toEqual({ error: "Not found" });
+  });
+
+  test("lists required items first, each group alphabetical by title", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app, [
+      { ...explicitItem, title: "Zeta ledger", required: true },
+      { ...explicitItem, title: "Alpha statements", required: false },
+      { ...explicitItem, title: "Alpha ledger", required: true },
+      { ...explicitItem, title: "Beta receipts", required: false },
+    ]);
+
+    const response = await app.request(`/api/portal/${engagement.portalToken}`);
+    const body = portalStateSchema.parse(await response.json());
+
+    expect(body.items.map((item) => item.title)).toEqual([
+      "Alpha ledger",
+      "Zeta ledger",
+      "Alpha statements",
+      "Beta receipts",
+    ]);
+  });
+});
+
+describe("portal messages", () => {
+  test("portal state carries the full thread oldest first and marks CPA messages read", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+    const db = await connectDb();
+    const fromCpa = await insertMessage(db, {
+      engagementId: engagement.id,
+      sender: "cpa",
+      body: "Please add the December statement",
+    });
+    const fromClient = await insertMessage(db, {
+      engagementId: engagement.id,
+      sender: "client",
+      body: "Uploading it tonight",
+    });
+
+    const response = await app.request(`/api/portal/${engagement.portalToken}`);
+    const body = portalStateSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    // The engagement's opening request message may lead the thread; ours follow in insert order.
+    expect(body.messages.map((message) => message.id).slice(-2)).toEqual([
+      fromCpa.id,
+      fromClient.id,
+    ]);
+    const createdAts = body.messages.map((message) => message.createdAt);
+    expect([...createdAts].sort()).toEqual(createdAts);
+
+    // Fetching the portal means the client saw the firm's messages — and only those.
+    const stored = await listMessages(db, engagement.id);
+    expect(stored.filter((message) => message.sender === "cpa").every((m) => m.readAt)).toBe(true);
+    expect(stored.find((message) => message.id === fromClient.id)?.readAt).toBeUndefined();
+  });
+
+  test("posting a message inserts a client message and returns 201", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+
+    const response = await app.request(`/api/portal/${engagement.portalToken}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: "Is the prior-year return needed too?" }),
+    });
+    const payload = await response.json() as { message: Message };
+
+    expect(response.status).toBe(201);
+    expect(() => messageSchema.parse(payload.message)).not.toThrow();
+    expect(payload.message).toMatchObject({
+      engagementId: engagement.id,
+      sender: "client",
+      body: "Is the prior-year return needed too?",
+    });
+
+    const db = await connectDb();
+    const stored = await listMessages(db, engagement.id);
+    expect(
+      stored.filter((message) => message.sender === "client").map((message) => message.id),
+    ).toEqual([payload.message.id]);
+  });
+
+  test("an empty or over-long message body is a 400 with the zod summary", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+
+    const empty = await app.request(`/api/portal/${engagement.portalToken}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: "   " }),
+    });
+    expect(empty.status).toBe(400);
+
+    const overlong = await app.request(`/api/portal/${engagement.portalToken}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: "x".repeat(2001) }),
+    });
+    expect(overlong.status).toBe(400);
+    const overlongBody = await overlong.json() as { error: string };
+    expect(overlongBody.error.length).toBeGreaterThan(0);
+
+    const db = await connectDb();
+    const stored = await listMessages(db, engagement.id);
+    expect(stored.filter((message) => message.sender === "client")).toEqual([]);
+  });
+
+  test("posting a message with an unknown token is 404, never 403", async () => {
+    const app = createApp();
+    const response = await app.request("/api/portal/wrong-token/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: "hello" }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(response.status).not.toBe(403);
+    expect(await response.json()).toEqual({ error: "Not found" });
   });
 });
 

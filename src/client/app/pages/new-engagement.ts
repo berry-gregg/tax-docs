@@ -173,8 +173,10 @@ export function renderNewEngagementModal(state: NewEngagementModalState): string
         ? renderChecklistStep(state)
         : renderDetailsStep(state);
 
+  // The checklist step lays each request out on one wide line, so its panel takes the wide
+  // modifier; the details and success steps keep the standard width.
   return `<div class="modal" data-new-engagement-modal>
-    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-engagement-title">
+    <section class="modal-panel${state.step === 2 ? " modal-panel-wide" : ""}" role="dialog" aria-modal="true" aria-labelledby="new-engagement-title">
       <h2 class="modal-title" id="new-engagement-title">Create engagement</h2>
       ${state.error ? `<p class="load-error-message">${escapeHtml(state.error)}</p>` : ""}
       ${body}
@@ -265,10 +267,21 @@ function renderDetailsStep(state: NewEngagementModalState): string {
   </form>`;
 }
 
+/**
+ * One compact line per requested document. Column labels render once in a head row instead of
+ * repeating per row, so each row is a single control-height line instead of a stacked card.
+ */
 function renderChecklistStep(state: NewEngagementModalState): string {
   return `<form class="form-grid" data-new-engagement-step="2">
     <h3 class="section-title">Request checklist</h3>
-    <div class="row-list">
+    <div class="checklist">
+      <div class="checklist-head" aria-hidden="true">
+        <span>Title</span>
+        <span>Description</span>
+        <span>Document type</span>
+        <span>Required</span>
+        <span></span>
+      </div>
       ${state.items.map((item, index) => renderChecklistItem(state, item, index)).join("")}
     </div>
     <button class="btn-secondary" type="button" data-add-request-item>Add item</button>
@@ -286,26 +299,20 @@ function renderChecklistItem(
   index: number,
 ): string {
   const documentTypes = state.documentTypes.filter((type) => type.active);
-  return `<div class="list-row" data-checklist-index="${index}">
-    <span class="list-row-body">
-      <label class="form-field"><span class="form-label">Title</span><input name="title-${index}" value="${escapeHtml(
-        item.title,
-      )}" /></label>
-      <label class="form-field"><span class="form-label">Description</span><input name="description-${index}" value="${escapeHtml(
-        item.description,
-      )}" /></label>
-      <label class="form-field"><span class="form-label">Document type</span><select name="documentTypeId-${index}">
-        ${documentTypes
-          .map(
-            (type) =>
-              `<option value="${escapeHtml(type.id)}" ${
-                type.id === item.documentTypeId ? "selected" : ""
-              }>${escapeHtml(type.name)}</option>`,
-          )
-          .join("")}
-      </select></label>
-      <label class="form-field"><input type="checkbox" name="required-${index}" ${item.required ? "checked" : ""} /> Required</label>
-    </span>
+  return `<div class="checklist-row" data-checklist-index="${index}">
+    <input name="title-${index}" value="${escapeHtml(item.title)}" aria-label="Title" />
+    <input name="description-${index}" value="${escapeHtml(item.description)}" aria-label="Description" />
+    <select name="documentTypeId-${index}" aria-label="Document type">
+      ${documentTypes
+        .map(
+          (type) =>
+            `<option value="${escapeHtml(type.id)}" ${
+              type.id === item.documentTypeId ? "selected" : ""
+            }>${escapeHtml(type.name)}</option>`,
+        )
+        .join("")}
+    </select>
+    <label class="checkbox"><input class="visually-hidden-input" type="checkbox" name="required-${index}" aria-label="Required"${item.required ? " checked" : ""} /><span class="checkbox-box" aria-hidden="true"></span></label>
     <button class="btn-ghost" type="button" data-remove-request-item="${index}">Remove</button>
   </div>`;
 }

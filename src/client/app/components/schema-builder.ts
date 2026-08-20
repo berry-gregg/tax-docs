@@ -182,8 +182,9 @@ function renderFieldRow(field: FieldDef, index: number): string {
         <span class="field-issue" data-field-issue="dataType"></span>
       </label>
     </div>
-    <label class="check-field">
-      <input type="checkbox" name="fields.${index}.required" data-field-input="required" ${field.required ? "checked" : ""} />
+    <label class="checkbox">
+      <input class="visually-hidden-input" type="checkbox" name="fields.${index}.required" data-field-input="required" ${field.required ? "checked" : ""} />
+      <span class="checkbox-box" aria-hidden="true"></span>
       <span>Required</span>
     </label>
     <label class="form-field">

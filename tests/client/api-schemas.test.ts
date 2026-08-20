@@ -198,6 +198,15 @@ describe("portalStateSchema", () => {
           uploadedAt: iso,
         },
       ],
+      messages: [
+        {
+          id: "msg-1",
+          engagementId: "eng-1",
+          sender: "cpa",
+          body: "Please upload the December statement",
+          createdAt: iso,
+        },
+      ],
     });
 
     expect(state.firmName).toBe(FIRM_NAME);
@@ -205,6 +214,7 @@ describe("portalStateSchema", () => {
     expect(state.items[1]?.waiveNote).toBe("Account was closed in 2024");
     expect(state.items[0]?.documents[0]?.documentTypeName).toBe("W-2");
     expect(state.unmatched).toHaveLength(1);
+    expect(state.messages[0]?.sender).toBe("cpa");
   });
 
   test("rejects a pipeline status leaking into the coarse portal item status", () => {
@@ -226,6 +236,7 @@ describe("portalStateSchema", () => {
           },
         ],
         unmatched: [],
+        messages: [],
       }),
     ).toThrow();
   });

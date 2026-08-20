@@ -6,6 +6,7 @@ import type { TaxDocument } from "../../shared/schemas/document.ts";
 import type { DocumentType } from "../../shared/schemas/document-type.ts";
 import type { Engagement } from "../../shared/schemas/engagement.ts";
 import type { EngineExport } from "../../shared/schemas/export.ts";
+import type { Message } from "../../shared/schemas/message.ts";
 import type { RequestItem, RequestTemplate } from "../../shared/schemas/request.ts";
 
 export type StoredDoc<T extends { id: string }> = Omit<T, "id"> & { _id: string };
@@ -35,6 +36,7 @@ export const collectionNames = {
   requestItems: "requestItems",
   taxDocuments: "documents",
   activities: "activity",
+  messages: "messages",
   engineExports: "exports",
 } as const;
 
@@ -74,6 +76,10 @@ export function activitiesCollection(db: Db): Collection<StoredDoc<Activity>> {
   return db.collection<StoredDoc<Activity>>(collectionNames.activities);
 }
 
+export function messagesCollection(db: Db): Collection<StoredDoc<Message>> {
+  return db.collection<StoredDoc<Message>>(collectionNames.messages);
+}
+
 export function engineExportsCollection(db: Db): Collection<StoredDoc<EngineExport>> {
   return db.collection<StoredDoc<EngineExport>>(collectionNames.engineExports);
 }
@@ -94,6 +100,11 @@ export async function ensureIndexes(db: Db): Promise<void> {
       { key: { createdAt: -1 } },
     ]),
     activitiesCollection(db).createIndexes([{ key: { engagementId: 1 } }]),
-    requestItemsCollection(db).createIndexes([{ key: { engagementId: 1 } }]),
+    requestItemsCollection(db).createIndexes([
+      { key: { engagementId: 1 } },
+      // Covers the portal checklist load: required items first, then title.
+      { key: { engagementId: 1, required: -1, title: 1 } },
+    ]),
+    messagesCollection(db).createIndexes([{ key: { engagementId: 1 } }]),
   ]);
 }

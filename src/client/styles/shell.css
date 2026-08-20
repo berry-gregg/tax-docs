@@ -743,10 +743,56 @@
   letter-spacing: var(--tracking-subheading);
 }
 
+/* Wide modifier — flows whose rows lay out horizontally (the request checklist editor). */
+.modal-panel-wide {
+  width: min(840px, calc(100vw - var(--spacing-48)));
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-8);
+}
+
+/*
+ * Request-checklist editor — one grid so the single head row of column labels stays aligned
+ * with every row; rows are display: contents wrappers that keep the per-row query hooks.
+ */
+.checklist {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr) minmax(0, 5fr) auto auto;
+  gap: var(--spacing-8);
+  align-items: center;
+}
+
+.checklist-head,
+.checklist-row {
+  display: contents;
+}
+
+.checklist-head span {
+  color: var(--color-ash);
+  font-size: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
+  line-height: var(--leading-caption);
+}
+
+.checklist-row input,
+.checklist-row select {
+  width: 100%;
+  min-height: 28px;
+  padding: var(--spacing-4) var(--spacing-8);
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.checklist-row .checkbox {
+  justify-self: center;
 }
 
 /* Side panel — right-anchored editor surface for the document-type schema builder. */
@@ -886,8 +932,9 @@
   }
 }
 
-/* Inbox threads — one disclosure section per outbound request: a dense head row over
-   nested request-item lines. Hairlines only; no cards-within-cards. */
+/* Inbox threads — one disclosure section per engagement conversation: a dense head row
+   (client · latest-message preview · time · portal control) over the message timeline and a
+   compose box. Hairlines only; monochrome; no cards-within-cards. */
 .inbox-threads {
   display: grid;
   border-top: 1px solid var(--color-hairline);
@@ -899,7 +946,7 @@
 
 .inbox-thread-head {
   display: grid;
-  grid-template-columns: var(--icon-size-nav) minmax(0, 1fr) auto auto var(--icon-size-nav);
+  grid-template-columns: var(--icon-size-nav) minmax(0, auto) minmax(0, 1fr) auto auto var(--icon-size-nav);
   gap: var(--spacing-12);
   align-items: center;
   padding-block: var(--spacing-12);
@@ -924,19 +971,25 @@
   align-items: baseline;
   min-width: 0;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .inbox-thread-client {
   color: var(--color-ink);
 }
 
-.inbox-thread-head:not(.is-unread) .inbox-thread-client {
+.inbox-thread-head:not(.is-unread) .inbox-thread-client,
+.inbox-thread-head:not(.is-unread) .inbox-thread-preview {
   font-weight: var(--font-weight-light);
 }
 
-.inbox-thread-summary {
+.inbox-thread-preview {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-thread-time {
   white-space: nowrap;
   font-size: var(--text-micro);
 }
@@ -951,58 +1004,115 @@
   transform: rotate(180deg);
 }
 
-/* Item lines indent under the head's dot column so titles align with the client name. */
+/* The conversation indents under the head's dot column so rows align with the client name. */
 .inbox-thread-body {
-  padding: 0 0 var(--spacing-12) calc(var(--icon-size-nav) + var(--spacing-12));
-}
-
-.inbox-thread-items {
   display: grid;
-}
-
-.inbox-item-row {
-  display: grid;
-  grid-template-columns: minmax(96px, auto) minmax(0, 1fr) minmax(0, auto) auto;
   gap: var(--spacing-12);
-  align-items: center;
-  padding-block: var(--spacing-8);
+  padding: 0 0 var(--spacing-16) calc(var(--icon-size-nav) + var(--spacing-12));
+}
+
+.inbox-conversation {
+  display: grid;
+  gap: var(--spacing-8);
+  padding-top: var(--spacing-12);
   border-top: 1px solid var(--color-hairline);
 }
 
-a.inbox-item-row:hover {
-  background: var(--surface-nav-active);
+/* Messages are quiet blocks, not consumer chat bubbles: the CPA's own messages sit right on
+   the section wash, the client's left on the deeper wash, both hairline-framed. */
+.inbox-msg {
+  display: grid;
+  gap: var(--spacing-4);
+  max-width: 560px;
+  padding: var(--spacing-8) var(--spacing-12);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
 }
 
-.inbox-item-row .chip {
-  justify-self: start;
-}
-
-.inbox-item-title {
-  color: var(--color-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.inbox-item-phrase {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.inbox-item-time {
+.inbox-msg-cpa {
   justify-self: end;
+  background: var(--surface-section);
+}
+
+.inbox-msg-client {
+  justify-self: start;
+  background: var(--surface-wash);
+}
+
+.inbox-msg-meta {
+  display: flex;
+  gap: var(--spacing-8);
+  align-items: baseline;
   font-size: var(--text-micro);
 }
 
+.inbox-msg-sender {
+  color: var(--color-ink);
+}
+
+.inbox-msg-body {
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* System events read as quiet single lines between messages — muted, smaller, no chips. */
+.inbox-event {
+  display: flex;
+  gap: var(--spacing-8);
+  align-items: baseline;
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+}
+
+.inbox-event-link {
+  color: var(--color-ash);
+}
+
+.inbox-event-link:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
+.inbox-event-time {
+  white-space: nowrap;
+}
+
 .inbox-thread-empty {
-  padding-block: var(--spacing-8);
+  padding-top: var(--spacing-12);
+  border-top: 1px solid var(--color-hairline);
+  margin: 0;
+}
+
+/* Compose — data-preserve-focus in the markup keeps poll repaints away while typing. */
+.inbox-compose {
+  display: grid;
+  gap: var(--spacing-8);
+  padding-top: var(--spacing-12);
   border-top: 1px solid var(--color-hairline);
 }
 
-.inbox-thread-foot {
-  padding-top: var(--spacing-8);
-  border-top: 1px solid var(--color-hairline);
+.inbox-compose-input {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  padding: var(--spacing-8) var(--spacing-12);
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.inbox-compose-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--spacing-12);
+}
+
+.inbox-compose-error {
+  color: var(--color-warning);
   font-size: var(--text-micro);
 }
 
@@ -1096,6 +1206,60 @@ a.inbox-item-row:hover {
   line-height: var(--leading-ui);
 }
 
+/*
+ * Checkbox — THE native-checkbox replacement, single source of truth. Same spirit as
+ * .segmented: the real input stays focusable via .visually-hidden-input while a drawn
+ * 16px box carries the visual state — hairline at rest, ink fill with a drawn check when
+ * checked. Used by the checklist editor, the schema builder, and the settings toggles.
+ */
+.checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+  cursor: pointer;
+}
+
+.checkbox-box {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+}
+
+.checkbox-box::after {
+  content: "";
+  width: 4px;
+  height: 8px;
+  margin-top: -2px;
+  border: solid var(--surface-card);
+  border-width: 0 1.5px 1.5px 0;
+  opacity: 0;
+  transform: rotate(45deg);
+}
+
+.checkbox:has(input:checked) .checkbox-box {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+}
+
+.checkbox:has(input:checked) .checkbox-box::after {
+  opacity: 1;
+}
+
+.checkbox:has(input:focus-visible) .checkbox-box {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
 .modal-error {
   margin: 0;
   color: var(--color-warning);
@@ -1165,16 +1329,7 @@ a.inbox-item-row:hover {
   gap: var(--spacing-12);
 }
 
-.check-field,
-.toggle-field {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-8);
-  color: var(--color-ink);
-  font-size: var(--text-ui);
-  font-weight: var(--font-weight-regular);
-}
-
+/* Settings status toggles use the shared .checkbox recipe with quiet ash text. */
 .toggle-field {
   color: var(--color-ash);
 }
@@ -1369,7 +1524,7 @@ a.inbox-item-row:hover {
 }
 
 /* A gated primary reads as unavailable rather than as a live highlighter CTA. */
-.review-foot .btn-primary:disabled {
+.review-page .page-actions .btn-primary:disabled {
   border-color: var(--color-hairline);
   background: var(--surface-nav-active);
   color: var(--color-ash);
@@ -1672,15 +1827,15 @@ a.inbox-item-row:hover {
 }
 
 /*
- * Client portal — chromeless, low-friction upload surface. The request checklist sits in a
- * left column with 16px inline status marks and collapsible nested files; the right column
- * is one common drop zone plus a live status list for in-flight and unmatched uploads.
+ * Client portal — chromeless, low-friction upload surface. Three white cards over the bone
+ * wash: the compact request checklist (one summary line per item, details behind disclosure),
+ * one common drop zone plus a live status list, and the message thread with the firm.
  * Hairlines only, sentence case, the shared `.chip` recipe for status — never highlighter.
  */
 .portal-page {
   display: grid;
-  gap: var(--spacing-32);
-  width: min(100%, 960px);
+  gap: var(--spacing-24);
+  width: min(100%, 1240px);
 }
 
 .portal-header {
@@ -1689,23 +1844,33 @@ a.inbox-item-row:hover {
 }
 
 .portal-firm {
+  color: var(--color-ink);
   font-size: var(--text-heading-sm);
   font-weight: var(--font-weight-regular);
   line-height: var(--leading-heading-sm);
 }
 
+/* Primary copy stays ink — ash on the bone wash was the operator's readability complaint. */
 .portal-intro {
   margin: 0;
-  color: var(--color-ash);
+  color: var(--color-ink);
   font-size: var(--text-ui);
   line-height: var(--leading-ui);
 }
 
 .portal-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--spacing-32);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 0.95fr);
+  gap: var(--spacing-16);
   align-items: start;
+}
+
+/* The white card surface the portal content sits on. */
+.portal-card {
+  background: var(--surface-card);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-cards);
+  padding: var(--spacing-20) var(--spacing-24);
 }
 
 .portal-section-title {
@@ -1716,7 +1881,7 @@ a.inbox-item-row:hover {
   line-height: var(--leading-ui);
 }
 
-/* Checklist rows — hairline-ruled, never cards. */
+/* Checklist rows — compact hairline-ruled summary lines; detail behind disclosure. */
 .portal-item-list {
   display: grid;
   margin: 0;
@@ -1725,25 +1890,40 @@ a.inbox-item-row:hover {
 }
 
 .portal-item {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: var(--spacing-12);
-  padding: var(--spacing-16) 0;
   border-top: 1px solid var(--color-hairline);
 }
 
-.portal-item:last-child {
-  border-bottom: 1px solid var(--color-hairline);
+.portal-item:first-child {
+  border-top: 0;
+}
+
+/* One ~36px summary line: mark, title, Required badge, file count. */
+.portal-item-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  min-width: 0;
+  padding: var(--spacing-8) 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.portal-item-summary::-webkit-details-marker {
+  display: none;
+}
+
+.portal-item-summary::marker {
+  content: "";
 }
 
 /* 16px inline status marks: check received, dash waived, warning attention, circle open. */
 .portal-mark {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
   width: 16px;
   height: 16px;
-  margin-top: 2px;
 }
 
 .portal-mark-open {
@@ -1765,23 +1945,40 @@ a.inbox-item-row:hover {
   border-top: 1px solid var(--color-ash);
 }
 
+/* Expanded detail indents under the title, clear of the 16px mark column. */
 .portal-item-body {
   display: grid;
-  gap: var(--spacing-4);
+  gap: var(--spacing-8);
   justify-items: start;
   min-width: 0;
+  padding: 0 0 var(--spacing-12) calc(16px + var(--spacing-8));
 }
 
 .portal-item-title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-8);
+  overflow: hidden;
+  min-width: 0;
   margin: 0;
+  color: var(--color-ink);
   font-size: var(--text-ui);
   line-height: var(--leading-ui);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
+/* Ink-outline micro chip — visibly required while staying monochrome. */
 .portal-required {
+  flex: none;
+  padding: 0 var(--spacing-8);
+  border: 1px solid var(--color-ink);
+  border-radius: var(--radius-badge);
+  color: var(--color-ink);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+}
+
+.portal-item-count {
+  flex: none;
+  margin-left: auto;
   color: var(--color-ash);
   font-size: var(--text-micro);
   line-height: var(--leading-micro);
@@ -1794,23 +1991,12 @@ a.inbox-item-row:hover {
   line-height: var(--leading-micro);
 }
 
-/* Matched files nest under their item: collapsible, indented, hairline-left. */
-.portal-item-docs {
-  justify-self: stretch;
-  margin-top: var(--spacing-4);
-}
-
-.portal-item-docs-summary {
-  color: var(--color-ash);
-  font-size: var(--text-micro);
-  line-height: var(--leading-micro);
-  cursor: pointer;
-}
-
+/* Matched files nest under their item: indented, hairline-left. */
 .portal-doc-list {
   display: grid;
+  justify-self: stretch;
   gap: var(--spacing-8);
-  margin: var(--spacing-8) 0 0;
+  margin: 0;
   padding: 0 0 0 var(--spacing-12);
   border-left: 1px solid var(--color-hairline);
   list-style: none;
@@ -1939,6 +2125,85 @@ a.inbox-item-row:hover {
   line-height: var(--leading-micro);
 }
 
+/* Messages — the client side of the CPA↔client thread. Quiet hairline rows, no bubbles. */
+.portal-messages-hint {
+  margin: 0 0 var(--spacing-12);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-message-list {
+  display: grid;
+  overflow-y: auto;
+  max-height: 360px;
+  margin: 0 0 var(--spacing-16);
+  padding: 0;
+  list-style: none;
+}
+
+.portal-message {
+  display: grid;
+  gap: var(--spacing-4);
+  padding: var(--spacing-8) 0;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.portal-message:first-child {
+  border-top: 0;
+}
+
+.portal-message-sender {
+  color: var(--color-ash);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+}
+
+.portal-message-client .portal-message-sender {
+  color: var(--color-ink);
+}
+
+.portal-message-body {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.portal-messages-empty {
+  padding: var(--spacing-8) 0;
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-compose {
+  display: grid;
+  gap: var(--spacing-8);
+}
+
+.portal-compose-input {
+  padding: var(--spacing-8) var(--spacing-12);
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+  resize: vertical;
+}
+
+.portal-compose-input:focus-visible {
+  outline: 1px solid var(--color-ink);
+  outline-offset: 0;
+}
+
+.portal-compose-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .portal-invalid {
   place-items: center;
   min-height: 40vh;
@@ -1950,8 +2215,22 @@ a.inbox-item-row:hover {
   line-height: var(--leading-ui);
 }
 
+@media (max-width: 1100px) {
+  .portal-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .portal-messages {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 760px) {
   .portal-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .portal-messages {
+    grid-column: auto;
   }
 }

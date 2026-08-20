@@ -33,4 +33,16 @@ describe("query indexes", () => {
     expect(await indexKeys(collectionNames.activities)).toContain("engagementId");
     expect(await indexKeys(collectionNames.requestItems)).toContain("engagementId");
   });
+
+  test("request items carry a covering index for the portal's required-first checklist sort", async () => {
+    const keys = await indexKeys(collectionNames.requestItems);
+
+    for (const field of ["required", "title"]) {
+      expect(keys).toContain(field);
+    }
+  });
+
+  test("messages are indexed by engagement for thread loads", async () => {
+    expect(await indexKeys(collectionNames.messages)).toContain("engagementId");
+  });
 });
