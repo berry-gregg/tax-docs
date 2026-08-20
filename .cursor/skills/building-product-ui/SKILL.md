@@ -74,7 +74,7 @@ Ramp’s sidebar is not “highlight the active `<a>`.”
 - **Expanded group:** the whole parent+children block gets `--surface-nav-active` (`#ebe8e5`) at `--radius-nav` (4px). Parent label turns ink.
 - **Current child:** bone fill (`--surface-sidebar`) punched out of that wash — not another hairline chip.
 - Nested labels share an empty `.nav-icon-spacer` (12px) so they line up under the parent text, not under the icon.
-- Children exist in `nav.ts` but only render when that group is the current page. The current child is the one whose `href` equals `pathname + search`, so `/documents?tab=needs-review` punches out "Needs review".
+- Children exist in `nav.ts` but only render when that group is the current page. The current child is the one whose `href` equals `pathname + search`, so `/documents?tab=needs-review` punches out "Needs review". If no child matches, punch out none — the parent group can stay active. Do not fall back to index 0.
 - Settings is a footer item, same row language, Feather `settings` (the gear that looked janky was a hand path).
 - Count badges: highlighter, pill, ~22px. They are the only yellow in the nav. The one badge is Inbox, filled from `/api/inbox/unread-count` into `[data-inbox-badge]` and hidden at zero — never a literal in `nav.ts`.
 - Engagements is Feather `briefcase`. There is no standalone Review tab: review is reached from a document row (`/engagements/:engagementId/review/:documentId`) and keeps Engagements current.
@@ -87,7 +87,7 @@ Reuse the helpers in `render.ts` (`pageHeader`, `tabs`, `toolbar`, `dataTable`, 
 
 **Home** — scanning answer first. Time-of-day eyebrow (`greeting.ts`, never “Welcome back”). 28px/400 title with negative tracking stating the live queue count from `/api/metrics`. Wash card (`12px`, bone fill, no border) for the one-paragraph next step, with an honest empty variant when nothing is waiting. `.row-list` of dual-line rows (avatar, title, muted meta, pipeline chip) — the latest five documents, each deep-linking to its review page. `.ticker` product hairline band under them (transparent, `border-top` only — not the marketing inverted strip) for auto-processed / awaiting-review / straight-through. Right rail: stacked `.btn-block` (one primary, rest secondary) then `.rail-widget` links separated by hairline. No table on Home.
 
-**List** — this is Expenses/Accounting/People. Title + ash count on the left; kebab + optional secondary + **one** highlighter primary on the right. Underline tabs (active = ink + 2px ink border; counts in ash). Toolbar: 10px-radius search, ghost “Add filter”, download icon at `.toolbar-end`. Table: ash 14px headers, dual-line primary cell (32px avatar + title + muted sub), hairline row rules, semantic status, “1–N of N” footer. Workspace stays full-bleed white — no card wrapping the table.
+**List** — this is Expenses/Accounting/People. Title + ash count on the left; optional secondary + **one** highlighter primary on the right when those actions are real. Do not emit a kebab, “Add filter”, or download until they do something. `toolbar()` is a no-op — list search is not shipped. Underline tabs (active = ink + 2px ink border; counts in ash). Table: ash 14px headers, dual-line primary cell (32px avatar + title + muted sub), hairline row rules, semantic status, “1–N of N” footer. Workspace stays full-bleed white — no card wrapping the table.
 
 **Inbox** — header + `.row-list`. Skip tabs/table until the data needs filters.
 
@@ -133,6 +133,8 @@ Favicon and sidebar brand: `design-system/gb-favicon.png`. Tab icon is linked fr
 | Path-only `Route` union | `?tab=` / `?new=1` are view state; putting them in the union makes every module re-parse | A query value changes which module loads |
 | Polling, not websockets | Pipeline progress is visible with one interval and no server push | Real-time volume outgrows `POLL_INTERVAL_MS` |
 | Palette index injected by the shell | Typing never fires a request; the shell fetches once on first open | Search needs server-side ranking |
+| No unbound list kebab / toolbar | Visible controls that do nothing are the loudest prototype signal; `toolbar()` stays empty until search is wired | A kebab, filter, download, or search is bound to a real action |
+| Unmatched nav child: no punch-out | Falling back to index 0 punched "All" on `/documents?tab=trusted` | A child `href` equals `pathname + search` |
 
 ## Anti-patterns
 
@@ -146,3 +148,5 @@ Favicon and sidebar brand: `design-system/gb-favicon.png`. Tab icon is linked fr
 - Hardcoded counts or a fixture module standing in for `/api`.
 - Modal for row detail; toast for field validation.
 - Skipping the recipe because “this page is different.” If it is, document the fifth recipe first.
+- Shipping a kebab, “Add filter”, download, or search input that is not bound to a real action.
+- Punching out the first nav child when no child `href` matches.
