@@ -1,0 +1,149 @@
+import { z } from "zod";
+import { POLL_INTERVAL_MS } from "../../../shared/constants.ts";
+import {
+  inboxListResponseSchema,
+  type InboxEntry,
+} from "../../../shared/schemas/api.ts";
+import { getJson, sendJson } from "../api.ts";
+import { formatRelativeTime } from "../format.ts";
+import { escapeHtml, listRow, pageHeader } from "../render.ts";
+import type { PageModule } from "./registry.ts";
+
+export type InboxData = {
+  entries: InboxEntry[];
+  now: Date;
+};
+
+const DOCUMENT_ACTIONS = new Set([
+  "document-uploaded",
+  "document-extracted",
+  "document-rejected",
+  "document-unclassified",
+]);
+
+function parseItemCount(detail: string): number | null {
+  const match = detail.match(/(\d+)\s+(?:items requested|requested items)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function documentIdFromActivityId(id: string, action: string): string | null {
+  const suffix = action.replace(/^document-/, "");
+  const match = id.match(new RegExp(`^act-(.+)-${suffix}$`));
+  return match?.[1] ?? null;
+}
+
+function entryHref(entry: InboxEntry): string {
+  if (entry.action === "request-sent") {
+    return entry.portalToken ? `/portal/${entry.portalToken}` : `/engagements/${entry.engagementId}`;
+  }
+
+  if (DOCUMENT_ACTIONS.has(entry.action)) {
+    const documentId = documentIdFromActivityId(entry.id, entry.action);
+    if (documentId && entry.action !== "document-uploaded") {
+      return `/engagements/${entry.engagementId}/review/${documentId}`;
+    }
+    return `/engagements/${entry.engagementId}`;
+  }
+
+  return `/engagements/${entry.engagementId}`;
+}
+
+function renderRequestSentEntry(entry: InboxEntry): string {
+  const itemCount = parseItemCount(entry.detail);
+  const title = itemCount === null ? "Request sent" : `Request sent · ${itemCount} items`;
+  const portalHref = entry.portalToken ? `/portal/${entry.portalToken}` : "";
+
+  return `<article class="inbox-entry inbox-entry-outbound">
+    <div class="inbox-entry-head">
+      <p class="list-row-title">${escapeHtml(title)}</p>
+      <p class="muted">${escapeHtml(entry.clientName)}</p>
+    </div>
+    ${
+      portalHref
+        ? `<div class="portal-link-row">
+            <label class="search-field portal-link-field">
+              <input type="text" readonly value="${escapeHtml(portalHref)}" aria-label="Portal link" />
+            </label>
+            <a class="btn-secondary" href="${portalHref}" data-nav-link>Open portal</a>
+          </div>`
+        : ""
+    }
+  </article>`;
+}
+
+function renderInboundEntry(entry: InboxEntry, now: Date): string {
+  const href = entryHref(entry);
+  const meta = `${entry.detail} · ${formatRelativeTime(entry.createdAt, now)}`;
+  const unreadDot = entry.unread ? `<span class="unread-dot" aria-hidden="true"></span>` : "";
+  const row = listRow({
+    href,
+    title: entry.clientName,
+    meta,
+  }).replace(
+    'class="list-row"',
+    `class="list-row" data-inbox-entry data-entry-id="${escapeHtml(entry.id)}"${entry.unread ? ' data-unread="true"' : ""}`,
+  );
+
+  return `<div class="inbox-entry inbox-entry-inbound">${unreadDot}${row}</div>`;
+}
+
+function renderInboxEntry(entry: InboxEntry, now: Date): string {
+  if (entry.action === "request-sent") {
+    return renderRequestSentEntry(entry);
+  }
+
+  return renderInboundEntry(entry, now);
+}
+
+export function renderInbox(data: InboxData): string {
+  const unreadCount = data.entries.filter((entry) => entry.unread).length;
+
+  return `<div class="page-inbox">
+    ${pageHeader("Inbox", unreadCount > 0 ? String(unreadCount) : undefined)}
+    ${
+      data.entries.length === 0
+        ? `<p class="muted">No inbox activity yet.</p>`
+        : `<div class="row-list">${data.entries.map((entry) => renderInboxEntry(entry, data.now)).join("")}</div>`
+    }
+  </div>`;
+}
+
+function bindUnreadEntries(root: HTMLElement, repaint: () => void): void {
+  root.querySelectorAll<HTMLAnchorElement>('[data-inbox-entry][data-unread="true"]').forEach((link) => {
+    link.addEventListener(
+      "click",
+      (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const id = link.dataset.entryId;
+        const href = link.getAttribute("href");
+        if (!id || !href) {
+          return;
+        }
+
+        void sendJson("POST", `/api/inbox/${id}/read`, null, z.null())
+          .catch(() => {
+            // Navigation still proceeds — marking read is best-effort on the way out.
+          })
+          .finally(() => {
+            window.history.pushState({}, "", href);
+            repaint();
+          });
+      },
+      { capture: true },
+    );
+  });
+}
+
+export const inboxPage: PageModule<InboxData> = {
+  async load() {
+    const { entries } = await getJson("/api/inbox", inboxListResponseSchema);
+    return { entries, now: new Date() };
+  },
+  render: renderInbox,
+  bind(root, _data, repaint) {
+    bindUnreadEntries(root, repaint);
+  },
+  pollMs: POLL_INTERVAL_MS,
+};

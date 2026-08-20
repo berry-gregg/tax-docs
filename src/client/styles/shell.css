@@ -974,3 +974,150 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Inbox ledger — unread marker and outbound portal link row (Task 19). */
+.inbox-entry-inbound {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.inbox-entry-inbound .unread-dot {
+  width: 8px;
+  height: 8px;
+  margin: var(--spacing-20) 0 0 var(--spacing-16);
+  border-radius: var(--radius-badge);
+  background: var(--color-ink);
+  align-self: start;
+}
+
+.inbox-entry-outbound {
+  display: grid;
+  gap: var(--spacing-12);
+  padding: var(--spacing-16);
+  border: 1px solid var(--color-hairline);
+  border-bottom-width: 0;
+  background: var(--surface-card);
+}
+
+.inbox-entry-outbound:last-child {
+  border-bottom-width: 1px;
+}
+
+.portal-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-8);
+  align-items: center;
+}
+
+.portal-link-field {
+  flex: 1 1 240px;
+}
+
+/* Client portal — centered checklist on bone, paper cards, item states. */
+.portal-page {
+  display: grid;
+  gap: var(--spacing-24);
+  width: min(100%, 640px);
+}
+
+.portal-header {
+  display: grid;
+  gap: var(--spacing-8);
+  text-align: center;
+}
+
+.portal-firm {
+  font-size: var(--text-heading);
+  font-weight: var(--font-weight-regular);
+  line-height: 32px;
+  letter-spacing: var(--tracking-heading);
+}
+
+.portal-intro {
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.portal-checklist {
+  display: grid;
+  gap: var(--spacing-16);
+}
+
+.portal-card {
+  display: grid;
+  gap: var(--spacing-12);
+  padding: var(--spacing-24);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-cards);
+  background: var(--surface-card);
+}
+
+.portal-card-title {
+  font-size: var(--text-subheading);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-subheading);
+}
+
+.portal-card-description {
+  margin: 0;
+}
+
+.portal-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.portal-status-processing {
+  color: var(--color-ash);
+}
+
+.portal-status-received {
+  color: var(--color-success);
+}
+
+.portal-status-attention {
+  color: var(--color-warning);
+}
+
+.portal-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-hairline);
+  border-top-color: var(--color-ash);
+  border-radius: 50%;
+  animation: portal-spin 0.8s linear infinite;
+}
+
+@keyframes portal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.portal-general {
+  display: grid;
+  gap: var(--spacing-12);
+}
+
+.portal-general-title {
+  font-size: var(--text-subheading);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-subheading);
+}
+
+.portal-invalid {
+  place-items: center;
+  min-height: 40vh;
+  text-align: center;
+}
+
+.portal-invalid-message {
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
