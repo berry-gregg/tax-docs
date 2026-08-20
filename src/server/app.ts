@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { documentTypeRoutes } from "./routes/document-types.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { recordRoutes } from "./routes/records.ts";
+import { requestTemplateRoutes } from "./routes/request-templates.ts";
 
 export function createApp() {
   const app = new Hono();
@@ -15,6 +17,8 @@ export function createApp() {
 
   app.route("/api/health", healthRoutes);
   app.route("/api/records", recordRoutes);
+  app.route("/api/document-types", documentTypeRoutes);
+  app.route("/api/request-templates", requestTemplateRoutes);
 
   app.notFound((c) => c.json({ error: "Not found" }, 404));
 
