@@ -116,7 +116,7 @@ Ramp operates as a black-and-white editorial system punctuated by a single highl
 
 |---------|-------|
 
-| tags | 6px |
+| chips/badges | pill (`--radius-badge`) |
 
 | cards | 16px |
 
@@ -493,8 +493,6 @@ Motion is utility-focused and moderate: 0.3–0.4s durations with ease-out timin
   --radius-2xl: 16px;
 
   /* Named Radii */
-
-  --radius-tags: 6px;
 
   --radius-cards: 16px;
 
