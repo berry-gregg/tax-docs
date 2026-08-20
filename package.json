@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "seed": "bun run scripts/seed.ts",
     "demo-docs": "bun run scripts/generate-demo-docs.ts",
     "db:up": "docker compose up -d mongodb",
     "db:down": "docker compose down"

@@ -3,11 +3,15 @@ import { createApp } from "./app.ts";
 import { config } from "./config.ts";
 import { connectDb } from "./db/client.ts";
 import { createRunner } from "./pipeline/runner.ts";
+import { seedIfEmpty } from "./seed/seed.ts";
 
 const ai = createOpenRouterClient();
 const app = createApp({ runner: createRunner({ ai }), ai });
 
-await connectDb();
+const db = await connectDb();
+if (await seedIfEmpty(db)) {
+  console.log("seeded demo book");
+}
 
 const server = Bun.serve({
   port: config.port,
