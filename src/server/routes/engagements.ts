@@ -28,6 +28,11 @@ import {
   taxDocumentsCollection,
   toStored,
 } from "../db/collections.ts";
+import {
+  buildDraftExportForEngagement,
+  getLatestExportForEngagement,
+} from "./exports.ts";
+import { computeValidations } from "../validation/checks.ts";
 
 export const engagementRoutes = new Hono();
 
@@ -168,6 +173,19 @@ engagementRoutes.post("/", async (c) => {
   await activitiesCollection(db).insertOne(toStored(activity));
 
   return c.json({ engagement }, 201);
+});
+
+engagementRoutes.get("/:id/validations", async (c) => {
+  const id = c.req.param("id");
+  const engagement = await findEngagement(id);
+
+  if (!engagement) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const checks = await computeValidations(id);
+
+  return c.json({ checks });
 });
 
 engagementRoutes.get("/:id", async (c) => {
