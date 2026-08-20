@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 export const entityTypeSchema = z.enum(["s-corp", "partnership", "c-corp", "llc"]);
-export type EntityType = z.infer<typeof entityTypeSchema>;
 
 export const clientSchema = z.object({
   id: z.string().min(1),
@@ -17,4 +16,3 @@ export const clientSchema = z.object({
 export type Client = z.infer<typeof clientSchema>;
 
 export const createClientInputSchema = clientSchema.omit({ id: true, createdAt: true });
-export type CreateClientInput = z.infer<typeof createClientInputSchema>;

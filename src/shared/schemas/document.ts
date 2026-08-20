@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dataTypeSchema, metadataTypeSchema } from "./metadata.ts";
+import { fieldDefSchema } from "./metadata.ts";
 
 const nullableValueSchema = z.union([z.string(), z.number(), z.boolean()]).nullable();
 
@@ -14,21 +14,18 @@ export const pipelineStatusSchema = z.enum([
   "trusted",
   "failed",
 ]);
-export type PipelineStatus = z.infer<typeof pipelineStatusSchema>;
 
-export const extractionFieldSchema = z.object({
-  key: z.string().min(1),
-  label: z.string().min(1),
-  metadataType: metadataTypeSchema,
-  dataType: dataTypeSchema,
-  value: nullableValueSchema,
-  confidence: z.number().min(0).max(1),
-  sourceSnippet: z.string(),
-  notFound: z.boolean(),
-  regexPass: z.boolean().nullable(),
-  reviewStatus: z.enum(["unreviewed", "accepted", "edited"]),
-  editedValue: z.union([z.string(), z.number(), z.boolean()]).optional(),
-});
+export const extractionFieldSchema = fieldDefSchema
+  .pick({ key: true, label: true, metadataType: true, dataType: true })
+  .extend({
+    value: nullableValueSchema,
+    confidence: z.number().min(0).max(1),
+    sourceSnippet: z.string(),
+    notFound: z.boolean(),
+    regexPass: z.boolean().nullable(),
+    reviewStatus: z.enum(["unreviewed", "accepted", "edited"]),
+    editedValue: z.union([z.string(), z.number(), z.boolean()]).optional(),
+  });
 export type ExtractionField = z.infer<typeof extractionFieldSchema>;
 
 export const taxDocumentSchema = z.object({
@@ -49,7 +46,7 @@ export const taxDocumentSchema = z.object({
     .optional(),
   classification: z
     .object({
-      documentTypeId: z.string().nullable(),
+      documentTypeId: z.string().min(1).nullable(),
       confidence: z.number().min(0).max(1),
       reasoning: z.string(),
     })

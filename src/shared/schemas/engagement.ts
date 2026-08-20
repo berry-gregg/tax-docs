@@ -10,7 +10,6 @@ export const engagementStatusSchema = z.enum([
   "ready-to-export",
   "exported",
 ]);
-export type EngagementStatus = z.infer<typeof engagementStatusSchema>;
 
 export const engagementSchema = z.object({
   id: z.string().min(1),
@@ -29,4 +28,3 @@ export const createEngagementInputSchema = engagementSchema.pick({
   taxYear: true,
   filingType: true,
 });
-export type CreateEngagementInput = z.infer<typeof createEngagementInputSchema>;

@@ -70,4 +70,31 @@ describe("engagement-side schemas", () => {
   test("client entity types are the business set", () => {
     expect(clientSchema.shape.entityType.options).toEqual(["s-corp", "partnership", "c-corp", "llc"]);
   });
+
+  test("extraction fields reuse fieldDefSchema for key, label, metadataType, dataType", () => {
+    expect(extractionFieldSchema.shape.key).toBeDefined();
+    expect(() =>
+      extractionFieldSchema.parse({
+        key: "Bad Key!", label: "Employer EIN", metadataType: "ein-tin",
+        dataType: "string", value: null, confidence: 0.2, sourceSnippet: "",
+        notFound: true, regexPass: null, reviewStatus: "unreviewed",
+      }),
+    ).toThrow();
+  });
+
+  test("classification documentTypeId and relatedDocumentIds reject empty strings", () => {
+    const base = {
+      id: "d1", engagementId: "e1", filename: "w2.pdf", mimeType: "application/pdf",
+      size: 1000, storagePath: "data/uploads/d1.pdf", uploadedBy: "client" as const,
+      pipelineStatus: "classifying" as const, createdAt: iso, updatedAt: iso,
+    };
+    expect(taxDocumentSchema.safeParse({
+      ...base,
+      classification: { documentTypeId: "", confidence: 0.9, reasoning: "W-2" },
+    }).success).toBe(false);
+    expect(validationCheckSchema.safeParse({
+      checkId: "c1", label: "Missing W-2", status: "warn",
+      explanation: "No W-2 found", relatedDocumentIds: [""],
+    }).success).toBe(false);
+  });
 });
