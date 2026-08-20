@@ -224,7 +224,7 @@ Favicon and sidebar brand are `design-system/gb-favicon.png` (GB on highlighter)
 
 **Role:** Expenses / Accounting / People list pattern
 
-Full-bleed white workspace. Page title 28px/400 with tracking -0.56px, secondary + primary (highlighter, 0 radius, 40px) actions, underline tabs with counts, search + Add filter toolbar, dual-line cells (title + muted meta), hairline row rules, status in success/warning/ash — never highlighter.
+Full-bleed white workspace. Page title 28px/400 with tracking -0.56px, optional secondary plus one real primary (highlighter, 0 radius, 40px) when that action exists, underline tabs with counts, dual-line cells (title + muted meta), hairline row rules, status in success/warning/ash — never highlighter.
 
 ### Announcement Bar
 
