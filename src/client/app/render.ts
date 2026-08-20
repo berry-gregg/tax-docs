@@ -271,6 +271,48 @@ export function listRow(opts: {
   </a>`;
 }
 
+/**
+ * Compact portal-link actions: one ghost copy button with a brief "Copied" state plus an "Open"
+ * nav link. The one recipe for surfacing a portal link — inbox rows, the engagement workspace,
+ * and the new-engagement success panel all render this instead of a readonly field + button pair.
+ */
+export function portalLinkControl(url: string, label = "Copy portal link"): string {
+  return `<span class="portal-link-control" data-portal-link-control>
+    <button type="button" class="btn-ghost portal-link-copy" data-copy-portal-link="${escapeHtml(url)}">${escapeHtml(label)}</button>
+    <a class="portal-link-open" href="${escapeHtml(url)}" data-nav-link>Open</a>
+  </span>`;
+}
+
+const PORTAL_COPY_CONFIRM_MS = 1500;
+
+/** Binds every `portalLinkControl` copy button under `root`: clipboard write + "Copied" flash. */
+export function bindPortalLinkControls(root: HTMLElement): void {
+  root.querySelectorAll<HTMLButtonElement>("[data-copy-portal-link]").forEach((button) => {
+    const label = button.textContent;
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const href = button.getAttribute("data-copy-portal-link");
+      if (!href) {
+        return;
+      }
+
+      void globalThis.navigator?.clipboard?.writeText(
+        new URL(href, globalThis.location.origin).toString(),
+      );
+
+      button.textContent = "Copied";
+      globalThis.clearTimeout(resetTimer);
+      resetTimer = globalThis.setTimeout(() => {
+        button.textContent = label;
+      }, PORTAL_COPY_CONFIRM_MS);
+    });
+  });
+}
+
 export function railWidget(title: string, detail: string, href: string): string {
   return `<a class="rail-widget" href="${href}" data-nav-link>
     <span class="section-title">${escapeHtml(title)}</span>

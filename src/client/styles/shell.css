@@ -924,31 +924,108 @@
   }
 }
 
-/* Inbox ledger — unread marker and outbound portal link row (Task 19). */
-.inbox-entry-inbound {
+/* Inbox ledger — grouped client headers over dense single-line rows. */
+.inbox-groups {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: stretch;
+  gap: var(--spacing-24);
 }
 
-.inbox-entry-inbound .unread-dot {
-  width: 8px;
-  height: 8px;
-  margin: var(--spacing-20) 0 0 var(--spacing-16);
+.inbox-group {
+  display: grid;
+  gap: var(--spacing-8);
+}
+
+.inbox-group-head {
+  justify-self: start;
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+}
+
+.inbox-group-head:hover {
+  text-decoration: underline;
+}
+
+/* Extends .list-row: tighter rhythm, unread dot and direction glyph inside the row grid. */
+.inbox-row {
+  grid-template-columns: var(--icon-size-nav) var(--icon-size-nav) minmax(0, 1fr) auto;
+  gap: var(--spacing-8);
+  padding-block: var(--spacing-8);
+}
+
+.inbox-row-outbound {
+  grid-template-columns: var(--icon-size-nav) var(--icon-size-nav) minmax(0, 1fr) auto auto;
+}
+
+.inbox-row .unread-dot {
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border-radius: var(--radius-badge);
   background: var(--color-ink);
-  align-self: start;
+  justify-self: center;
 }
 
-.portal-link-row {
+.inbox-row:not(.is-unread) .unread-dot {
+  background: transparent;
+}
+
+.inbox-row:not(.is-unread) .list-row-title {
+  font-weight: var(--font-weight-light);
+}
+
+.inbox-direction {
+  display: inline-flex;
+  color: var(--color-ash);
+}
+
+.inbox-row-text {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--spacing-8);
-  align-items: center;
+  align-items: baseline;
+  min-width: 0;
 }
 
-.portal-link-field {
-  flex: 1 1 240px;
+.inbox-row-text .list-row-title,
+.inbox-row-text .muted {
+  white-space: nowrap;
+}
+
+.inbox-row-text .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-time {
+  justify-self: end;
+  font-size: var(--text-micro);
+}
+
+/* Portal link control — SHARED compact copy + open pair rendered by portalLinkControl()
+   in src/client/app/render.ts. Consumed by inbox rows today; the engagement workspace and
+   new-engagement success panel adopt it next wave. */
+.portal-link-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  white-space: nowrap;
+}
+
+.portal-link-control .portal-link-copy {
+  min-height: var(--spacing-24);
+  padding: 0 var(--spacing-8);
+  font-size: var(--text-micro);
+}
+
+.portal-link-open {
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-ui);
+}
+
+.portal-link-open:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
 }
 
 /* Client portal — centered checklist on bone, paper cards, item states. */

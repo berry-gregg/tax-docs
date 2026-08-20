@@ -36,6 +36,8 @@ export const icons = {
   check: mark("check", 16),
   warning: mark("alert-triangle", 16),
   arrow: mark("arrow-right", 16),
+  arrowDownLeft: mark("arrow-down-left"),
+  arrowUpRight: mark("arrow-up-right"),
 } as const;
 
 /** Command K rows use the same Feather marks at 16px, matching Ramp's RyuIconSvg--asSizeM. */

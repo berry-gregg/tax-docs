@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { greetingFor } from "../../src/client/app/greeting.ts";
 import { navItems } from "../../src/client/app/nav.ts";
 import {
+  bindPortalLinkControls,
   bindRowLinks,
   confidenceChip,
   pageHeader,
   pipelineChip,
+  portalLinkControl,
   renderApp,
   renderLoadError,
   renderPageSkeleton,
@@ -268,6 +270,76 @@ describe("bindRowLinks", () => {
   });
 });
 
+describe("portalLinkControl", () => {
+  test("is one compact ghost copy button plus an open link — no readonly field", () => {
+    const html = portalLinkControl("/portal/tok-1");
+
+    expect(html).toContain("data-portal-link-control");
+    expect(html).toMatch(
+      /<button type="button" class="btn-ghost portal-link-copy" data-copy-portal-link="\/portal\/tok-1">Copy portal link<\/button>/,
+    );
+    expect(html).toMatch(/<a class="portal-link-open" href="\/portal\/tok-1" data-nav-link>Open<\/a>/);
+    expect(html).not.toContain("readonly");
+    expect(html).not.toContain("<input");
+    expect(html).not.toContain("btn-secondary");
+  });
+
+  test("escapes the url and honors a custom label", () => {
+    const html = portalLinkControl('/portal/"tok', "Copy link");
+
+    expect(html).toContain("&quot;tok");
+    expect(html).not.toContain('href="/portal/"tok"');
+    expect(html).toContain(">Copy link</button>");
+  });
+
+  test("copying writes the absolute portal url and flips to a brief Copied state", () => {
+    const written: string[] = [];
+    const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    const previousLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {
+        clipboard: {
+          writeText(text: string) {
+            written.push(text);
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: { origin: "https://firm.example" },
+    });
+
+    try {
+      const button = new FakeCopyButton("/portal/tok-1");
+      const root = {
+        querySelectorAll(selector: string) {
+          return selector === "[data-copy-portal-link]" ? [button] : [];
+        },
+      };
+
+      bindPortalLinkControls(root as unknown as HTMLElement);
+      button.click();
+
+      expect(written).toEqual(["https://firm.example/portal/tok-1"]);
+      expect(button.textContent).toBe("Copied");
+    } finally {
+      if (previousNavigator) {
+        Object.defineProperty(globalThis, "navigator", previousNavigator);
+      } else {
+        Reflect.deleteProperty(globalThis, "navigator");
+      }
+      if (previousLocation) {
+        Object.defineProperty(globalThis, "location", previousLocation);
+      } else {
+        Reflect.deleteProperty(globalThis, "location");
+      }
+    }
+  });
+});
+
 describe("load states", () => {
   test("the loading state is a skeleton, not the word loading", () => {
     const html = renderPageSkeleton();
@@ -432,6 +504,29 @@ class FakeRowElement {
   dispatch(type: string, target: FakeRowElement, key?: string): void {
     for (const listener of this.listeners.get(type) ?? []) {
       listener({ target, key, preventDefault() {} });
+    }
+  }
+}
+
+type CopyClickListener = (event: { preventDefault(): void; stopPropagation(): void }) => void;
+
+class FakeCopyButton {
+  textContent: string | null = "Copy portal link";
+  private readonly listeners: CopyClickListener[] = [];
+
+  constructor(private readonly href: string) {}
+
+  getAttribute(name: string): string | null {
+    return name === "data-copy-portal-link" ? this.href : null;
+  }
+
+  addEventListener(_type: string, listener: CopyClickListener): void {
+    this.listeners.push(listener);
+  }
+
+  click(): void {
+    for (const listener of this.listeners) {
+      listener({ preventDefault() {}, stopPropagation() {} });
     }
   }
 }
