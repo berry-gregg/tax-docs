@@ -345,6 +345,9 @@ export function createDocumentRoutes(runner: PipelineRunner, ai: OpenRouterClien
     }
 
     const fields = document.extraction?.fields ?? [];
+    if (fields.length === 0) {
+      return c.json({ error: "extraction returned no fields" }, 409);
+    }
     if (fields.some((field) => field.reviewStatus === "unreviewed")) {
       return c.json({ error: "unreviewed fields remain" }, 409);
     }

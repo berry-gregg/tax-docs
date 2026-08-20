@@ -64,11 +64,12 @@ const reviewStatusChips: Record<ExtractionField["reviewStatus"], string> = {
 
 /**
  * The trust gate, mirroring the server's own rule in `POST /api/documents/:id/trust`: a field the
- * reviewer never touched blocks the write. Keeping the two in step means the button is never
- * enabled for a request the API would reject, and never disabled for one it would accept.
+ * reviewer never touched blocks the write, and an empty extraction is not vacuously trusted.
+ * Keeping the two in step means the button is never enabled for a request the API would reject,
+ * and never disabled for one it would accept.
  */
 export function canTrust(fields: ExtractionField[]): boolean {
-  return fields.every((field) => field.reviewStatus !== "unreviewed");
+  return fields.length > 0 && fields.every((field) => field.reviewStatus !== "unreviewed");
 }
 
 /** `formatConfidence` owns the 90% boundary, so the bulk-accept control reuses its tier. */
@@ -76,9 +77,10 @@ function isHighConfidence(field: ExtractionField): boolean {
   return formatConfidence(field.confidence).tier === "high";
 }
 
-function bulkAcceptKeys(fields: ExtractionField[]): string[] {
+/** Ungrounded gaps stay unreviewed — a high confidence on a null value is not an accept. */
+export function bulkAcceptKeys(fields: ExtractionField[]): string[] {
   return fields
-    .filter((field) => field.reviewStatus === "unreviewed" && isHighConfidence(field))
+    .filter((field) => field.reviewStatus === "unreviewed" && !field.notFound && isHighConfidence(field))
     .map((field) => field.key);
 }
 
@@ -241,15 +243,21 @@ function renderFieldsVariant(data: ReviewData, fields: ExtractionField[]): strin
     ${interactive ? renderTrustFooter(fields) : renderTrustedFooter(data)}`;
 }
 
+function trustFooterCopy(fields: ExtractionField[], ready: boolean): string {
+  if (fields.length === 0) {
+    return "Extraction returned no fields. This document cannot be marked trusted.";
+  }
+
+  return ready
+    ? "Every field is resolved. Marking trusted is the human confirmation step."
+    : "Accept or edit every field before this document can be trusted.";
+}
+
 function renderTrustFooter(fields: ExtractionField[]): string {
   const ready = canTrust(fields);
 
   return `<footer class="review-foot">
-    <span class="muted">${
-      ready
-        ? "Every field is resolved. Marking trusted is the human confirmation step."
-        : "Accept or edit every field before this document can be trusted."
-    }</span>
+    <span class="muted">${trustFooterCopy(fields, ready)}</span>
     <button class="btn-primary" type="button" data-mark-trusted${ready ? "" : " disabled"}>Mark trusted</button>
   </footer>`;
 }

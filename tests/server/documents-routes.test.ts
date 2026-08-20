@@ -391,6 +391,34 @@ describe("document routes", () => {
     expect(started).toEqual([]);
   });
 
+  test("refuses to trust a document whose extraction returned no fields", async () => {
+    const { started, runner } = recordingRunner();
+    const app = createApp({ runner });
+    const engagement = await createEngagement(app);
+    const document = await insertDocument({
+      id: "doc-empty-extraction",
+      engagementId: engagement.id,
+      filename: "blank.pdf",
+      mimeType: "application/pdf",
+      size: 12,
+      storagePath: "data/uploads/doc-empty-extraction.pdf",
+      uploadedBy: "cpa",
+      pipelineStatus: "needs-review",
+      extraction: { fields: [] },
+    });
+
+    const response = await app.request(`/api/documents/${document.id}/trust`, { method: "POST" });
+    const body = await response.json() as { error: string };
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("extraction returned no fields");
+
+    const db = await connectDb();
+    const stored = await taxDocumentsCollection(db).findOne({ _id: document.id });
+    expect(stored?.pipelineStatus).toBe("needs-review");
+    expect(started).toEqual([]);
+  });
+
   test("rerun resets a failed document and restarts the runner", async () => {
     const { started, runner } = recordingRunner();
     const app = createApp({ runner });

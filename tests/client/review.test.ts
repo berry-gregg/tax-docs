@@ -12,6 +12,7 @@ import {
 } from "../../src/shared/schemas/validation.ts";
 import { ApiError } from "../../src/client/app/api.ts";
 import {
+  bulkAcceptKeys,
   canTrust,
   renderReview,
   reviewPage,
@@ -207,6 +208,65 @@ describe("review page", () => {
     expect(reviewed).not.toContain("data-accept-high-confidence");
   });
 
+  test("Accept all >=90% stays hidden when the only high-confidence fields are notFound", () => {
+    const html = renderReview(
+      data({
+        document: document({
+          extraction: {
+            fields: [
+              {
+                key: "officer_name",
+                label: "Officer name",
+                metadataType: "person-name",
+                dataType: "string",
+                value: null,
+                confidence: 0.95,
+                sourceSnippet: "",
+                notFound: true,
+                regexPass: null,
+                reviewStatus: "unreviewed",
+              },
+            ],
+          },
+        }),
+      }),
+    );
+
+    expect(html).toContain("Not found");
+    expect(html).not.toContain("data-accept-high-confidence");
+  });
+
+  test("bulkAcceptKeys skips notFound even when a null value keeps high model confidence", () => {
+    expect(
+      bulkAcceptKeys([
+        {
+          key: "gross_receipts",
+          label: "Gross receipts",
+          metadataType: "dollar-amount",
+          dataType: "double",
+          value: 1250000,
+          confidence: 0.96,
+          sourceSnippet: "Total revenue 1,250,000",
+          notFound: false,
+          regexPass: null,
+          reviewStatus: "unreviewed",
+        },
+        {
+          key: "officer_name",
+          label: "Officer name",
+          metadataType: "person-name",
+          dataType: "string",
+          value: null,
+          confidence: 0.95,
+          sourceSnippet: "",
+          notFound: true,
+          regexPass: null,
+          reviewStatus: "unreviewed",
+        },
+      ]),
+    ).toEqual(["gross_receipts"]);
+  });
+
   test("an edited field shows the corrected value and keeps the extracted one visible", () => {
     const html = renderReview(
       data({
@@ -248,10 +308,27 @@ describe("review page", () => {
     expect(canTrust(fields())).toBe(false);
   });
 
-  test("canTrust is true when every field is accepted or edited", () => {
+  test("canTrust is true when at least one field exists and every field is accepted or edited", () => {
     expect(
       canTrust(fields([{ reviewStatus: "accepted" }, { reviewStatus: "edited", editedValue: "x" }])),
     ).toBe(true);
+  });
+
+  test("canTrust is false when extraction returned no fields", () => {
+    expect(canTrust([])).toBe(false);
+  });
+
+  test("Mark trusted stays disabled when extraction returned no fields", () => {
+    const html = renderReview(
+      data({
+        document: document({ extraction: { fields: [] } }),
+      }),
+    );
+
+    expect(html).toContain("Extraction returned no fields for this document type.");
+    expect(html).toContain("data-mark-trusted disabled");
+    expect(html).not.toContain("Every field is resolved");
+    expect(html).toContain("This document cannot be marked trusted.");
   });
 
   test("validation warnings render the real explanation and stay advisory", () => {
