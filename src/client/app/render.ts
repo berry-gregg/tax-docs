@@ -85,7 +85,6 @@ function renderNavItem(
   const groupClass = current ? "nav-group is-active" : "nav-group";
   const children = item.children ?? [];
   const matchedChild = children.findIndex((child) => child.href === currentHref);
-  const currentChild = matchedChild === -1 ? 0 : matchedChild;
 
   return `<div data-nav-group="${item.id}" class="${groupClass}">
     <a class="nav-item" href="${item.href}" data-nav-link aria-label="${escapeHtml(item.label)}" title="${escapeHtml(item.label)}" ${current ? 'aria-current="page"' : ""}>
@@ -97,7 +96,7 @@ function renderNavItem(
       expanded
         ? `<div class="nav-children">${children
             .map((child, index) => {
-              const childClass = index === currentChild ? "nav-child is-current" : "nav-child";
+              const childClass = index === matchedChild ? "nav-child is-current" : "nav-child";
               return `<a data-nav-child="${child.id}" class="${childClass}" href="${child.href}" data-nav-link aria-label="${escapeHtml(child.label)}" title="${escapeHtml(child.label)}"><span class="nav-icon-spacer" aria-hidden="true"></span><span class="nav-label">${escapeHtml(child.label)}</span></a>`;
             })
             .join("")}</div>`
@@ -150,12 +149,10 @@ export type PageAction = {
 };
 
 export function pageHeader(title: string, count?: string, actions: PageAction[] = []): string {
-  return `<header class="page-header">
-    <div>
-      <h1 class="page-title">${escapeHtml(title)}${count ? ` <span class="count">${escapeHtml(count)}</span>` : ""}</h1>
-    </div>
-    <div class="page-actions">
-      <button class="icon-btn" type="button" aria-label="More actions">${icons.dots}</button>
+  const actionMarkup =
+    actions.length === 0
+      ? ""
+      : `<div class="page-actions">
       ${actions
         .map((action) => {
           const cls = action.kind === "primary" ? "btn-primary" : "btn-secondary";
@@ -163,7 +160,13 @@ export function pageHeader(title: string, count?: string, actions: PageAction[] 
           return `<a class="${cls}" href="${action.href}" ${isAppRoute ? "data-nav-link" : ""}>${escapeHtml(action.label)}</a>`;
         })
         .join("")}
+    </div>`;
+
+  return `<header class="page-header">
+    <div>
+      <h1 class="page-title">${escapeHtml(title)}${count ? ` <span class="count">${escapeHtml(count)}</span>` : ""}</h1>
     </div>
+    ${actionMarkup}
   </header>`;
 }
 
@@ -182,17 +185,9 @@ export function tabs(items: { label: string; count?: number; current: boolean; h
   </div>`;
 }
 
-export function toolbar(placeholder: string): string {
-  return `<div class="toolbar">
-    <label class="search-field">
-      ${icons.search}
-      <input type="search" placeholder="${escapeHtml(placeholder)}" />
-    </label>
-    <button class="btn-ghost" type="button">${icons.filter} Add filter</button>
-    <div class="toolbar-end">
-      <button class="icon-btn" type="button" aria-label="Export">${icons.download}</button>
-    </div>
-  </div>`;
+/** Callers may keep invoking this; it stays empty until a real bound control exists. */
+export function toolbar(_placeholder: string): string {
+  return "";
 }
 
 export function dataTable(headers: string[], rows: string[], footer: string): string {

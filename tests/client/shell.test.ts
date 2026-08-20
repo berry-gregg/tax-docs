@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { greetingFor } from "../../src/client/app/greeting.ts";
 import { navItems } from "../../src/client/app/nav.ts";
-import { pageHeader, renderApp, renderLoadError, renderPageSkeleton } from "../../src/client/app/render.ts";
+import { pageHeader, renderApp, renderLoadError, renderPageSkeleton, toolbar } from "../../src/client/app/render.ts";
 
 describe("home greeting", () => {
   test("uses time of day without a welcome-back line", () => {
@@ -81,6 +81,18 @@ describe("app shell chrome", () => {
     expect(needsReview).not.toContain('data-nav-child="documents-all" class="nav-child is-current"');
   });
 
+  test("an unmatched documents ?tab= lens does not punch out All", () => {
+    const html = renderApp({
+      pathname: "/documents",
+      search: "?tab=trusted",
+      body: "",
+    });
+
+    expect(html).toContain('data-nav-group="documents" class="nav-group is-active"');
+    expect(html).not.toContain('data-nav-child="documents-all" class="nav-child is-current"');
+    expect(html).not.toContain('class="nav-child is-current"');
+  });
+
   test("a non-current group renders no children", () => {
     const html = renderApp({ pathname: "/inbox", body: "" });
 
@@ -154,6 +166,21 @@ describe("app shell chrome", () => {
     expect(back).toContain("data-nav-link");
     expect(download).toBeDefined();
     expect(download).not.toContain("data-nav-link");
+  });
+
+  test("pageHeader does not emit an unbound More actions kebab", () => {
+    const html = pageHeader("Documents", "4", [
+      { href: "/documents", label: "Upload", kind: "primary" },
+    ]);
+
+    expect(html).not.toContain('aria-label="More actions"');
+  });
+
+  test("toolbar does not emit inert Add filter or download chrome", () => {
+    const html = toolbar("Search documents…");
+
+    expect(html).not.toContain("Add filter");
+    expect(html).not.toContain('aria-label="Export"');
   });
 });
 
