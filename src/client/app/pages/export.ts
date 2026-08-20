@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { engagementDetailSchema } from "../../../shared/schemas/api.ts";
+import { engagementDetailSchema, type EngagementDetail } from "../../../shared/schemas/api.ts";
 import { exportSchema, type EngineExport, type ExportLine } from "../../../shared/schemas/export.ts";
 import type { FilingType } from "../../../shared/schemas/engagement.ts";
 import { ApiError, getJson, sendJson } from "../api.ts";
@@ -17,6 +17,7 @@ export type ExportData = {
   filingType: FilingType;
   export: EngineExport | null;
   blocked: string | null;
+  needsBuild: boolean;
 };
 
 function assertExportRoute(route: Route): asserts route is Extract<Route, { page: "export" }> {
@@ -64,10 +65,26 @@ function renderLineRows(data: ExportData): string[] {
   );
 }
 
+function missingLineCount(data: ExportData): number {
+  return data.export?.lines.filter((line) => line.value === null).length ?? 0;
+}
+
+function missingLinesCopy(data: ExportData): string | null {
+  const lineCount = data.export?.lines.length ?? 0;
+  const missing = missingLineCount(data);
+  if (missing === 0) {
+    return null;
+  }
+
+  return `${missing} of ${lineCount} lines have no trusted source`;
+}
+
 function confirmModalCopy(data: ExportData): string {
   const lineCount = data.export?.lines.length ?? 0;
+  const missing = missingLinesCopy(data);
+  const base = `This sends ${lineCount} line items for ${data.clientName} ${data.taxYear} ${data.filingType} to the tax engine. This is the human confirmation step — nothing has been sent yet.`;
 
-  return `This sends ${lineCount} line items for ${data.clientName} ${data.taxYear} ${data.filingType} to the tax engine. This is the human confirmation step — nothing has been sent yet.`;
+  return missing ? `${base} ${missing}.` : base;
 }
 
 function renderConfirmModal(data: ExportData): string {
@@ -107,9 +124,35 @@ function renderBlocked(data: ExportData): string {
   </div>`;
 }
 
+function renderNeedsBuild(data: ExportData): string {
+  return `<div class="page-export" data-export-needs-build>
+    ${pageHeader("Export")}
+    <div class="wash-card">
+      <p>No export has been built yet.</p>
+      <p class="load-error-message" data-export-error hidden></p>
+      <div class="page-actions">
+        <button class="btn-primary" type="button" data-export-build>Build export</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderMissingWarning(data: ExportData): string {
+  const missing = missingLinesCopy(data);
+  if (!missing) {
+    return "";
+  }
+
+  return `<p class="load-error-message" data-export-missing>${escapeHtml(missing)}</p>`;
+}
+
 export function renderExport(data: ExportData): string {
   if (data.blocked) {
     return renderBlocked(data);
+  }
+
+  if (data.needsBuild) {
+    return renderNeedsBuild(data);
   }
 
   const exportRecord = data.export;
@@ -127,6 +170,7 @@ export function renderExport(data: ExportData): string {
   return `<div class="page-export" data-export-id="${escapeHtml(exportRecord.id)}">
     ${pageHeader("Export", String(lineCount), headerActions)}
     ${exportRecord.status === "sent" ? renderSentBanner(exportRecord) : ""}
+    ${renderMissingWarning(data)}
     ${dataTable(
       ["Engine form", "Line", "Label", "Value", "Sources"],
       renderLineRows(data),
@@ -200,8 +244,47 @@ function bindExportModal(root: HTMLElement, data: ExportData, repaint: () => voi
   });
 }
 
+function bindExportBuild(root: HTMLElement, data: ExportData, repaint: () => void): void {
+  if (!data.needsBuild) {
+    return;
+  }
+
+  const buildButton = root.querySelector<HTMLButtonElement>("[data-export-build]");
+  buildButton?.addEventListener("click", () => {
+    void (async () => {
+      try {
+        await sendJson(
+          "POST",
+          `/api/engagements/${data.engagementId}/export`,
+          {},
+          exportResponseSchema,
+        );
+        repaint();
+      } catch (error) {
+        const slot = root.querySelector<HTMLElement>("[data-export-error]");
+        if (!slot) {
+          return;
+        }
+
+        slot.textContent = error instanceof Error ? error.message : String(error);
+        slot.hidden = false;
+      }
+    })();
+  });
+}
+
 function bindExport(root: HTMLElement, data: ExportData, repaint: () => void): void {
   bindExportModal(root, data, repaint);
+  bindExportBuild(root, data, repaint);
+}
+
+function exportContext(detail: EngagementDetail): Omit<ExportData, "export" | "blocked" | "needsBuild"> {
+  return {
+    engagementId: detail.engagement.id,
+    clientName: detail.client.legalName,
+    taxYear: detail.engagement.taxYear,
+    filingType: detail.engagement.filingType,
+  };
 }
 
 export const exportPage: PageModule<ExportData> = {
@@ -209,32 +292,36 @@ export const exportPage: PageModule<ExportData> = {
     assertExportRoute(route);
 
     const detail = await getJson(`/api/engagements/${route.engagementId}`, engagementDetailSchema);
+    const context = exportContext(detail);
 
     try {
-      const built = await sendJson(
-        "POST",
+      const latest = await getJson(
         `/api/engagements/${route.engagementId}/export`,
-        {},
         exportResponseSchema,
       );
 
       return {
-        engagementId: route.engagementId,
-        clientName: detail.client.legalName,
-        taxYear: detail.engagement.taxYear,
-        filingType: detail.engagement.filingType,
-        export: built.export,
+        ...context,
+        export: latest.export,
         blocked: null,
+        needsBuild: false,
       };
     } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return {
+          ...context,
+          export: null,
+          blocked: null,
+          needsBuild: true,
+        };
+      }
+
       if (error instanceof ApiError && error.status === 409) {
         return {
-          engagementId: route.engagementId,
-          clientName: detail.client.legalName,
-          taxYear: detail.engagement.taxYear,
-          filingType: detail.engagement.filingType,
+          ...context,
           export: null,
           blocked: error.message,
+          needsBuild: false,
         };
       }
 

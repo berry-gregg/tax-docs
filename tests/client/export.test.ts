@@ -42,8 +42,55 @@ function data(overrides: Partial<ExportData> = {}): ExportData {
     filingType: "1120-S",
     export: draftExport,
     blocked: null,
+    needsBuild: false,
     ...overrides,
   };
+}
+
+const filledExport = exportSchema.parse({
+  ...draftExport,
+  id: "exp-filled",
+  lines: draftExport.lines.map((line) =>
+    line.value === null
+      ? { ...line, value: 12000, sourceRefs: [{ documentId: "doc-pl", fieldKey: "rents" }] }
+      : line,
+  ),
+});
+
+function engagementDetail() {
+  return {
+    engagement: {
+      id: "eng-1",
+      clientId: "client-1",
+      taxYear: 2025,
+      filingType: "1120-S",
+      status: "in-review",
+      portalToken: "portal-token",
+      createdAt: iso,
+      updatedAt: iso,
+    },
+    client: {
+      id: "client-1",
+      legalName: "Northwind Partners LLC",
+      entityType: "s-corp",
+      ein: "12-3456789",
+      contactName: "Nora North",
+      contactEmail: "nora@example.com",
+      city: "Denver",
+      state: "CO",
+      createdAt: iso,
+    },
+    requestItems: [],
+    documents: [],
+    activity: [],
+  };
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 class FakeExportNode {
@@ -123,6 +170,23 @@ describe("export page", () => {
     expect(html).toContain("This sends 2 line items for Northwind Partners LLC 2025 1120-S to the tax engine");
     expect(html).toContain("nothing has been sent yet");
     expect(html).toContain("Confirm &amp; send to tax engine");
+  });
+
+  test("confirm copy and table warn when lines have no trusted source, without blocking send", () => {
+    const html = renderExport(data());
+
+    expect(html).toContain("1 of 2 lines have no trusted source");
+    expect(html).toContain("data-export-missing");
+    expect(html).toContain('class="btn-primary" type="button" data-export-open');
+    expect(html).toContain('data-export-confirm');
+  });
+
+  test("filled exports omit the missing-source warning", () => {
+    const html = renderExport(data({ export: filledExport }));
+
+    expect(html).not.toContain("have no trusted source");
+    expect(html).not.toContain("data-export-missing");
+    expect(html).toContain("This sends 2 line items for Northwind Partners LLC 2025 1120-S to the tax engine");
   });
 
   test("sent state shows success banner and download payload href", () => {
@@ -210,5 +274,79 @@ describe("export page", () => {
       globalThis.alert = originalAlert;
       globalThis.fetch = originalFetch;
     }
+  });
+
+  test("load GETs the latest export and does not POST a draft", async () => {
+    const calls: Array<{ method: string; path: string }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = init?.method ?? "GET";
+      calls.push({ method, path });
+      if (path === "/api/engagements/eng-1") {
+        return jsonResponse(engagementDetail());
+      }
+      if (path === "/api/engagements/eng-1/export") {
+        return jsonResponse({ export: draftExport });
+      }
+      return jsonResponse({ error: "unexpected" }, 500);
+    }) as unknown) as typeof fetch;
+
+    try {
+      const loaded = await exportPage.load({ page: "export", engagementId: "eng-1" });
+
+      expect(loaded.export?.id).toBe("exp-1");
+      expect(loaded.needsBuild).toBe(false);
+      expect(calls).toEqual([
+        { method: "GET", path: "/api/engagements/eng-1" },
+        { method: "GET", path: "/api/engagements/eng-1/export" },
+      ]);
+      expect(calls.some((call) => call.method === "POST")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("load treats a missing export as a build prompt instead of writing a draft", async () => {
+    const calls: Array<{ method: string; path: string }> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      const method = init?.method ?? "GET";
+      calls.push({ method, path });
+      if (path === "/api/engagements/eng-1") {
+        return jsonResponse(engagementDetail());
+      }
+      return jsonResponse({ error: "Not found" }, 404);
+    }) as unknown) as typeof fetch;
+
+    try {
+      const loaded = await exportPage.load({ page: "export", engagementId: "eng-1" });
+
+      expect(loaded).toMatchObject({
+        engagementId: "eng-1",
+        export: null,
+        blocked: null,
+        needsBuild: true,
+      });
+      expect(calls.some((call) => call.method === "POST")).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("needs-build state offers an explicit Build export primary", () => {
+    const html = renderExport(
+      data({
+        export: null,
+        needsBuild: true,
+      }),
+    );
+
+    expect(html).toContain("Build export");
+    expect(html).toContain("data-export-build");
+    expect(html).toContain("No export has been built yet");
+    expect(html).not.toContain("Export could not be loaded");
+    expect(html).not.toContain("data-export-open");
   });
 });
