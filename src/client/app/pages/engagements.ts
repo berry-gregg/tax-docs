@@ -1,0 +1,137 @@
+import { POLL_INTERVAL_MS } from "../../../shared/constants.ts";
+import {
+  engagementListResponseSchema,
+  type EngagementListRow,
+} from "../../../shared/schemas/api.ts";
+import { getJson } from "../api.ts";
+import {
+  dataTable,
+  emptyState,
+  entityCell,
+  escapeHtml,
+  initialsFor,
+  pageHeader,
+  toolbar,
+} from "../render.ts";
+import {
+  bindNewEngagementModal,
+  initialNewEngagementState,
+  loadNewEngagementState,
+  renderNewEngagementModal,
+  type NewEngagementModalState,
+} from "./new-engagement.ts";
+import type { PageModule } from "./registry.ts";
+
+export type EngagementsData = {
+  engagements: EngagementListRow[];
+  showNewEngagementModal?: boolean;
+  newEngagement?: NewEngagementModalState;
+};
+
+const stageLabels: Record<EngagementListRow["status"], string> = {
+  draft: "Draft",
+  collecting: "Collecting",
+  "in-review": "In review",
+  "ready-to-export": "Ready to export",
+  exported: "Exported",
+};
+
+const stageTones: Record<EngagementListRow["status"], "processing" | "warning" | "success"> = {
+  draft: "processing",
+  collecting: "processing",
+  "in-review": "warning",
+  "ready-to-export": "success",
+  exported: "success",
+};
+
+export function renderEngagements(data: EngagementsData): string {
+  const rows = data.engagements.map(renderEngagementRow);
+  const modal = data.showNewEngagementModal
+    ? renderNewEngagementModal(
+        data.newEngagement ?? initialNewEngagementState({ clients: [], documentTypes: [] }),
+      )
+    : "";
+
+  return `<section>
+    ${pageHeader("Engagements", String(data.engagements.length), [
+      { href: "/engagements?new=1", label: "New engagement", kind: "primary" },
+    ])}
+    ${toolbar("Search engagements")}
+    ${
+      rows.length === 0
+        ? emptyState("No engagements yet. Create one to request client documents.")
+        : dataTable(
+            ["Client", "Filing type", "Tax year", "Stage", "Docs progress", "Needs review"],
+            rows,
+            `1–${rows.length} of ${rows.length}`,
+          )
+    }
+    ${modal}
+  </section>`;
+}
+
+function renderEngagementRow(row: EngagementListRow): string {
+  const totalRequested = row.docCounts.total + row.openItems;
+  const progress =
+    totalRequested === 0
+      ? "No requests yet"
+      : `${row.docCounts.total} of ${totalRequested} received`;
+  const needsReview =
+    row.docCounts.needsReview === 1 ? "1 needs review" : `${row.docCounts.needsReview} need review`;
+
+  return `<tr>
+    <td><a href="/engagements/${encodeURIComponent(row.id)}" data-nav-link>${entityCell(
+      initialsFor(row.clientName),
+      row.clientName,
+      row.clientId,
+    )}</a></td>
+    <td>${escapeHtml(row.filingType)}</td>
+    <td>${row.taxYear}</td>
+    <td>${stageChip(row.status)}</td>
+    <td>${escapeHtml(progress)}</td>
+    <td><span class="status status-needs-review">${escapeHtml(needsReview)}</span></td>
+  </tr>`;
+}
+
+function stageChip(status: EngagementListRow["status"]): string {
+  return `<span class="chip chip-${stageTones[status]}">${escapeHtml(stageLabels[status])}</span>`;
+}
+
+function modalRequested(): { show: boolean; clientId?: string } {
+  const search = globalThis.location?.search ?? "";
+  const params = new URLSearchParams(search);
+  const clientId = params.get("client") ?? undefined;
+  return { show: params.get("new") === "1", clientId };
+}
+
+export const engagementsPage: PageModule<EngagementsData> = {
+  async load() {
+    const [engagements, modalState] = await Promise.all([
+      getJson("/api/engagements", engagementListResponseSchema),
+      (async () => {
+        const requested = modalRequested();
+        return requested.show ? loadNewEngagementState(requested.clientId) : undefined;
+      })(),
+    ]);
+    return {
+      engagements: engagements.engagements,
+      showNewEngagementModal: modalState !== undefined,
+      newEngagement: modalState,
+    };
+  },
+  render: renderEngagements,
+  bind(root, data, repaint) {
+    if (!data.newEngagement) return;
+
+    let modalState = data.newEngagement;
+    bindNewEngagementModal(root, {
+      state: modalState,
+      setState(next) {
+        modalState = next;
+        data.newEngagement = next;
+      },
+      repaint,
+    });
+  },
+  pollMs: POLL_INTERVAL_MS,
+};
