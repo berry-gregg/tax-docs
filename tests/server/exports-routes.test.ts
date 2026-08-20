@@ -219,6 +219,66 @@ describe("export routes", () => {
     expect(await payloadResponse.text()).toBe(buildBody.export.payloadJson);
   });
 
+  test("refreshes an outstanding draft with documents trusted after it was built", async () => {
+    const app = createApp();
+    await seedTrustedProfitLoss();
+
+    const buildResponse = await app.request(`/api/engagements/${engagement.id}/export`, { method: "POST" });
+    const buildBody = await buildResponse.json();
+    expect(buildBody.export.lines.find((line: { engineForm: string }) => line.engineForm === "Item F")).toMatchObject({
+      value: null,
+    });
+
+    const db = await connectDb();
+    await taxDocumentsCollection(db).insertOne(
+      toStored(documentWithFields({
+        id: "doc-bs-trusted",
+        pipelineStatus: "trusted",
+        classification: { documentTypeId: "dt-balance-sheet", confidence: 0.96, reasoning: "Balance sheet" },
+        extraction: { fields: [moneyField("total_assets", 640000)] },
+      })),
+    );
+
+    const response = await app.request(`/api/engagements/${engagement.id}/export`);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.export.id).toBe(buildBody.export.id);
+    expect(body.export.status).toBe("draft");
+    expect(body.export.lines.find((line: { engineForm: string }) => line.engineForm === "Item F")).toMatchObject({
+      value: 640000,
+      sourceRefs: [{ documentId: "doc-bs-trusted", fieldKey: "total_assets" }],
+    });
+    expect(JSON.parse(body.export.payloadJson).lines).toEqual(body.export.lines);
+  });
+
+  test("leaves a sent export untouched when documents are trusted afterwards", async () => {
+    const app = createApp();
+    await seedTrustedProfitLoss();
+
+    const buildResponse = await app.request(`/api/engagements/${engagement.id}/export`, { method: "POST" });
+    const buildBody = await buildResponse.json();
+    const confirmResponse = await app.request(`/api/exports/${buildBody.export.id}/confirm`, { method: "POST" });
+    const confirmBody = await confirmResponse.json();
+    expect(confirmResponse.status).toBe(200);
+
+    const db = await connectDb();
+    await taxDocumentsCollection(db).insertOne(
+      toStored(documentWithFields({
+        id: "doc-bs-after-send",
+        pipelineStatus: "trusted",
+        classification: { documentTypeId: "dt-balance-sheet", confidence: 0.96, reasoning: "Balance sheet" },
+        extraction: { fields: [moneyField("total_assets", 640000)] },
+      })),
+    );
+
+    const response = await app.request(`/api/engagements/${engagement.id}/export`);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.export).toEqual(confirmBody.export);
+  });
+
   test("returns a newer rebuilt draft as the latest export after an older draft is confirmed", async () => {
     const app = createApp();
     await seedTrustedProfitLoss();

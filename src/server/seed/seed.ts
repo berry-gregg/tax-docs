@@ -6,7 +6,7 @@ import { clientSchema, type Client } from "../../shared/schemas/client.ts";
 import { extractionFieldSchema, taxDocumentSchema, type ExtractionField, type TaxDocument } from "../../shared/schemas/document.ts";
 import { documentTypeSchema, type DocumentType } from "../../shared/schemas/document-type.ts";
 import { engagementSchema, type Engagement } from "../../shared/schemas/engagement.ts";
-import { exportLineSchema, exportSchema, type EngineExport, type ExportLine } from "../../shared/schemas/export.ts";
+import { exportLineSchema, exportSchema, type EngineExport } from "../../shared/schemas/export.ts";
 import { messageSchema, type Message } from "../../shared/schemas/message.ts";
 import { requestItemSchema, requestTemplateSchema, type RequestItem, type RequestTemplate } from "../../shared/schemas/request.ts";
 import {
@@ -22,7 +22,7 @@ import {
   taxDocumentsCollection,
   toStored,
 } from "../db/collections.ts";
-import { ENGINE_LINE_MAP } from "../export/engine-map.ts";
+import { exportPayloadJson, mapExportLines } from "../export/engine-map.ts";
 import { seedDocumentTypes, seedRequestTemplates } from "./definitions.ts";
 import { type DemoCompany, type DemoFigureDocument, loadDemoFigures } from "./figures.ts";
 
@@ -188,41 +188,14 @@ function message(params: Message): Message {
   return messageSchema.parse(params);
 }
 
-function buildExportLines(engagement: Engagement, documents: TaxDocument[]): ExportLine[] {
-  return ENGINE_LINE_MAP[engagement.filingType].map((lineDef) => {
-    const matches = documents.flatMap((document) => {
-      if (document.pipelineStatus !== "trusted") return [];
-      if (document.classification?.documentTypeId !== lineDef.source.documentTypeId) return [];
-      const field = document.extraction?.fields.find((candidate) => candidate.key === lineDef.source.fieldKey);
-      if (!field || field.value === null) return [];
-      return [{ documentId: document.id, fieldKey: field.key, value: field.editedValue ?? field.value }];
-    });
-    const numericValues = matches
-      .map((match) => match.value)
-      .filter((value): value is number => typeof value === "number");
-
-    return exportLineSchema.parse({
-      engineForm: lineDef.engineForm,
-      lineId: lineDef.lineId,
-      lineLabel: lineDef.lineLabel,
-      value:
-        matches.length === 0
-          ? null
-          : numericValues.length === matches.length
-            ? numericValues.reduce((sum, value) => sum + value, 0)
-            : matches[0]?.value ?? null,
-      sourceRefs: matches.map(({ documentId, fieldKey }) => ({ documentId, fieldKey })),
-    });
-  });
-}
-
 function exportFor(
   engagement: Engagement,
   client: Client,
   documents: TaxDocument[],
   status: EngineExport["status"],
 ): EngineExport {
-  const lines = buildExportLines(engagement, documents);
+  const trusted = documents.filter((document) => document.pipelineStatus === "trusted");
+  const lines = mapExportLines(engagement.filingType, trusted);
   return exportSchema.parse({
     id: `export-${engagement.id}-${status}`,
     engagementId: engagement.id,
@@ -230,17 +203,7 @@ function exportFor(
     lines,
     createdAt: SEED_CREATED_AT,
     confirmedAt: status === "sent" ? SEED_CONFIRMED_AT : undefined,
-    payloadJson: JSON.stringify(
-      {
-        engine: "tax-engine-generic",
-        filingType: engagement.filingType,
-        taxYear: engagement.taxYear,
-        client: { legalName: client.legalName, ein: client.ein },
-        lines,
-      },
-      null,
-      2,
-    ),
+    payloadJson: exportPayloadJson({ engagement, client, lines }),
   });
 }
 

@@ -107,7 +107,7 @@ Drop `demo-docs/northgate-profit-and-loss-2025.pdf` on it. Watch the status adva
 
 **7. Validations** - upload and trust the four Northgate Forms 941, then return to the engagement. `Payroll ties to P&L` now warns: 1,218,500 of wages against 1,200,000 of payroll, the pack's one planted discrepancy. Validations warn; they never block.
 
-**8. Export** - a draft built from the trusted documents is already seeded, so go straight to **Confirm & send to tax engine**. The engagement moves to `exported` and the JSON payload becomes downloadable. Nothing reaches an engine without this click.
+**8. Export** - the draft is a live view of the trusted documents, not a snapshot: every line you trusted in the steps above is mapped by the time you open it, and lines with no trusted source stay honestly empty. Then **Confirm & send to tax engine**. The engagement moves to `exported` and the JSON payload becomes downloadable. Nothing reaches an engine without this click.
 
 **9. Inbox and Settings** - the client conversation threads (reply to Northgate's unread question live from the compose box), and the eight seeded document types plus anything you drafted in step 6.
 
@@ -268,7 +268,7 @@ Tests run on `bun:test` and mock only at system boundaries. Persistence tests us
 **Exports**
 
 - `POST /api/engagements/:id/export` - build a draft
-- `GET /api/engagements/:id/export` - latest export
+- `GET /api/engagements/:id/export` - latest export; an outstanding draft is remapped from the currently trusted documents on read, a `sent` export is returned verbatim
 - `POST /api/exports/:id/confirm` - human-confirmed send
 - `GET /api/exports/:id/payload` - download the confirmed JSON
 

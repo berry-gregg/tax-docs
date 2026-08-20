@@ -37,7 +37,7 @@ import {
 import { insertMessage } from "../db/messages.ts";
 import {
   buildDraftExportForEngagement,
-  getLatestExportForEngagement,
+  getCurrentExportForEngagement,
 } from "./exports.ts";
 import { computeValidations } from "../validation/checks.ts";
 import { zodIssueSummary } from "../../shared/zod-issue-summary.ts";
@@ -241,7 +241,7 @@ engagementRoutes.get("/:id/export", async (c) => {
     return c.json({ error: "Not found" }, 404);
   }
 
-  const exportRecord = await getLatestExportForEngagement(engagement.id);
+  const exportRecord = await getCurrentExportForEngagement(engagement.id);
   if (!exportRecord) {
     return c.json({ error: "Not found" }, 404);
   }

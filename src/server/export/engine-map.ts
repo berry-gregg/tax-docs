@@ -1,8 +1,9 @@
+import type { Client } from "../../shared/schemas/client.ts";
 import type { ExportLine } from "../../shared/schemas/export.ts";
 import { exportLineSchema } from "../../shared/schemas/export.ts";
-import type { FilingType } from "../../shared/schemas/engagement.ts";
+import type { Engagement, FilingType } from "../../shared/schemas/engagement.ts";
 import { engagementSchema } from "../../shared/schemas/engagement.ts";
-import { taxDocumentSchema, type ExtractionField } from "../../shared/schemas/document.ts";
+import { taxDocumentSchema, type ExtractionField, type TaxDocument } from "../../shared/schemas/document.ts";
 import { connectDb } from "../db/client.ts";
 import {
   engagementsCollection,
@@ -61,24 +62,14 @@ function effectiveValue(field: ExtractionField): string | number | boolean | nul
   return field.editedValue ?? field.value;
 }
 
-export async function buildExportLines(engagementId: string): Promise<ExportLine[]> {
-  const db = await connectDb();
-  const engagementDoc = await engagementsCollection(db).findOne({ _id: engagementId });
-  if (!engagementDoc) {
-    return [];
-  }
-
-  const engagement = fromStored(engagementSchema, engagementDoc);
-  const trustedDocs = (
-    await taxDocumentsCollection(db)
-      .find({ engagementId, pipelineStatus: "trusted" })
-      // _id tiebreak keeps sourceRefs deterministic when uploads share a createdAt timestamp.
-      .sort({ createdAt: 1, _id: 1 })
-      .toArray()
-  ).map((doc) => fromStored(taxDocumentSchema, doc));
-
-  return ENGINE_LINE_MAP[engagement.filingType].map((lineDef) => {
-    const matches = trustedDocs.flatMap((document) => {
+/**
+ * The one mapping from trusted documents to engine lines — the DB-backed builder and the demo
+ * seed both go through here so a demo book can never show figures the live path would not
+ * produce. Callers pass only documents a person has trusted, in a deterministic order.
+ */
+export function mapExportLines(filingType: FilingType, trustedDocuments: TaxDocument[]): ExportLine[] {
+  return ENGINE_LINE_MAP[filingType].map((lineDef) => {
+    const matches = trustedDocuments.flatMap((document) => {
       if (document.classification?.documentTypeId !== lineDef.source.documentTypeId) {
         return [];
       }
@@ -112,4 +103,42 @@ export async function buildExportLines(engagementId: string): Promise<ExportLine
       sourceRefs: matches.map(({ documentId, fieldKey }) => ({ documentId, fieldKey })),
     });
   });
+}
+
+export async function buildExportLines(engagementId: string): Promise<ExportLine[]> {
+  const db = await connectDb();
+  const engagementDoc = await engagementsCollection(db).findOne({ _id: engagementId });
+  if (!engagementDoc) {
+    return [];
+  }
+
+  const engagement = fromStored(engagementSchema, engagementDoc);
+  const trustedDocs = (
+    await taxDocumentsCollection(db)
+      .find({ engagementId, pipelineStatus: "trusted" })
+      // _id tiebreak keeps sourceRefs deterministic when uploads share a createdAt timestamp.
+      .sort({ createdAt: 1, _id: 1 })
+      .toArray()
+  ).map((doc) => fromStored(taxDocumentSchema, doc));
+
+  return mapExportLines(engagement.filingType, trustedDocs);
+}
+
+/** The wire shape handed to the engine. One writer, so a stored payload can never drift from it. */
+export function exportPayloadJson(input: {
+  engagement: Engagement;
+  client: Client;
+  lines: ExportLine[];
+}): string {
+  return JSON.stringify(
+    {
+      engine: "tax-engine-generic",
+      filingType: input.engagement.filingType,
+      taxYear: input.engagement.taxYear,
+      client: { legalName: input.client.legalName, ein: input.client.ein },
+      lines: input.lines,
+    },
+    null,
+    2,
+  );
 }

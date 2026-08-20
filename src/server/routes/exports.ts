@@ -13,7 +13,7 @@ import {
   fromStored,
   toStored,
 } from "../db/collections.ts";
-import { buildExportLines } from "../export/engine-map.ts";
+import { buildExportLines, exportPayloadJson } from "../export/engine-map.ts";
 
 export const exportRoutes = new Hono();
 
@@ -31,7 +31,7 @@ function safeFilenamePart(value: string): string {
   return value.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "client";
 }
 
-export async function getLatestExportForEngagement(engagementId: string): Promise<EngineExport | null> {
+async function getLatestExportForEngagement(engagementId: string): Promise<EngineExport | null> {
   const db = await connectDb();
   const doc = await engineExportsCollection(db).findOne(
     { engagementId },
@@ -65,17 +65,7 @@ export async function buildDraftExportForEngagement(engagementId: string): Promi
     return { ok: false, status: 409, error: "No trusted documents to export" };
   }
 
-  const payloadJson = JSON.stringify(
-    {
-      engine: "tax-engine-generic",
-      filingType: engagement.filingType,
-      taxYear: engagement.taxYear,
-      client: { legalName: client.legalName, ein: client.ein },
-      lines,
-    },
-    null,
-    2,
-  );
+  const payloadJson = exportPayloadJson({ engagement, client, lines });
   const existingDraft = await engineExportsCollection(db).findOne({
     engagementId: engagement.id,
     status: "draft",
@@ -102,6 +92,23 @@ export async function buildDraftExportForEngagement(engagementId: string): Promi
   );
 
   return { ok: true, exportRecord };
+}
+
+/**
+ * What the export screen reads. A `sent` export is history and is returned verbatim; a draft is a
+ * derived view of the currently trusted documents, so it rebuilds on read — otherwise a document
+ * trusted after the draft was built would never reach its engine line. The rebuild persists
+ * because confirm sends the stored record: the reviewer must send exactly what they saw. A
+ * rebuild that finds nothing to export leaves the stored draft alone.
+ */
+export async function getCurrentExportForEngagement(engagementId: string): Promise<EngineExport | null> {
+  const latest = await getLatestExportForEngagement(engagementId);
+  if (!latest || latest.status !== "draft") {
+    return latest;
+  }
+
+  const rebuilt = await buildDraftExportForEngagement(engagementId);
+  return rebuilt.ok ? rebuilt.exportRecord : latest;
 }
 
 exportRoutes.post("/:id/confirm", async (c) => {

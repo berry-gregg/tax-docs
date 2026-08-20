@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { buildExportLines, ENGINE_LINE_MAP } from "../../src/server/export/engine-map.ts";
+import { buildExportLines, ENGINE_LINE_MAP, mapExportLines } from "../../src/server/export/engine-map.ts";
 import { connectDb, disconnectDb } from "../../src/server/db/client.ts";
 import {
   activitiesCollection,
@@ -113,6 +113,40 @@ describe("ENGINE_LINE_MAP", () => {
         expect(seedFieldsByDocumentType.get(lineDef.source.documentTypeId)?.has(lineDef.source.fieldKey)).toBe(true);
       }
     }
+  });
+});
+
+describe("mapExportLines", () => {
+  test("exports a human edit over the extracted value, including one the model could not ground", () => {
+    const edited = documentWithFields({
+      id: "doc-edited",
+      pipelineStatus: "trusted",
+      classification: { documentTypeId: "dt-profit-loss", confidence: 0.95, reasoning: "P&L" },
+      extraction: {
+        fields: [
+          { ...moneyField("gross_receipts", 120000), editedValue: 125000, reviewStatus: "edited" },
+          {
+            ...moneyField("net_income", 0),
+            value: null,
+            notFound: true,
+            sourceSnippet: "",
+            editedValue: 45000,
+            reviewStatus: "edited",
+          },
+        ],
+      },
+    });
+
+    const lines = mapExportLines("1120-S", [edited]);
+
+    expect(lines.find((line) => line.engineForm === "Form 1120-S" && line.lineId === "1a")).toMatchObject({
+      value: 125000,
+      sourceRefs: [{ documentId: "doc-edited", fieldKey: "gross_receipts" }],
+    });
+    expect(lines.find((line) => line.engineForm === "Form 1120-S" && line.lineId === "21")).toMatchObject({
+      value: 45000,
+      sourceRefs: [{ documentId: "doc-edited", fieldKey: "net_income" }],
+    });
   });
 });
 

@@ -27,6 +27,12 @@ The API is a Hono app on Bun. `createApp(opts?: { runner?: PipelineRunner; ai?: 
 
 `createRunner({ ai })` fires `runPipeline` in the background. Stages are quality → classify → extract (`src/server/pipeline/stages.ts`). Unclassified documents can `POST /api/documents/:id/draft-type` for a non-persisted schema proposal. A reviewer overrides a mis-classification with `POST /api/documents/:id/reclassify` (`needs-review` / `unclassified` only): the route flips the document to `extracting` and `runner.startReclassify` fires `reclassifyDocument` — an extract-only continuation (classification written as the human's decision, confidence 1; classify never re-runs) that relinks the checklist item and shares the pipeline's failure lane. Production `src/server/index.ts` wires the real OpenRouter client; tests inject a stub `ai` / recording `runner`.
 
+## Export
+
+`src/server/export/engine-map.ts` owns the tax-engine contract: `ENGINE_LINE_MAP` (filing type → engine lines), `mapExportLines(filingType, trustedDocuments)` (the one mapping, honoring `editedValue ?? value`), and `exportPayloadJson`. Every producer — the route builder and the demo seed — goes through those; a second copy of the mapping is how a demo book starts showing figures the live path would not produce.
+
+A **draft** export is a derived view of the currently trusted documents, not history: `GET /api/engagements/:id/export` remaps it on read (`getCurrentExportForEngagement`), so a document trusted after the draft was built reaches its line without the reviewer hunting for a rebuild control. The rebuild persists because `POST /api/exports/:id/confirm` sends the stored record — the reviewer must send exactly what they saw. A **sent** export is immutable and is returned verbatim. Unmapped lines stay `null` and the screen says how many; a `0` in an engine line nobody grounded would be an invention.
+
 ## Scripts
 
 `scripts/seed.ts` seeds or `--reset`s the demo book. `scripts/generate-demo-docs.ts` regenerates `demo-docs/`. `scripts/smoke-llm.ts` (`bun run smoke`) boots the real app + OpenRouter client and is **not** in the bun test gate.
