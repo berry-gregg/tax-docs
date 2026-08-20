@@ -39,6 +39,7 @@ Sample computed styles from the product app, not screenshots of ramp.com.
 | `/accounting` | `/engagements` | List | Stage chips, progress column, export primary |
 | `/people/all` | `/clients` | List | Entity avatar + name/email, New client primary |
 | `/settings/company-settings` | `/settings` | Settings | Underline tabs, dt/dd grid, Edit secondary |
+| Expense detail (receipt beside fields) | `/engagements/:id/review/:documentId` | Review | Sticky document frame on the left, field rows + gated primary on the right |
 
 Product ink is `#2e2e27`, ash `#707062`, hairline `#ebe8e5`, outline `#91917b`, success `#26763b`, warning `#876634`. Marketing ink `#0c0a08` and 6px buttons stay in DESIGN.md as history — never in `src/client/`.
 
@@ -91,6 +92,8 @@ Reuse the helpers in `render.ts` (`pageHeader`, `tabs`, `toolbar`, `dataTable`, 
 **Inbox** — header + `.row-list`. Skip tabs/table until the data needs filters.
 
 **Settings** — header, tabs, `.settings-block` max 720px, `.definition-grid` two-columns (dt ash, dd ink), secondary Edit. Health slots: `[data-api-status]` / `[data-db-status]`.
+
+**Review** — the split pane, analogous to Ramp's expense detail where the receipt sits beside the coded fields. `pageHeader` carries the filename with the document type as the ash count and a secondary link back to the engagement. `.review-split` is two equal columns: left is a sticky `.review-viewer` hairline frame around `<iframe src="/api/documents/:id/file">`, right is `.review-panel`. The panel leads with the type name, `pipelineChip`, classification confidence, and the reasoning line, then one `.review-field` per extracted field — label, `10px` ash `metadataType` caption, confidence badge from `formatConfidence` (success/warning/ash, never highlighter), value or a muted "Not found", a `.review-source` quote block, a warning chip when `regexPass === false`, and ghost Accept / Edit with an inline edit form. Validation warnings render through `.row-list` and stay advisory. `.review-foot` holds the one primary, disabled until `canTrust(fields)` — the same rule the trust endpoint enforces. Variant lanes replace the field list, never the split: `unclassified` offers the schema-builder side panel, `failed` and `rejected` show the stored cause with a rerun, in-pipeline states say so and let polling finish.
 
 Unknown routes: inline empty page, not a toast.
 

@@ -1,7 +1,16 @@
-import { FIRM_NAME } from "../../../shared/constants.ts";
-import { escapeHtml, pageHeader, renderNotFound } from "../render.ts";
+import { renderNotFound } from "../render.ts";
 import type { Route } from "../router.ts";
+import { clientDetailPage } from "./client-detail.ts";
+import { clientsPage } from "./clients.ts";
+import { documentsPage } from "./documents.ts";
+import { engagementPage } from "./engagement-workspace.ts";
+import { engagementsPage } from "./engagements.ts";
+import { exportPage } from "./export.ts";
 import { homePage } from "./home.ts";
+import { inboxPage } from "./inbox.ts";
+import { portalPage } from "./portal.ts";
+import { reviewPage } from "./review.ts";
+import { settingsPage } from "./settings.ts";
 
 /**
  * One page contract for the whole product: load data, render a string, optionally bind behaviour
@@ -14,40 +23,10 @@ export type PageModule<T> = {
   pollMs?: number;
 };
 
-/**
- * Routes whose pages land in later steps still need a module, otherwise navigating to them would
- * throw inside the paint loop. Each placeholder states plainly that the page is not built.
- */
-function placeholder(title: string): PageModule<null> {
-  return {
-    load: () => Promise.resolve(null),
-    render: () =>
-      `${pageHeader(title)}<p class="muted">${escapeHtml(`${title} is not built yet.`)}</p>`,
-  };
-}
-
-const portalPlaceholder: PageModule<null> = {
-  load: () => Promise.resolve(null),
-  render: () => `<div class="empty-page">
-    <h1 class="page-title">${escapeHtml(FIRM_NAME)}</h1>
-    <p class="muted">This upload portal is not built yet.</p>
-  </div>`,
-};
-
 const notFoundPage: PageModule<null> = {
   load: () => Promise.resolve(null),
   render: () => renderNotFound(),
 };
-
-const inboxPage = placeholder("Inbox");
-const documentsPage = placeholder("Documents");
-const engagementsPage = placeholder("Engagements");
-const engagementPage = placeholder("Engagement");
-const reviewPage = placeholder("Review");
-const exportPage = placeholder("Export");
-const clientsPage = placeholder("Clients");
-const clientPage = placeholder("Client");
-const settingsPage = placeholder("Settings");
 
 export function moduleFor(route: Route): PageModule<unknown> {
   switch (route.page) {
@@ -68,11 +47,11 @@ export function moduleFor(route: Route): PageModule<unknown> {
     case "clients":
       return clientsPage;
     case "client":
-      return clientPage;
+      return clientDetailPage;
     case "settings":
       return settingsPage;
     case "portal":
-      return portalPlaceholder;
+      return portalPage;
     case "not-found":
       return notFoundPage;
   }

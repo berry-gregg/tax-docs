@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { POLL_INTERVAL_MS } from "../../src/shared/constants.ts";
 import { moduleFor } from "../../src/client/app/pages/registry.ts";
+import { reviewPage } from "../../src/client/app/pages/review.ts";
 import type { Route } from "../../src/client/app/router.ts";
 
 const routes: Route[] = [
@@ -27,25 +29,19 @@ describe("page registry", () => {
     }
   });
 
-  test("placeholder pages render a titled body without touching the network", async () => {
-    const placeholders: [Route, string][] = [
-      [{ page: "inbox" }, "Inbox"],
-      [{ page: "documents" }, "Documents"],
-      [{ page: "engagements" }, "Engagements"],
-      [{ page: "engagement", id: "eng-1" }, "Engagement"],
-      [{ page: "review", engagementId: "eng-1", documentId: "doc-1" }, "Review"],
-      [{ page: "export", engagementId: "eng-1" }, "Export"],
-      [{ page: "clients" }, "Clients"],
-      [{ page: "client", id: "client-1" }, "Client"],
-      [{ page: "settings" }, "Settings"],
-      [{ page: "portal", token: "tok" }, "Tax Docs LLP"],
-    ];
+  test("the review route resolves to the field-level review workspace", () => {
+    const route: Route = { page: "review", engagementId: "eng-1", documentId: "doc-1" };
 
-    for (const [route, expected] of placeholders) {
+    expect(moduleFor(route)).toBe(reviewPage);
+    expect(reviewPage.pollMs).toBe(POLL_INTERVAL_MS);
+  });
+
+  test("no route resolves to an unbuilt placeholder any more", () => {
+    for (const route of routes) {
       const module = moduleFor(route);
-      const data = await module.load(route);
 
-      expect(module.render(data)).toContain(expected);
+      expect(module.render).not.toBe(undefined);
+      expect(String(module.render)).not.toContain("is not built yet");
     }
   });
 
