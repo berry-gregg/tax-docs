@@ -175,6 +175,30 @@ engagementRoutes.post("/", async (c) => {
   return c.json({ engagement }, 201);
 });
 
+engagementRoutes.post("/:id/export", async (c) => {
+  const result = await buildDraftExportForEngagement(c.req.param("id"));
+
+  if (!result.ok) {
+    return c.json({ error: result.error }, result.status);
+  }
+
+  return c.json({ export: result.exportRecord });
+});
+
+engagementRoutes.get("/:id/export", async (c) => {
+  const engagement = await findEngagement(c.req.param("id"));
+
+  if (!engagement) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const exportRecord = await getLatestExportForEngagement(engagement.id);
+  if (!exportRecord) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  return c.json({ export: exportRecord });
+});
 engagementRoutes.get("/:id/validations", async (c) => {
   const id = c.req.param("id");
   const engagement = await findEngagement(id);
