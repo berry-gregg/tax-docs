@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "seed": "bun run scripts/seed.ts",
     "demo-docs": "bun run scripts/generate-demo-docs.ts",
+    "smoke": "bun run scripts/smoke-llm.ts",
     "db:up": "docker compose up -d mongodb",
     "db:down": "docker compose down"
   },

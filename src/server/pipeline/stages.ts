@@ -47,7 +47,7 @@ export type DraftTypeResult = z.infer<typeof draftTypeResultSchema>;
 type StageDocument = { filename: string; bytes: Uint8Array };
 
 const QUALITY_SYSTEM =
-  "Decide whether this document is relevant to a business tax engagement and whether it is legible enough to read. Set relevant and legible independently. Provide a confidence between 0 and 1 and a short reason.";
+  "Decide whether this document is relevant to a business tax engagement and whether it is legible enough to read. Set relevant and legible independently. relevant is true only for tax source documents — financial statements, IRS forms, information returns, K-1s, trial balances, depreciation schedules, or other tax working papers that contain extractable tax figures. Legal agreements such as leases, contracts, and bylaws are not relevant even when they name the taxpayer or mention rent. Provide a confidence between 0 and 1 and a short reason.";
 
 const CLASSIFY_SYSTEM =
   "Classify the document against the candidate document types listed in the user message as id — name: description lines. You must return null documentTypeId if no candidate confidently matches — do not force a match.";

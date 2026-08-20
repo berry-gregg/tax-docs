@@ -119,6 +119,8 @@ describe("runQualityStage", () => {
     expect(req.system.toLowerCase()).toContain("relevant");
     expect(req.system.toLowerCase()).toContain("business tax engagement");
     expect(req.system.toLowerCase()).toContain("legib");
+    expect(req.system.toLowerCase()).toContain("tax source");
+    expect(req.system.toLowerCase()).toContain("lease");
     expect(req.system).not.toContain(DOC.filename);
     expect(req.system).not.toContain("UNTRUSTED DATA.");
     expectDocumentParts(req.parts);
