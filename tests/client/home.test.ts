@@ -79,7 +79,12 @@ describe("home page", () => {
     expect(html).toContain("W-2");
     expect(html).toContain("Northwind Partners LLC");
     expect(html).toContain("Recent documents");
-    expect(html).toContain('href="/documents"');
+  });
+
+  test("View all documents links to the documents all tab", () => {
+    const html = renderHome(data());
+
+    expect(html).toMatch(/href="\/documents\?tab=all"[^>]*>View all documents/);
   });
 
   test("shows at most five recent documents", () => {

@@ -21,6 +21,7 @@ import type { PageModule } from "./registry.ts";
 
 const RECENT_LIMIT = 5;
 const REVIEW_QUEUE_HREF = "/documents?tab=needs-review";
+const ALL_DOCUMENTS_HREF = "/documents?tab=all";
 const NEW_ENGAGEMENT_HREF = "/engagements?new=1";
 
 export type HomeData = {
@@ -45,7 +46,7 @@ export function renderHome(data: HomeData): string {
             ? emptyState("No documents yet. Uploads appear here as soon as a client sends one.")
             : `<div class="row-list">${recent.map(renderRecentRow(data.now)).join("")}</div>`
         }
-        <a class="text-link" href="/documents" data-nav-link>View all documents${icons.arrow}</a>
+        <a class="text-link" href="${ALL_DOCUMENTS_HREF}" data-nav-link>View all documents${icons.arrow}</a>
       </section>
       ${renderTicker(metrics)}
     </div>
