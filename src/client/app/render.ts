@@ -6,10 +6,12 @@ import {
   type PaletteGroup,
   type PaletteIndex,
 } from "./command-palette.ts";
+import { formatConfidence } from "./format.ts";
 import { icons, paletteIcons } from "./icons.ts";
 import { navIdForRoute, navItems, type NavItem } from "./nav.ts";
 import { parseRoute, type Route } from "./router.ts";
 import type { TaxDocument } from "../../shared/schemas/document.ts";
+import type { Engagement } from "../../shared/schemas/engagement.ts";
 
 export type RenderInput = {
   pathname: string;
@@ -311,6 +313,35 @@ const pipelineTones: Record<PipelineStatus, "processing" | "warning" | "success"
 
 export function pipelineChip(status: PipelineStatus): string {
   return `<span class="chip chip-${pipelineTones[status]}">${escapeHtml(pipelineLabels[status])}</span>`;
+}
+
+type EngagementStage = Engagement["status"];
+
+const stageLabels: Record<EngagementStage, string> = {
+  draft: "Draft",
+  collecting: "Collecting",
+  "in-review": "In review",
+  "ready-to-export": "Ready to export",
+  exported: "Exported",
+};
+
+const stageTones: Record<EngagementStage, "processing" | "warning" | "success"> = {
+  draft: "processing",
+  collecting: "processing",
+  "in-review": "warning",
+  "ready-to-export": "success",
+  exported: "success",
+};
+
+/** The one engagement-stage vocabulary. Every screen showing a stage renders through this. */
+export function stageChip(status: EngagementStage): string {
+  return `<span class="chip chip-${stageTones[status]}">${escapeHtml(stageLabels[status])}</span>`;
+}
+
+/** Extraction confidence is the chip recipe with a tier modifier, never a parallel component. */
+export function confidenceChip(confidence: number): string {
+  const formatted = formatConfidence(confidence);
+  return `<span class="chip confidence-${formatted.tier}">${formatted.pct}</span>`;
 }
 
 export function initialsFor(name: string): string {

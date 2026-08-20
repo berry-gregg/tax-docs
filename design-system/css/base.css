@@ -49,18 +49,6 @@ img {
   max-width: 100%;
 }
 
-.page {
-  width: min(100% - var(--spacing-32), var(--page-max-width));
-  margin-inline: auto;
-}
-
-.card {
-  background: var(--surface-card);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-cards);
-  padding: var(--card-padding);
-}
-
 .btn-primary,
 .btn-secondary,
 .btn-ghost {

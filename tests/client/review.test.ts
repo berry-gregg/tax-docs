@@ -149,12 +149,18 @@ describe("review page", () => {
   test("a field row carries its confidence tier, metadata caption, and source snippet", () => {
     const html = renderReview(data());
 
-    expect(html).toContain('class="confidence confidence-high">96%');
-    expect(html).toContain('class="confidence confidence-medium">72%');
-    expect(html).toContain('class="confidence confidence-low">20%');
+    expect(html).toContain('class="chip confidence-high">96%');
+    expect(html).toContain('class="chip confidence-medium">72%');
+    expect(html).toContain('class="chip confidence-low">20%');
     expect(html).toContain('class="review-field-type">dollar-amount');
     expect(html).toContain('class="review-source">Total revenue 1,250,000');
     expect(html).toContain("1 of 3 fields reviewed");
+  });
+
+  test("needs-review renders the same warning chip class the documents list uses", () => {
+    const html = renderReview(data());
+
+    expect(html).toContain('<span class="chip chip-warning">Needs review</span>');
   });
 
   test("confidence never borrows the highlighter reserved for primary actions", () => {

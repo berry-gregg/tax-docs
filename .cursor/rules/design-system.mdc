@@ -25,7 +25,7 @@ The **product app** (sidebar chrome at `try.ramp.com`) is the token source for `
 
 ## SSOT for repeating visuals
 
-One sidebar, one page header, one tab row, one table, one list-row, one empty-state wash card. If two screens show "needs review," they share a class (`status-needs-review`) or a documented helper. Do not fork a local copy that will drift.
+One sidebar, one page header, one tab row, one table, one list-row, one empty-state wash card. If two screens show "needs review," they share a documented helper (`pipelineChip`, `stageChip`, `confidenceChip` in `src/client/app/render.ts` — all render the one `.chip` recipe). Do not fork a local copy that will drift.
 
 ## Anti-patterns
 

@@ -19,7 +19,7 @@ import {
 import { ApiError, getJson, sendJson } from "../api.ts";
 import { bindSchemaBuilder, renderSchemaBuilder } from "../components/schema-builder.ts";
 import { formatConfidence, formatMoney } from "../format.ts";
-import { emptyState, escapeHtml, pageHeader, pipelineChip } from "../render.ts";
+import { confidenceChip, emptyState, escapeHtml, pageHeader, pipelineChip } from "../render.ts";
 import type { Route } from "../router.ts";
 import type { PageModule } from "./registry.ts";
 
@@ -156,14 +156,13 @@ function editControl(field: ExtractionField): string {
 }
 
 function renderFieldRow(field: ExtractionField, interactive: boolean): string {
-  const confidence = formatConfidence(field.confidence);
   const key = escapeHtml(field.key);
 
   return `<article class="review-field" data-field-row="${key}">
     <div class="review-field-head">
       <span class="review-field-label">${escapeHtml(field.label)}</span>
       <span class="review-field-type">${escapeHtml(field.metadataType)}</span>
-      <span class="confidence confidence-${confidence.tier}">${confidence.pct}</span>
+      ${confidenceChip(field.confidence)}
       ${reviewStatusChips[field.reviewStatus]}
       ${field.regexPass === false ? '<span class="chip chip-warning">Format mismatch</span>' : ""}
     </div>
@@ -304,13 +303,12 @@ function renderProcessingVariant(): string {
 
 function renderPanelHead(data: ReviewData, typeName: string): string {
   const classification = data.document.classification;
-  const confidence = classification ? formatConfidence(classification.confidence) : null;
 
   return `<header class="review-panel-head">
     <div class="review-panel-title">
       <h2 class="section-title">${escapeHtml(typeName)}</h2>
       ${pipelineChip(data.document.pipelineStatus)}
-      ${confidence ? `<span class="confidence confidence-${confidence.tier}">${confidence.pct}</span>` : ""}
+      ${classification ? confidenceChip(classification.confidence) : ""}
     </div>
     <p class="muted">${escapeHtml(classification?.reasoning ?? "Classification has not run for this document yet.")}</p>
     <p class="load-error-message" data-review-error hidden></p>

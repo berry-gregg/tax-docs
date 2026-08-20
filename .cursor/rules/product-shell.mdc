@@ -40,7 +40,7 @@ Nav is Inbox, Home, Documents (children All / Needs review), Engagements, Client
 | **Settings** | `/settings` | `pageHeader` → tabs → `.definition-grid` (dt ash / dd ink) inside `.settings-block` |
 | **Review** | `/engagements/:id/review/:documentId` | `pageHeader` (filename + type name + secondary back link) → `.review-split`: sticky hairline `.review-viewer` iframe on the left, `.review-panel` on the right (panel head, `.review-field` rows, validation `.row-list`, `.review-foot` gate) |
 
-A new route picks one recipe. Extend `pageHeader` / `tabs` / `dataTable` / `bindRowLinks` / `entityCell` / `listRow` / `railWidget` / `pipelineChip` / `emptyState` — do not fork a lookalike.
+A new route picks one recipe. Extend `pageHeader` / `tabs` / `dataTable` / `bindRowLinks` / `entityCell` / `listRow` / `railWidget` / `pipelineChip` / `stageChip` / `confidenceChip` / `emptyState` — do not fork a lookalike.
 
 ## Primitives
 
@@ -48,7 +48,7 @@ Buttons live in `design-system/css/base.css`: primary highlighter `0` radius `40
 
 The review split is furniture, not a fifth surface: `.review-split` is a two-column grid, `.review-viewer` is a sticky `16px`-radius hairline frame around the stored-PDF iframe, `.review-field` rows are hairline-ruled, `.review-field-type` is the `10px` ash `metadataType` caption (a caption, never an uppercased UI sentence), `.review-source` is a hairline-left quote block, and `.review-foot` holds the single gated primary. A gated `.review-foot .btn-primary:disabled` drops to `--surface-nav-active` + ash so an unavailable action never reads as a live highlighter CTA.
 
-Pipeline state renders through `pipelineChip(status)`: `received` / `quality-review` / `classifying` / `extracting` are ash `.chip-processing`; `needs-review` / `unclassified` are `.chip-warning`; `trusted` is `.chip-success`; `rejected` / `failed` are `.chip-halted` (hairline fill, warning text). Extraction confidence uses `.confidence-high` / `-medium` / `-low` from `formatConfidence`. Shared furniture in `shell.css`: `.ticker` (full-width hairline band — `border-top` only, transparent background, sentence-case ash caption labels, ink `--text-ui` values, weight 400; **never** `--surface-inverted` — that token is marketing-only), `.modal`, `.side-panel`, `.dropzone`, `.page-skeleton`, `.load-error`.
+Pipeline state renders through `pipelineChip(status)`: `received` / `quality-review` / `classifying` / `extracting` are ash `.chip-processing`; `needs-review` / `unclassified` are `.chip-warning`; `trusted` is `.chip-success`; `rejected` / `failed` are `.chip-halted` (hairline fill, warning text). Engagement stages render through `stageChip(status)` and extraction confidence through `confidenceChip(value)` — both compose the one `.chip` base (`confidence-high` / `-medium` / `-low` are tier modifiers of it, not a separate component). Chip labels are sentence case, never uppercase. Shared furniture in `shell.css`: `.ticker` (full-width hairline band — `border-top` only, transparent background, sentence-case ash caption labels, ink `--text-ui` values, weight 400; **never** `--surface-inverted` — that token is marketing-only), `.modal`, `.side-panel`, `.dropzone`, `.page-skeleton`, `.load-error`.
 
 ## Anti-patterns
 

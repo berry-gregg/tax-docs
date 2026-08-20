@@ -355,7 +355,7 @@
 }
 
 .list-row:hover {
-  background: var(--surface-sidebar);
+  background: var(--surface-wash);
 }
 
 .list-row-body {
@@ -382,29 +382,6 @@
   color: var(--color-ink);
   font-size: var(--text-micro);
   font-weight: var(--font-weight-regular);
-}
-
-.status {
-  font-size: var(--text-ui);
-  font-weight: var(--font-weight-light);
-  line-height: var(--leading-ui);
-  white-space: nowrap;
-}
-
-.status-trusted,
-.status-ready {
-  color: var(--color-success);
-}
-
-.status-missing-items,
-.status-waiting,
-.status-warning {
-  color: var(--color-warning);
-}
-
-.status-needs-review,
-.status-pending {
-  color: var(--color-ash);
 }
 
 .rail {
@@ -444,13 +421,6 @@
   border-bottom-color: var(--color-ink);
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-8);
-  margin-bottom: var(--spacing-16);
-}
-
 .search-field {
   display: flex;
   align-items: center;
@@ -468,19 +438,6 @@
   background: transparent;
   color: var(--color-ink);
   outline: none;
-}
-
-.search-field-lg {
-  width: 100%;
-  min-height: var(--control-height);
-}
-
-.search-field-lg input {
-  width: 100%;
-}
-
-.toolbar-end {
-  margin-left: auto;
 }
 
 .table-wrap {
@@ -744,7 +701,11 @@
   line-height: var(--leading-ui);
 }
 
-/* Pipeline chips. Semantic tones only — the highlighter never marks a status. */
+/*
+ * Status chips — the one status-token recipe. Semantic tone modifiers (`.chip-*`) and the
+ * confidence tiers (`.confidence-*` from formatConfidence) both compose with this base;
+ * the highlighter never marks a status.
+ */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -775,20 +736,6 @@
   border-color: transparent;
   background: var(--surface-nav-active);
   color: var(--color-warning);
-}
-
-/* Confidence badges — the extraction tiers from formatConfidence. */
-.confidence {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 var(--spacing-8);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-badge);
-  font-size: var(--text-micro);
-  font-weight: var(--font-weight-light);
-  line-height: 1;
-  white-space: nowrap;
 }
 
 .confidence-high {
@@ -1108,7 +1055,7 @@
   line-height: var(--leading-ui);
 }
 
-/* Form fields — modal create flows (clients, engagements). */
+/* Form fields — modal create flows and the settings schema builder share one recipe. */
 .form-grid {
   display: grid;
   gap: var(--spacing-16);
@@ -1117,6 +1064,10 @@
 .form-field {
   display: grid;
   gap: var(--spacing-8);
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
 }
 
 .form-label {
@@ -1126,16 +1077,21 @@
 }
 
 .form-field input,
-.form-field select {
+.form-field select,
+.form-field textarea {
   width: 100%;
   min-height: var(--control-height);
-  padding: 0 var(--spacing-12);
+  padding: var(--spacing-8) var(--spacing-12);
   border: 1px solid var(--color-input-hairline);
   border-radius: var(--radius-inputs);
   background: var(--surface-card);
   color: var(--color-ink);
-  font-size: var(--text-ui);
-  line-height: var(--leading-ui);
+  font: inherit;
+}
+
+.form-field textarea {
+  min-height: 84px;
+  resize: vertical;
 }
 
 .form-hint {
@@ -1166,33 +1122,6 @@
   justify-content: space-between;
   gap: var(--spacing-16);
   margin-bottom: var(--spacing-16);
-}
-
-.form-field {
-  display: grid;
-  gap: var(--spacing-8);
-  color: var(--color-ink);
-  font-size: var(--text-ui);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--leading-ui);
-}
-
-.form-field input,
-.form-field select,
-.form-field textarea {
-  width: 100%;
-  min-height: var(--control-height);
-  padding: var(--spacing-8) var(--spacing-12);
-  border: 1px solid var(--color-input-hairline);
-  border-radius: var(--radius-inputs);
-  background: var(--surface-card);
-  color: var(--color-ink);
-  font: inherit;
-}
-
-.form-field textarea {
-  min-height: 84px;
-  resize: vertical;
 }
 
 .field-issue {

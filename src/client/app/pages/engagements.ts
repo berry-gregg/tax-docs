@@ -12,6 +12,7 @@ import {
   escapeHtml,
   initialsFor,
   pageHeader,
+  stageChip,
 } from "../render.ts";
 import {
   bindNewEngagementModal,
@@ -27,22 +28,6 @@ export type EngagementsData = {
   engagements: EngagementListRow[];
   showNewEngagementModal?: boolean;
   newEngagement?: NewEngagementModalState;
-};
-
-const stageLabels: Record<EngagementListRow["status"], string> = {
-  draft: "Draft",
-  collecting: "Collecting",
-  "in-review": "In review",
-  "ready-to-export": "Ready to export",
-  exported: "Exported",
-};
-
-const stageTones: Record<EngagementListRow["status"], "processing" | "warning" | "success"> = {
-  draft: "processing",
-  collecting: "processing",
-  "in-review": "warning",
-  "ready-to-export": "success",
-  exported: "success",
 };
 
 export function renderEngagements(data: EngagementsData): string {
@@ -78,6 +63,8 @@ function renderEngagementRow(row: EngagementListRow): string {
       : `${row.docCounts.total} of ${totalRequested} received`;
   const needsReview =
     row.docCounts.needsReview === 1 ? "1 needs review" : `${row.docCounts.needsReview} need review`;
+  // The same phrase as the Documents/review chips: warning while work waits, ash at zero.
+  const needsReviewTone = row.docCounts.needsReview > 0 ? "warning" : "processing";
 
   return `<tr data-href="/engagements/${escapeHtml(row.id)}" tabindex="0">
     <td>${entityCell(
@@ -89,12 +76,8 @@ function renderEngagementRow(row: EngagementListRow): string {
     <td>${row.taxYear}</td>
     <td>${stageChip(row.status)}</td>
     <td>${escapeHtml(progress)}</td>
-    <td><span class="status status-needs-review">${escapeHtml(needsReview)}</span></td>
+    <td><span class="chip chip-${needsReviewTone}">${escapeHtml(needsReview)}</span></td>
   </tr>`;
-}
-
-function stageChip(status: EngagementListRow["status"]): string {
-  return `<span class="chip chip-${stageTones[status]}">${escapeHtml(stageLabels[status])}</span>`;
 }
 
 function modalRequested(): { show: boolean; clientId?: string; filingType?: "1120-S" | "1065" } {

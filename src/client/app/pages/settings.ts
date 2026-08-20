@@ -125,9 +125,14 @@ function renderDocumentTypeRow(documentType: DocumentType): string {
   </tr>`;
 }
 
+const createdByLabels: Record<DocumentType["createdBy"], string> = {
+  cpa: "CPA",
+  seed: "Seed",
+};
+
+/** Provenance is not a success state — both origins stay in the neutral ash tone. */
 function createdByChip(createdBy: DocumentType["createdBy"]): string {
-  const tone = createdBy === "cpa" ? "success" : "processing";
-  return `<span class="chip chip-${tone}">${escapeHtml(createdBy)}</span>`;
+  return `<span class="chip chip-processing">${escapeHtml(createdByLabels[createdBy])}</span>`;
 }
 
 function bindSettings(root: HTMLElement, data: SettingsData, repaint: () => void): void {

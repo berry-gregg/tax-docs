@@ -55,11 +55,6 @@
         "$type": "color",
         "$description": "Warning — Missing items and waiting-for-client status text"
       },
-      "banner": {
-        "$value": "#2f4842",
-        "$type": "color",
-        "$description": "Banner — Optional inverted promo strip; not used in the tax-docs chrome"
-      },
       "input-hairline": {
         "$value": "#dbdac9",
         "$type": "color",

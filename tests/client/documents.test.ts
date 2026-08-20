@@ -96,7 +96,7 @@ describe("documents page", () => {
       }),
     );
 
-    expect(html).toContain('class="chip chip-warning"');
+    expect(html).toContain('<span class="chip chip-warning">Needs review</span>');
     expect(html).toContain('class="chip chip-success"');
     expect(html).toContain('class="chip chip-processing"');
     expect(html).toContain('class="chip chip-halted"');

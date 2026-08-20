@@ -55,7 +55,7 @@ describe("settings page", () => {
     expect(html).toContain("Trial balance");
     expect(html).toContain("Year-end account balances.");
     expect(html).toContain("2 fields");
-    expect(html).toContain('class="chip chip-processing">seed</span>');
+    expect(html).toContain('class="chip chip-processing">Seed</span>');
     expect(html).toContain('data-document-type-active="dt-1"');
     expect(html).toContain("New document type");
     expect(html).toContain("data-settings-error");
@@ -77,7 +77,8 @@ describe("settings page", () => {
       }),
     );
 
-    expect(html).toContain('class="chip chip-success">cpa</span>');
+    expect(html).toContain('class="chip chip-processing">CPA</span>');
+    expect(html).not.toContain("chip-success");
     expect(html).toContain("&lt;img src=&quot;x&quot;&gt;");
     expect(html).not.toContain('<img src="x">');
     expect(html).toContain("Inactive");

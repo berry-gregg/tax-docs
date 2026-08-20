@@ -5,7 +5,7 @@ import {
   type Engagement,
 } from "../../../shared/schemas/engagement.ts";
 import { getJson } from "../api.ts";
-import { bindRowLinks, dataTable, escapeHtml, pageHeader } from "../render.ts";
+import { bindRowLinks, dataTable, escapeHtml, pageHeader, stageChip } from "../render.ts";
 import type { Route } from "../router.ts";
 import type { PageModule } from "./registry.ts";
 
@@ -19,31 +19,11 @@ export type ClientDetailData = {
   engagements: Engagement[];
 };
 
-const engagementStatusLabels: Record<Engagement["status"], string> = {
-  draft: "Draft",
-  collecting: "Collecting",
-  "in-review": "In review",
-  "ready-to-export": "Ready to export",
-  exported: "Exported",
-};
-
-const engagementStatusTones: Record<Engagement["status"], "processing" | "warning" | "success"> = {
-  draft: "processing",
-  collecting: "processing",
-  "in-review": "warning",
-  "ready-to-export": "success",
-  exported: "success",
-};
-
-function engagementStageChip(status: Engagement["status"]): string {
-  return `<span class="chip chip-${engagementStatusTones[status]}">${escapeHtml(engagementStatusLabels[status])}</span>`;
-}
-
 function renderEngagementRow(engagement: Engagement): string {
   return `<tr data-href="/engagements/${escapeHtml(engagement.id)}" tabindex="0">
     <td>${escapeHtml(String(engagement.taxYear))}</td>
     <td>${escapeHtml(engagement.filingType)}</td>
-    <td>${engagementStageChip(engagement.status)}</td>
+    <td>${stageChip(engagement.status)}</td>
   </tr>`;
 }
 

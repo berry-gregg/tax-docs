@@ -11,7 +11,6 @@
   --color-outline: #91917b;
   --color-success: #26763b;
   --color-warning: #876634;
-  --color-banner: #2f4842;
   --color-input-hairline: #dbdac9;
 
   /* Typography — Font Families */
@@ -82,7 +81,6 @@
   --radius-2xl: 16px;
 
   /* Named Radii */
-  --radius-tags: 6px;
   --radius-cards: 16px;
   --radius-inputs: 10px;
   --radius-buttons: 0px;
@@ -102,5 +100,4 @@
   --surface-section: #fcfbfa;
   --surface-inverted: #1a1919;
   --surface-action: #e4f222;
-  --surface-banner: #2f4842;
 }

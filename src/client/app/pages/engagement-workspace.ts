@@ -12,9 +12,10 @@ import {
   type ValidationCheck,
 } from "../../../shared/schemas/validation.ts";
 import { getJson, sendJson, uploadFile } from "../api.ts";
-import { formatConfidence, formatRelativeTime } from "../format.ts";
+import { formatRelativeTime } from "../format.ts";
 import {
   bindRowLinks,
+  confidenceChip,
   dataTable,
   emptyState,
   escapeHtml,
@@ -22,6 +23,7 @@ import {
   pageHeader,
   pipelineChip,
   railWidget,
+  stageChip,
 } from "../render.ts";
 import type { PageModule } from "./registry.ts";
 
@@ -104,24 +106,6 @@ export function renderEngagementWorkspace(data: EngagementWorkspaceData): string
       ${railWidget("Open requests", `${detail.requestItems.filter((item) => item.status === "open").length} still open`, "/inbox")}
     </aside>
   </div>`;
-}
-
-function stageChip(status: EngagementDetail["engagement"]["status"]): string {
-  const labels: Record<EngagementDetail["engagement"]["status"], string> = {
-    draft: "Draft",
-    collecting: "Collecting",
-    "in-review": "In review",
-    "ready-to-export": "Ready to export",
-    exported: "Exported",
-  };
-  const tones: Record<EngagementDetail["engagement"]["status"], "processing" | "warning" | "success"> = {
-    draft: "processing",
-    collecting: "processing",
-    "in-review": "warning",
-    "ready-to-export": "success",
-    exported: "success",
-  };
-  return `<span class="chip chip-${tones[status]}">${escapeHtml(labels[status])}</span>`;
 }
 
 function renderValidationSummary(checks: ValidationCheck[]): string {
@@ -230,8 +214,7 @@ function confidenceForDocument(document: TaxDocument): string {
   if (confidence === undefined) {
     return "—";
   }
-  const formatted = formatConfidence(confidence);
-  return `<span class="confidence confidence-${formatted.tier}">${formatted.pct}</span>`;
+  return confidenceChip(confidence);
 }
 
 function renderFailure(document: TaxDocument): string {

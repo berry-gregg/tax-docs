@@ -200,7 +200,7 @@ describe("engagement workspace", () => {
     expect(html).toContain("profit-loss.pdf");
     expect(html).toContain("Profit and loss");
     expect(html).toContain("Trusted");
-    expect(html).toContain("94%");
+    expect(html).toContain('class="chip confidence-high">94%');
     expect(html).toContain("client");
     expect(html).toContain('href="/engagements/eng-1/review/doc-trusted"');
     expect(html).toContain("trial-balance.pdf");

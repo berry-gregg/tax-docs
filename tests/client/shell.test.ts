@@ -3,10 +3,13 @@ import { greetingFor } from "../../src/client/app/greeting.ts";
 import { navItems } from "../../src/client/app/nav.ts";
 import {
   bindRowLinks,
+  confidenceChip,
   pageHeader,
+  pipelineChip,
   renderApp,
   renderLoadError,
   renderPageSkeleton,
+  stageChip,
 } from "../../src/client/app/render.ts";
 
 describe("home greeting", () => {
@@ -205,6 +208,28 @@ describe("app shell chrome", () => {
   });
 });
 
+describe("status chip SSOT", () => {
+  test("stageChip is the one engagement-stage vocabulary, sentence cased", () => {
+    expect(stageChip("draft")).toBe('<span class="chip chip-processing">Draft</span>');
+    expect(stageChip("collecting")).toBe('<span class="chip chip-processing">Collecting</span>');
+    expect(stageChip("in-review")).toBe('<span class="chip chip-warning">In review</span>');
+    expect(stageChip("ready-to-export")).toBe(
+      '<span class="chip chip-success">Ready to export</span>',
+    );
+    expect(stageChip("exported")).toBe('<span class="chip chip-success">Exported</span>');
+  });
+
+  test("confidence renders as the chip recipe with a tier modifier, not a fork", () => {
+    expect(confidenceChip(0.96)).toBe('<span class="chip confidence-high">96%</span>');
+    expect(confidenceChip(0.72)).toBe('<span class="chip confidence-medium">72%</span>');
+    expect(confidenceChip(0.2)).toBe('<span class="chip confidence-low">20%</span>');
+  });
+
+  test("needs-review keeps the same warning chip everywhere", () => {
+    expect(pipelineChip("needs-review")).toBe('<span class="chip chip-warning">Needs review</span>');
+  });
+});
+
 describe("bindRowLinks", () => {
   test("activates data-href rows on click and Enter without stacking on interactive children", () => {
     const pushed: string[] = [];
@@ -312,10 +337,61 @@ describe("shell.css page furniture", () => {
     expect(css).toContain(".load-error");
   });
 
+  test("confidence tiers are modifiers of the one .chip recipe, not a duplicate block", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css.match(/^\.chip \{/gm)?.length).toBe(1);
+    expect(css).not.toMatch(/^\.confidence \{/m);
+  });
+
+  test("dead status, toolbar, and search-field-lg recipes are gone", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).not.toContain(".toolbar");
+    expect(css).not.toContain(".search-field-lg");
+    expect(css).not.toMatch(/^\.status \{/m);
+    expect(css).not.toContain(".status-");
+  });
+
+  test("form-field is defined once, with the settings-era padding and textarea support", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css.match(/^\.form-field \{/gm)?.length).toBe(1);
+    expect(css).toMatch(
+      /\.form-field input,\s*\.form-field select,\s*\.form-field textarea \{[^}]*padding:\s*var\(--spacing-8\) var\(--spacing-12\)/s,
+    );
+  });
+
+  test("list rows and table rows share the bone hover wash", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).toMatch(/\.list-row:hover \{[^}]*background:\s*var\(--surface-wash\)/s);
+    expect(css).toMatch(
+      /\.data-table tr\[data-href\]:hover \{[^}]*background:\s*var\(--surface-wash\)/s,
+    );
+  });
+
   test("no raw hex values leak into the shell stylesheet", async () => {
     const css = await Bun.file("src/client/styles/shell.css").text();
 
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
+describe("token and base hygiene", () => {
+  test("unreferenced banner and tags tokens are removed", async () => {
+    const tokens = await Bun.file("design-system/css/tokens.css").text();
+
+    expect(tokens).not.toContain("--color-banner");
+    expect(tokens).not.toContain("--surface-banner");
+    expect(tokens).not.toContain("--radius-tags");
+  });
+
+  test("marketing-era .page and .card primitives are gone from base.css", async () => {
+    const css = await Bun.file("design-system/css/base.css").text();
+
+    expect(css).not.toMatch(/^\.page \{/m);
+    expect(css).not.toMatch(/^\.card \{/m);
   });
 });
 
