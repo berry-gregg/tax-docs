@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { z } from "zod";
 import { newClientFields } from "../../src/client/app/components/new-client-fields.ts";
 import { renderClients } from "../../src/client/app/pages/clients.ts";
 import {
@@ -6,6 +7,8 @@ import {
   advanceToChecklist,
   applyDetailsDraft,
   clearNewEngagementDraft,
+  clearNewEngagementDraftIfLeft,
+  engagementCreateFailureMessage,
   initialNewEngagementState,
   loadNewEngagementState,
   rememberNewEngagementDraft,
@@ -407,6 +410,50 @@ describe("new-engagement modal", () => {
 
     expect(reloaded.step).toBe(2);
     expect(reloaded.filingType).toBe("1065");
+    expect(reloaded.items[0]?.title).toBe("Edited K-1");
+  });
+
+  test("create-engagement Zod failures become a sentence, not a JSON dump", () => {
+    const parsed = z
+      .object({
+        items: z.array(z.object({ title: z.string().min(1), description: z.string().min(1) })),
+      })
+      .safeParse({ items: [{ title: "", description: "" }] });
+
+    expect(parsed.success).toBe(false);
+    if (parsed.success) {
+      throw new Error("expected Zod failure");
+    }
+
+    const message = engagementCreateFailureMessage(parsed.error);
+
+    expect(message).toContain("at least");
+    expect(message).not.toContain('"code"');
+    expect(message).not.toContain(parsed.error.message);
+  });
+
+  test("leaving the new-engagement route drops the persisted draft", async () => {
+    stubModalFetch();
+    const draft = state({ step: 2, filingType: "1065", items: [{ ...state().items[0]!, title: "Edited K-1" }] });
+    rememberNewEngagementDraft(draft);
+
+    clearNewEngagementDraftIfLeft("/clients", "");
+    const reloaded = await loadNewEngagementState(undefined, "1065");
+
+    expect(reloaded.step).toBe(1);
+    expect(reloaded.items[0]?.title).not.toBe("Edited K-1");
+  });
+
+  test("staying on the new-engagement route keeps the persisted draft", async () => {
+    stubModalFetch();
+    const draft = state({ step: 2, filingType: "1065", items: [{ ...state().items[0]!, title: "Edited K-1" }] });
+    rememberNewEngagementDraft(draft);
+
+    clearNewEngagementDraftIfLeft("/engagements", "?new=1");
+    const reloaded = await loadNewEngagementState(undefined, "1065");
+    clearNewEngagementDraft();
+
+    expect(reloaded.step).toBe(2);
     expect(reloaded.items[0]?.title).toBe("Edited K-1");
   });
 });

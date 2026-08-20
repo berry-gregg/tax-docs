@@ -12,6 +12,7 @@ import {
   searchPalette,
   type PaletteIndex,
 } from "./app/command-palette.ts";
+import { clearNewEngagementDraftIfLeft } from "./app/pages/new-engagement.ts";
 import { moduleFor, type PageModule } from "./app/pages/registry.ts";
 import {
   renderApp,
@@ -42,8 +43,24 @@ export type WorkspaceNode<T = unknown> = {
   ownerDocument: {
     createElement(tagName: string): T;
   };
+  querySelector(selector: string): unknown;
   replaceWith(node: T): void;
 };
+
+const OPEN_DIALOG_SELECTORS = [
+  "[data-new-engagement-modal]:not([hidden])",
+  ".side-panel",
+  "[data-export-confirm-modal]:not([hidden])",
+] as const;
+
+/** Poll must not swap `.workspace` while a modal or side panel holds focus. */
+export function dialogOpen(workspace: { querySelector(selector: string): unknown } | null): boolean {
+  if (!workspace) {
+    return false;
+  }
+
+  return OPEN_DIALOG_SELECTORS.some((selector) => workspace.querySelector(selector) != null);
+}
 
 export type ReplaceWorkspaceBodyResult<T> = {
   changed: boolean;
@@ -60,7 +77,7 @@ export function replaceWorkspaceBody<T extends WorkspaceNode<T>>(
   previousBody: string,
   nextBody: string,
 ): ReplaceWorkspaceBodyResult<T> {
-  if (!workspace || nextBody === previousBody) {
+  if (!workspace || nextBody === previousBody || dialogOpen(workspace)) {
     return { changed: false, workspace };
   }
 
@@ -163,6 +180,7 @@ async function paint(): Promise<void> {
   stopPolling = null;
 
   const route: Route = parseRoute(window.location.pathname);
+  clearNewEngagementDraftIfLeft(window.location.pathname, window.location.search);
   const module = moduleFor(route);
 
   renderShell(renderPageSkeleton());

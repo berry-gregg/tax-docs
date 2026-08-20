@@ -17,6 +17,7 @@ import {
   requestTemplateSchema,
   type RequestTemplate,
 } from "../../../shared/schemas/request.ts";
+import { zodIssueSummary } from "../../../shared/zod-issue-summary.ts";
 import { newClientFields } from "../components/new-client-fields.ts";
 import { getJson, sendJson } from "../api.ts";
 import { escapeHtml } from "../render.ts";
@@ -81,6 +82,24 @@ export function rememberNewEngagementDraft(state: NewEngagementModalState): void
 
 export function clearNewEngagementDraft(): void {
   persistedDraft = undefined;
+}
+
+export function clearNewEngagementDraftIfLeft(pathname: string, search: string): void {
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  const params = new URLSearchParams(query);
+  if (pathname === "/engagements" && params.get("new") === "1") {
+    return;
+  }
+
+  clearNewEngagementDraft();
+}
+
+export function engagementCreateFailureMessage(error: unknown): string {
+  if (error instanceof z.ZodError) {
+    return zodIssueSummary(error);
+  }
+
+  return error instanceof Error ? error.message : String(error);
 }
 
 function emptyItem(documentTypes: DocumentTypeOption[]): ChecklistItemDraft {
@@ -478,7 +497,7 @@ export function bindNewEngagementModal(
         .catch((error: unknown) => {
           setState({
             ...currentState,
-            error: error instanceof Error ? error.message : String(error),
+            error: engagementCreateFailureMessage(error),
           });
           renderCurrent();
         });

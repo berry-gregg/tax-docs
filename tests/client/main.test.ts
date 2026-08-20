@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { refreshInboxBadgeState, replaceWorkspaceBody } from "../../src/client/main.ts";
+import { dialogOpen, refreshInboxBadgeState, replaceWorkspaceBody } from "../../src/client/main.ts";
 
 type Badge = {
   hidden: boolean;
@@ -43,6 +43,25 @@ describe("refreshInboxBadgeState", () => {
   });
 });
 
+describe("dialogOpen", () => {
+  test("is true for the three live dialog hosts and false when they are hidden or absent", () => {
+    const openModal = new FakeWorkspace();
+    openModal.openSelectors.push("[data-new-engagement-modal]:not([hidden])");
+    const sidePanel = new FakeWorkspace();
+    sidePanel.openSelectors.push(".side-panel");
+    const exportConfirm = new FakeWorkspace();
+    exportConfirm.openSelectors.push("[data-export-confirm-modal]:not([hidden])");
+    const hiddenModal = new FakeWorkspace();
+    hiddenModal.openSelectors.push("[data-new-engagement-modal]");
+
+    expect(dialogOpen(openModal)).toBe(true);
+    expect(dialogOpen(sidePanel)).toBe(true);
+    expect(dialogOpen(exportConfirm)).toBe(true);
+    expect(dialogOpen(hiddenModal)).toBe(false);
+    expect(dialogOpen(new FakeWorkspace())).toBe(false);
+  });
+});
+
 describe("replaceWorkspaceBody", () => {
   test("returns unchanged when the markup is the same so poll does not rebind", () => {
     const workspace = new FakeWorkspace();
@@ -72,6 +91,63 @@ describe("replaceWorkspaceBody", () => {
     const result = replaceWorkspaceBody(workspace, "", "<p>portal</p>");
 
     expect(result.workspace?.className).toBe("workspace workspace-portal");
+  });
+
+  test("skips replace while a new-engagement modal is open so poll does not steal focus", () => {
+    const workspace = new FakeWorkspace();
+    workspace.openSelectors.push("[data-new-engagement-modal]:not([hidden])");
+
+    const result = replaceWorkspaceBody(workspace, "<p>old list</p>", "<p>draft typed into the modal</p>");
+
+    expect(result.changed).toBe(false);
+    expect(result.workspace).toBe(workspace);
+    expect(workspace.replaced).toBe(false);
+  });
+
+  test("skips replace while a schema-builder side panel is open", () => {
+    const workspace = new FakeWorkspace();
+    workspace.openSelectors.push(".side-panel");
+
+    const result = replaceWorkspaceBody(workspace, "<p>old</p>", "<p>poll markup</p>");
+
+    expect(result.changed).toBe(false);
+    expect(result.workspace).toBe(workspace);
+  });
+
+  test("skips replace while an export confirm modal is open", () => {
+    const workspace = new FakeWorkspace();
+    workspace.openSelectors.push("[data-export-confirm-modal]:not([hidden])");
+
+    const result = replaceWorkspaceBody(workspace, "<p>old</p>", "<p>poll markup</p>");
+
+    expect(result.changed).toBe(false);
+    expect(result.workspace).toBe(workspace);
+  });
+
+  test("replaces on the next tick after the dialog closes", () => {
+    const host = { current: new FakeWorkspace() };
+    host.current.parent = host;
+    host.current.openSelectors.push("[data-new-engagement-modal]:not([hidden])");
+
+    const skipped = replaceWorkspaceBody(host.current, "<p>old</p>", "<p>typed draft</p>");
+    expect(skipped.changed).toBe(false);
+
+    host.current.openSelectors = [];
+    const resumed = replaceWorkspaceBody(host.current, "<p>old</p>", "<p>typed draft</p>");
+
+    expect(resumed.changed).toBe(true);
+    expect(resumed.workspace).not.toBe(skipped.workspace);
+    expect(resumed.workspace?.innerHTML).toContain("typed draft");
+  });
+
+  test("a hidden new-engagement modal does not block replace", () => {
+    const workspace = new FakeWorkspace();
+    workspace.openSelectors.push("[data-new-engagement-modal]");
+
+    const result = replaceWorkspaceBody(workspace, "<p>old</p>", "<p>fresh list</p>");
+
+    expect(result.changed).toBe(true);
+    expect(result.workspace?.innerHTML).toContain("fresh list");
   });
 
   test("a second replace then bind does not stack click handlers on the surviving node", () => {
@@ -118,10 +194,16 @@ class FakeWorkspace {
   localName: string;
   ownerDocument = new FakeDocument();
   parent: { current: FakeWorkspace } | null = null;
+  openSelectors: string[] = [];
+  replaced = false;
   private readonly listeners = new Map<string, Array<() => void>>();
 
   constructor(tagName = "div") {
     this.localName = tagName;
+  }
+
+  querySelector(selector: string): { selector: string } | null {
+    return this.openSelectors.includes(selector) ? { selector } : null;
   }
 
   addEventListener(type: string, listener: () => void): void {
@@ -135,6 +217,7 @@ class FakeWorkspace {
   }
 
   replaceWith(node: FakeWorkspace): void {
+    this.replaced = true;
     if (this.parent) {
       this.parent.current = node;
       node.parent = this.parent;
