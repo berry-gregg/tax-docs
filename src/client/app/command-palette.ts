@@ -1,6 +1,7 @@
+import type { SearchGroupId, SearchResult } from "../../shared/schemas/search.ts";
 import { navItems } from "./nav.ts";
 
-export type PaletteGroupId = "Actions" | "Pages" | "Documents" | "Clients";
+export type PaletteGroupId = "Actions" | "Pages" | SearchGroupId;
 
 export type PaletteIcon = "inbox" | "home" | "documents" | "engagements" | "clients" | "settings" | "plus";
 
@@ -17,19 +18,20 @@ export type PaletteGroup = {
   items: PaletteItem[];
 };
 
-/** Entities the shell has already fetched. The palette never fetches on its own keystroke. */
-export type PaletteEntity = {
-  id: string;
-  label: string;
-  href: string;
-};
+/** Fixed display order for the entity groups `GET /api/search` returns. */
+const ENTITY_GROUP_ORDER: SearchGroupId[] = [
+  "Clients",
+  "Engagements",
+  "Documents",
+  "Document types",
+];
 
-export type PaletteIndex = {
-  documents: PaletteEntity[];
-  clients: PaletteEntity[];
+const ENTITY_GROUP_ICON: Record<SearchGroupId, PaletteIcon> = {
+  Clients: "clients",
+  Engagements: "engagements",
+  Documents: "documents",
+  "Document types": "settings",
 };
-
-export const emptyPaletteIndex: PaletteIndex = { documents: [], clients: [] };
 
 const actions: PaletteItem[] = [
   {
@@ -65,20 +67,6 @@ function pages(): PaletteItem[] {
   }));
 }
 
-function entityItems(
-  group: Extract<PaletteGroupId, "Documents" | "Clients">,
-  entities: PaletteEntity[],
-  icon: PaletteIcon,
-): PaletteItem[] {
-  return entities.map((entity) => ({
-    id: `${group.toLowerCase()}-${entity.id}`,
-    group,
-    label: entity.label,
-    href: entity.href,
-    icon,
-  }));
-}
-
 function matches(query: string, ...parts: string[]): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) {
@@ -97,7 +85,12 @@ function group(id: PaletteGroupId, items: PaletteItem[], query: string): Palette
   return { id, items: filtered };
 }
 
-export function searchPalette(query: string, index: PaletteIndex = emptyPaletteIndex): PaletteGroup[] {
+/**
+ * Static Actions and Pages filter locally so they respond on the keystroke. Entity rows come
+ * from the latest `GET /api/search` response — the server matched them on fields the label may
+ * not contain (client EIN, type description), so they render as-is instead of being re-filtered.
+ */
+export function searchPalette(query: string, entityResults: SearchResult[] = []): PaletteGroup[] {
   const trimmed = query.trim();
   const catalog: PaletteGroup[] = [];
 
@@ -114,17 +107,19 @@ export function searchPalette(query: string, index: PaletteIndex = emptyPaletteI
     return catalog;
   }
 
-  const documentGroup = group(
-    "Documents",
-    entityItems("Documents", index.documents, "documents"),
-    trimmed,
-  );
-  const clientGroup = group("Clients", entityItems("Clients", index.clients, "clients"), trimmed);
-  if (documentGroup) {
-    catalog.push(documentGroup);
-  }
-  if (clientGroup) {
-    catalog.push(clientGroup);
+  for (const groupId of ENTITY_GROUP_ORDER) {
+    const items = entityResults
+      .filter((result) => result.group === groupId)
+      .map((result) => ({
+        id: `${groupId.toLowerCase().replace(/\s+/g, "-")}-${result.id}`,
+        group: groupId,
+        label: result.label,
+        href: result.href,
+        icon: ENTITY_GROUP_ICON[groupId],
+      }));
+    if (items.length > 0) {
+      catalog.push({ id: groupId, items });
+    }
   }
 
   return catalog;

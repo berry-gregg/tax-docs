@@ -138,11 +138,33 @@ function validations(): ValidationCheck[] {
   ];
 }
 
+function otherType(): DocumentType {
+  return documentTypeSchema.parse({
+    id: "dt-941",
+    name: "Form 941",
+    description: "Employer's quarterly federal tax return.",
+    active: true,
+    createdBy: "seed",
+    fields: [
+      {
+        key: "employer_ein",
+        label: "Employer EIN",
+        metadataType: "ein-tin",
+        dataType: "string",
+        required: true,
+        description: "Employer identification number.",
+      },
+    ],
+    createdAt: "2026-08-19T18:00:00.000Z",
+  });
+}
+
 function data(overrides: Partial<ReviewData> = {}): ReviewData {
   return {
     engagementId: "eng-1",
     document: document(),
     documentType: documentType(),
+    documentTypes: [documentType(), otherType()],
     validations: validations(),
     ...overrides,
   };
@@ -397,6 +419,58 @@ describe("review page", () => {
   test("polls on the shared live interval so the fail-soft rerun lands on its own", () => {
     expect(reviewPage.pollMs).toBe(POLL_INTERVAL_MS);
   });
+
+  test("needs-review offers a type override with the current type pre-selected and Apply gated", () => {
+    const html = renderReview(data());
+
+    expect(html).toContain("data-reclassify-select");
+    expect(html).toMatch(/<option value="dt-pl" selected>Profit and loss<\/option>/);
+    expect(html).toMatch(/<option value="dt-941"\s*>Form 941<\/option>/);
+    expect(html).toMatch(/data-reclassify-apply disabled/);
+    expect(html).toContain("clears the extracted fields");
+  });
+
+  test("an unclassified document gets the override with a disabled Unclassified placeholder", () => {
+    const html = renderReview(
+      data({
+        documentType: null,
+        document: document({
+          pipelineStatus: "unclassified",
+          classification: {
+            documentTypeId: null,
+            confidence: 0.31,
+            reasoning: "No active document type matches a state apportionment schedule.",
+          },
+          extraction: undefined,
+        }),
+      }),
+    );
+
+    expect(html).toContain("data-reclassify-select");
+    expect(html).toContain('<option value="" disabled selected>Unclassified</option>');
+    expect(html).toMatch(/<option value="dt-pl"\s*>Profit and loss<\/option>/);
+    // Assigning an existing type and defining a new one are complementary paths.
+    expect(html).toContain("data-define-document-type");
+  });
+
+  test("trusted and in-flight documents hide the type override", () => {
+    const trusted = renderReview(
+      data({
+        document: document({
+          pipelineStatus: "trusted",
+          extraction: { fields: fields([{ reviewStatus: "accepted" }]) },
+        }),
+      }),
+    );
+    const extracting = renderReview(
+      data({
+        document: document({ pipelineStatus: "extracting", extraction: undefined }),
+      }),
+    );
+
+    expect(trusted).not.toContain("data-reclassify-select");
+    expect(extracting).not.toContain("data-reclassify-select");
+  });
 });
 
 const originalFetch = globalThis.fetch;
@@ -639,23 +713,115 @@ describe("review define-type schema builder", () => {
   });
 });
 
+describe("review reclassify apply", () => {
+  function makeReclassifyRoot() {
+    const select = new FakeReviewElement("[data-reclassify-select]");
+    select.value = "dt-pl";
+    const apply = new FakeReviewElement("[data-reclassify-apply]");
+    apply.disabled = true;
+    const error = new FakeReviewElement("[data-review-error]");
+
+    return {
+      select,
+      apply,
+      error,
+      querySelector(selector: string) {
+        if (selector === "[data-reclassify-select]") {
+          return select;
+        }
+        if (selector === "[data-reclassify-apply]") {
+          return apply;
+        }
+        if (selector === "[data-review-error]") {
+          return error;
+        }
+        return null;
+      },
+      querySelectorAll() {
+        return [];
+      },
+    };
+  }
+
+  test("Apply enables only while the selection differs from the current type", () => {
+    stubFetch(() => jsonResponse({ document: document() }));
+    const root = makeReclassifyRoot();
+
+    reviewPage.bind?.(root as unknown as HTMLElement, data(), () => {});
+
+    root.select.value = "dt-941";
+    root.select.dispatch("change");
+    expect(root.apply.disabled).toBe(false);
+
+    root.select.value = "dt-pl";
+    root.select.dispatch("change");
+    expect(root.apply.disabled).toBe(true);
+  });
+
+  test("Apply POSTs the chosen type and repaints so polling can take over", async () => {
+    const requests = stubFetch(() => jsonResponse({ document: document({ pipelineStatus: "extracting" }) }));
+    const root = makeReclassifyRoot();
+    let repainted = 0;
+
+    reviewPage.bind?.(root as unknown as HTMLElement, data(), () => { repainted += 1; });
+    root.select.value = "dt-941";
+    root.select.dispatch("change");
+    root.apply.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toBe("/api/documents/doc-1/reclassify");
+    expect(requests[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(requests[0]?.init?.body))).toEqual({ documentTypeId: "dt-941" });
+    expect(repainted).toBe(1);
+  });
+
+  test("a refused reclassify surfaces the server's own message and re-enables Apply", async () => {
+    stubFetch(() =>
+      new Response(JSON.stringify({ error: "Document cannot be reclassified from its current status" }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const root = makeReclassifyRoot();
+    let repainted = 0;
+
+    reviewPage.bind?.(root as unknown as HTMLElement, data(), () => { repainted += 1; });
+    root.select.value = "dt-941";
+    root.select.dispatch("change");
+    root.apply.dispatch("click");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.error.textContent).toBe("Document cannot be reclassified from its current status");
+    expect(root.apply.disabled).toBe(false);
+    expect(repainted).toBe(0);
+  });
+});
+
 describe("review page load", () => {
   const route: Route = { page: "review", documentId: "doc-1" };
 
   test("pulls the document by id and derives the engagement for its validations", async () => {
-    const requests = stubFetch((url) =>
-      url.startsWith("/api/documents")
+    const inactiveType = documentTypeSchema.parse({ ...otherType(), id: "dt-old", active: false });
+    const requests = stubFetch((url) => {
+      if (url === "/api/document-types") {
+        return jsonResponse({ documentTypes: [documentType(), otherType(), inactiveType] });
+      }
+      return url.startsWith("/api/documents")
         ? jsonResponse({ document: document(), documentType: documentType() })
-        : jsonResponse({ checks: validations() }),
-    );
+        : jsonResponse({ checks: validations() });
+    });
 
     const loaded = await reviewPage.load(route);
 
     expect(requests.map((request) => request.url)).toContain("/api/documents/doc-1");
+    expect(requests.map((request) => request.url)).toContain("/api/document-types");
     expect(requests.map((request) => request.url)).toContain("/api/engagements/eng-1/validations");
     expect(loaded.document.id).toBe("doc-1");
     expect(loaded.engagementId).toBe("eng-1");
     expect(loaded.documentType?.name).toBe("Profit and loss");
+    // Only active types are offered for reclassification.
+    expect(loaded.documentTypes.map((type) => type.id)).toEqual(["dt-pl", "dt-941"]);
     expect(loaded.validations).toHaveLength(4);
   });
 });

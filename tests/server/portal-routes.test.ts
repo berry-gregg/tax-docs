@@ -68,7 +68,7 @@ function recordingRunner() {
   const started: string[] = [];
   return {
     started,
-    runner: { start(documentId: string) { started.push(documentId); } },
+    runner: { start(documentId: string) { started.push(documentId); }, startReclassify() {} },
   };
 }
 

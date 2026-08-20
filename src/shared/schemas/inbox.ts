@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pipelineStatusSchema } from "./document.ts";
 import { filingTypeSchema } from "./engagement.ts";
 import { messageSchema, messageSenderSchema } from "./message.ts";
 
@@ -39,6 +40,15 @@ export const inboxTimelineEntrySchema = z.discriminatedUnion("kind", [
 ]);
 export type InboxTimelineEntry = z.infer<typeof inboxTimelineEntrySchema>;
 
+/** Compact document row for the thread's files panel — a slice of the full tax document. */
+export const inboxDocumentSchema = z.object({
+  id: z.string().min(1),
+  filename: z.string().min(1),
+  pipelineStatus: pipelineStatusSchema,
+  createdAt: z.string().datetime(),
+});
+export type InboxDocument = z.infer<typeof inboxDocumentSchema>;
+
 export const inboxThreadSchema = z.object({
   engagementId: z.string().min(1),
   clientName: z.string().min(1),
@@ -51,6 +61,8 @@ export const inboxThreadSchema = z.object({
   unreadCount: countSchema,
   /** Chronological, oldest first: messages interleaved with quiet system events. */
   timeline: z.array(inboxTimelineEntrySchema),
+  /** The engagement's uploaded documents, newest first — the conversation's files panel. */
+  documents: z.array(inboxDocumentSchema),
 });
 export type InboxThread = z.infer<typeof inboxThreadSchema>;
 

@@ -30,6 +30,7 @@ export const icons = {
   collapse: mark("sidebar"),
   plus: mark("plus", 16),
   download: mark("download", 16),
+  upload: mark("upload", 16),
   dots: mark("more-vertical", 16),
   filter: mark("filter", 16),
   chevron: mark("chevron-down", 16),

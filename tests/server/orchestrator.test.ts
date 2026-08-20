@@ -16,7 +16,7 @@ import {
   toStored,
 } from "../../src/server/db/collections.ts";
 import { saveUploadedFile } from "../../src/server/files/storage.ts";
-import { runPipeline } from "../../src/server/pipeline/orchestrator.ts";
+import { reclassifyDocument, runPipeline } from "../../src/server/pipeline/orchestrator.ts";
 import { createRunner } from "../../src/server/pipeline/runner.ts";
 import { activitySchema, type Activity } from "../../src/shared/schemas/activity.ts";
 import { taxDocumentSchema, type TaxDocument } from "../../src/shared/schemas/document.ts";
@@ -772,6 +772,221 @@ describe("runPipeline failure lane", () => {
   });
 });
 
+const bankStatement: DocumentType = documentTypeSchema.parse({
+  id: "dt-bank-statement",
+  name: "Bank statement",
+  description: "Monthly business bank statement.",
+  active: true,
+  createdBy: "seed",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  fields: [
+    {
+      key: "ending_balance",
+      label: "Ending balance",
+      metadataType: "dollar-amount",
+      dataType: "double",
+      required: true,
+      description: "Statement ending balance.",
+    },
+  ],
+});
+
+const staleBankField = {
+  key: "ending_balance",
+  label: "Ending balance",
+  metadataType: "dollar-amount" as const,
+  dataType: "double" as const,
+  value: 4200,
+  confidence: 0.7,
+  sourceSnippet: "Ending balance 4,200.00",
+  notFound: false,
+  regexPass: null,
+  reviewStatus: "unreviewed" as const,
+};
+
+describe("reclassifyDocument", () => {
+  test("overwrites classification with the reviewer's choice, relinks the checklist, and re-extracts", async () => {
+    const db = await connectDb();
+    await documentTypesCollection(db).insertOne(toStored(bankStatement));
+    await requestItemsCollection(db).insertOne(
+      toStored(
+        requestItem({
+          id: "item-bank",
+          documentTypeId: bankStatement.id,
+          status: "received",
+          matchedDocumentIds: ["doc-misclassified"],
+        }),
+      ),
+    );
+    await requestItemsCollection(db).insertOne(toStored(requestItem({ id: "item-941" })));
+    const document = await seedDocument({
+      id: "doc-misclassified",
+      pipelineStatus: "needs-review",
+      requestItemId: "item-bank",
+      classification: {
+        documentTypeId: bankStatement.id,
+        confidence: 0.62,
+        reasoning: "Columns of running balances",
+      },
+      extraction: { fields: [staleBankField] },
+      failure: { message: "a stale failure from an earlier run" },
+    });
+
+    const { ai, calls } = scriptedAi(
+      [
+        {
+          fields: [
+            {
+              key: "employer_ein",
+              value: "12-3456789",
+              confidence: 0.94,
+              sourceSnippet: "EIN 12-3456789",
+            },
+          ],
+        },
+      ],
+      document.id,
+    );
+
+    await reclassifyDocument(document.id, form941.id, { ai });
+
+    // Extract-only continuation: no quality or classify calls, and the status had already
+    // hit Mongo as extracting before the model ran.
+    expect(calls.map((call) => call.schemaName)).toEqual(["raw_extraction"]);
+    expect(calls.map((call) => call.documentStatusAtCall)).toEqual(["extracting"]);
+
+    const finished = await loadDocument(document.id);
+    expect(finished.pipelineStatus).toBe("needs-review");
+    expect(finished.classification).toEqual({
+      documentTypeId: form941.id,
+      confidence: 1,
+      reasoning: "Reclassified by reviewer",
+    });
+    expect(finished.failure).toBeUndefined();
+    expect(finished.extraction?.fields.map((field) => field.key)).toEqual([
+      "employer_ein",
+      "wages_tips_compensation",
+      "quarter_end_date",
+    ]);
+
+    // The wrong-type item released the document; the right-type open item collected it.
+    expect(finished.requestItemId).toBe("item-941");
+    expect(await loadItem("item-bank")).toMatchObject({
+      status: "open",
+      matchedDocumentIds: [],
+    });
+    expect(await loadItem("item-941")).toMatchObject({
+      status: "received",
+      matchedDocumentIds: [document.id],
+    });
+
+    const activities = await loadActivities();
+    const reclassified = activities.find((entry) => entry.action === "document-reclassified");
+    expect(reclassified).toMatchObject({
+      actor: "cpa",
+      direction: "internal",
+      documentId: document.id,
+    });
+    expect(reclassified?.detail).toContain("Form 941");
+    expect(activities.map((entry) => entry.action)).toContain("document-extracted");
+  });
+
+  test("unlinking leaves a multi-document item received for its remaining files", async () => {
+    const db = await connectDb();
+    await documentTypesCollection(db).insertOne(toStored(bankStatement));
+    await requestItemsCollection(db).insertOne(
+      toStored(
+        requestItem({
+          id: "item-multi-bank",
+          documentTypeId: bankStatement.id,
+          status: "received",
+          matchedDocumentIds: ["doc-other-statement", "doc-second-statement"],
+        }),
+      ),
+    );
+    const document = await seedDocument({
+      id: "doc-second-statement",
+      pipelineStatus: "needs-review",
+      requestItemId: "item-multi-bank",
+      classification: {
+        documentTypeId: bankStatement.id,
+        confidence: 0.7,
+        reasoning: "Bank statement layout",
+      },
+      extraction: { fields: [staleBankField] },
+    });
+
+    const { ai } = scriptedAi([{ fields: [] }], document.id);
+
+    await reclassifyDocument(document.id, form941.id, { ai });
+
+    const finished = await loadDocument(document.id);
+    expect(finished.pipelineStatus).toBe("needs-review");
+    // No open Form 941 item exists, so the document ends unlinked.
+    expect(finished.requestItemId).toBeUndefined();
+    expect(await loadItem("item-multi-bank")).toMatchObject({
+      status: "received",
+      matchedDocumentIds: ["doc-other-statement"],
+    });
+  });
+
+  test("a throwing extract stage lands in failed with the underlying message", async () => {
+    const document = await seedDocument({
+      id: "doc-reclassify-throws",
+      pipelineStatus: "needs-review",
+      classification: {
+        documentTypeId: bankStatement.id,
+        confidence: 0.6,
+        reasoning: "Bank statement layout",
+      },
+      extraction: { fields: [staleBankField] },
+    });
+
+    const { ai } = scriptedAi(
+      [new Error('OpenRouter request for "raw_extraction" failed with status 429: rate limited')],
+      document.id,
+    );
+
+    await reclassifyDocument(document.id, form941.id, { ai });
+
+    const finished = await loadDocument(document.id);
+    expect(finished.pipelineStatus).toBe("failed");
+    expect(finished.failure?.message).toContain("rate limited");
+    expect(await actionsLogged()).toContain("document-failed");
+  });
+
+  test("an inactive target type fails the document with the real cause instead of extracting", async () => {
+    const document = await seedDocument({
+      id: "doc-reclassify-retired",
+      pipelineStatus: "needs-review",
+      classification: {
+        documentTypeId: bankStatement.id,
+        confidence: 0.6,
+        reasoning: "Bank statement layout",
+      },
+    });
+
+    const { ai, calls } = scriptedAi([], document.id);
+
+    await reclassifyDocument(document.id, retiredType.id, { ai });
+
+    expect(calls).toHaveLength(0);
+    const finished = await loadDocument(document.id);
+    expect(finished.pipelineStatus).toBe("failed");
+    expect(finished.failure?.message).toContain(retiredType.id);
+    // The reviewer's choice never landed, so the prior classification survives.
+    expect(finished.classification?.documentTypeId).toBe(bankStatement.id);
+  });
+
+  test("a missing document surfaces its own error rather than failing silently", async () => {
+    const { ai } = scriptedAi([], "doc-reclassify-nowhere");
+
+    await expect(reclassifyDocument("doc-reclassify-nowhere", form941.id, { ai })).rejects.toThrow(
+      "doc-reclassify-nowhere",
+    );
+  });
+});
+
 describe("createRunner", () => {
   test("start returns immediately and drives the document to a terminal state", async () => {
     const document = await seedDocument({ id: "doc-runner" });
@@ -789,6 +1004,36 @@ describe("createRunner", () => {
 
     const finished = await waitForStatus(document.id, "needs-review");
     expect(finished.pipelineStatus).toBe("needs-review");
+  });
+
+  test("startReclassify returns immediately and drives the extract-only continuation to needs-review", async () => {
+    const document = await seedDocument({
+      id: "doc-runner-reclassify",
+      pipelineStatus: "needs-review",
+      classification: {
+        documentTypeId: bankStatement.id,
+        confidence: 0.6,
+        reasoning: "Bank statement layout",
+      },
+      extraction: { fields: [staleBankField] },
+    });
+    const { ai } = scriptedAi([{ fields: [] }], document.id);
+
+    const runner = createRunner({ ai });
+    expect(runner.startReclassify(document.id, form941.id)).toBeUndefined();
+
+    await waitFor(async () => {
+      const current = await loadDocument(document.id);
+      return current.classification?.documentTypeId === form941.id
+        && current.pipelineStatus === "needs-review";
+    });
+    const finished = await loadDocument(document.id);
+    expect(finished.classification?.reasoning).toBe("Reclassified by reviewer");
+    expect(finished.extraction?.fields.map((field) => field.key)).toEqual([
+      "employer_ein",
+      "wages_tips_compensation",
+      "quarter_end_date",
+    ]);
   });
 
   test("logs and swallows a rejected run so an unknown document never crashes the server", async () => {

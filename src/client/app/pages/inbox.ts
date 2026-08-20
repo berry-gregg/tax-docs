@@ -8,11 +8,12 @@ import {
 } from "../../../shared/schemas/inbox.ts";
 import { getJson, sendJson } from "../api.ts";
 import { formatRelativeTime } from "../format.ts";
-import { icons } from "../icons.ts";
 import {
   bindPortalLinkControls,
   escapeHtml,
+  initialsFor,
   pageHeader,
+  pipelineChip,
   portalLinkControl,
 } from "../render.ts";
 import type { PageModule } from "./registry.ts";
@@ -23,10 +24,10 @@ export type InboxData = {
 };
 
 /**
- * Which threads are expanded. Module-level so the 2s full-repaint polling re-renders the same
- * disclosure state; the toggle handler mutates it and patches the live DOM in place.
+ * Which conversation is open in the center pane. Module-level so the 2s full-repaint polling
+ * re-renders the same selection; nothing is selected until the CPA picks a thread.
  */
-export const openThreadIds = new Set<string>();
+export const inboxSelection: { threadId: string | null } = { threadId: null };
 
 /**
  * Unsent compose text keyed by engagementId. The compose form is `data-preserve-focus`, so a
@@ -64,11 +65,40 @@ function previewFor(thread: InboxThread): string {
   return lastEvent && lastEvent.kind === "event" ? truncate(lastEvent.text) : "No messages yet";
 }
 
+function threadLabel(thread: InboxThread): string {
+  return `${thread.filingType} · ${thread.taxYear}`;
+}
+
+function renderThreadRow(thread: InboxThread, now: Date, selected: boolean): string {
+  const latestAt = thread.timeline.at(-1)?.createdAt;
+  const classes = [
+    "inbox-row",
+    selected ? "is-selected" : "",
+    thread.unread ? "is-unread" : "",
+  ]
+    .filter((cls) => cls.length > 0)
+    .join(" ");
+
+  return `<div class="${classes}" data-thread-row data-engagement-id="${escapeHtml(thread.engagementId)}" role="button" tabindex="0"${thread.unread ? ' data-unread="true"' : ""}>
+    <span class="avatar" aria-hidden="true">${escapeHtml(initialsFor(thread.clientName))}</span>
+    <span class="inbox-row-body">
+      <span class="inbox-row-top">
+        <span class="inbox-row-name">${escapeHtml(thread.clientName)}</span>
+        ${latestAt ? relativeTime(latestAt, now, "inbox-row-time") : ""}
+      </span>
+      <span class="inbox-row-foot">
+        <span class="muted inbox-row-preview">${escapeHtml(previewFor(thread))}</span>
+        ${thread.unread ? `<span class="badge inbox-row-badge">${thread.unreadCount}</span>` : ""}
+      </span>
+    </span>
+  </div>`;
+}
+
 function renderTimelineEntry(entry: InboxTimelineEntry, thread: InboxThread, now: Date): string {
   if (entry.kind === "message") {
     const isCpa = entry.sender === "cpa";
     return `<div class="inbox-msg inbox-msg-${isCpa ? "cpa" : "client"}" data-message-id="${escapeHtml(entry.id)}">
-      <span class="inbox-msg-meta muted"><span class="inbox-msg-sender">${escapeHtml(
+      <span class="inbox-msg-meta"><span class="inbox-msg-sender">${escapeHtml(
         isCpa ? "You" : thread.clientName,
       )}</span> ${relativeTime(entry.createdAt, now, "inbox-msg-time")}</span>
       <p class="inbox-msg-body">${escapeHtml(entry.body)}</p>
@@ -97,51 +127,87 @@ function renderCompose(thread: InboxThread): string {
   </form>`;
 }
 
-function renderThread(thread: InboxThread, now: Date): string {
-  const open = openThreadIds.has(thread.engagementId);
-  const latestAt = thread.timeline.at(-1)?.createdAt;
+function renderConversation(thread: InboxThread | undefined, now: Date): string {
+  if (!thread) {
+    return `<section class="inbox-convo">
+      <div class="inbox-convo-empty">
+        <p class="muted">Select a conversation</p>
+      </div>
+    </section>`;
+  }
 
-  return `<section class="inbox-thread${open ? " is-open" : ""}" data-thread data-engagement-id="${escapeHtml(thread.engagementId)}">
-    <div class="inbox-thread-head${thread.unread ? " is-unread" : ""}" data-thread-toggle data-engagement-id="${escapeHtml(thread.engagementId)}" role="button" tabindex="0" aria-expanded="${open ? "true" : "false"}"${thread.unread ? ' data-unread="true"' : ""}>
-      <span class="unread-dot" aria-hidden="true"></span>
-      <span class="inbox-thread-title">
-        <span class="inbox-thread-client">${escapeHtml(thread.clientName)}</span>
-        <span class="muted">${escapeHtml(`${thread.filingType} · ${thread.taxYear}`)}</span>
-      </span>
-      <span class="muted inbox-thread-preview">${escapeHtml(previewFor(thread))}</span>
-      ${latestAt ? relativeTime(latestAt, now, "inbox-thread-time") : ""}
+  return `<section class="inbox-convo" data-conversation data-engagement-id="${escapeHtml(thread.engagementId)}">
+    <header class="inbox-convo-head">
+      <div class="inbox-convo-title">
+        <span class="inbox-convo-name">${escapeHtml(thread.clientName)}</span>
+        <span class="muted inbox-convo-meta">${escapeHtml(threadLabel(thread))}</span>
+      </div>
       ${portalLinkControl(`/portal/${thread.portalToken}`)}
-      <span class="inbox-thread-chevron" aria-hidden="true">${icons.chevron}</span>
-    </div>
-    <div class="inbox-thread-body" data-thread-body${open ? "" : " hidden"}>
+    </header>
+    <div class="inbox-messages">
       ${
         thread.timeline.length === 0
-          ? `<p class="muted inbox-thread-empty">No messages on this engagement yet.</p>`
-          : `<div class="inbox-conversation">${thread.timeline
-              .map((entry) => renderTimelineEntry(entry, thread, now))
-              .join("")}</div>`
+          ? `<p class="muted inbox-messages-empty">No messages on this engagement yet.</p>`
+          : thread.timeline.map((entry) => renderTimelineEntry(entry, thread, now)).join("")
       }
-      ${renderCompose(thread)}
     </div>
+    ${renderCompose(thread)}
   </section>`;
+}
+
+function renderFilesPanel(thread: InboxThread | undefined, now: Date): string {
+  if (!thread) {
+    return `<aside class="inbox-files"></aside>`;
+  }
+
+  return `<aside class="inbox-files" data-files-panel>
+    <div class="inbox-files-summary">
+      <span class="inbox-files-client">${escapeHtml(thread.clientName)}</span>
+      <span class="muted">${escapeHtml(threadLabel(thread))}</span>
+      <a class="text-link inbox-files-portal" href="/portal/${escapeHtml(thread.portalToken)}" data-nav-link>Open portal</a>
+    </div>
+    <div class="inbox-files-docs">
+      <span class="section-title">Documents</span>
+      ${
+        thread.documents.length === 0
+          ? `<p class="muted inbox-files-empty">No documents yet.</p>`
+          : thread.documents
+              .map(
+                (doc) => `<div class="inbox-doc">
+        <a class="inbox-doc-name" href="/documents/${escapeHtml(doc.id)}" data-nav-link>${escapeHtml(doc.filename)}</a>
+        <span class="inbox-doc-meta">
+          ${pipelineChip(doc.pipelineStatus)}
+          ${relativeTime(doc.createdAt, now, "inbox-doc-time")}
+        </span>
+      </div>`,
+              )
+              .join("")
+      }
+    </div>
+  </aside>`;
 }
 
 export function renderInbox(data: InboxData): string {
   const unreadThreads = data.threads.filter((thread) => thread.unread).length;
+  const selected = data.threads.find((thread) => thread.engagementId === inboxSelection.threadId);
 
   return `<div class="page-inbox">
     ${pageHeader("Inbox", unreadThreads > 0 ? String(unreadThreads) : undefined)}
     ${
       data.threads.length === 0
         ? `<p class="muted">No conversations yet. Create an engagement and its request message will open the thread here.</p>`
-        : `<div class="inbox-threads">${data.threads
-            .map((thread) => renderThread(thread, data.now))
-            .join("")}</div>`
+        : `<div class="inbox-shell">
+      <div class="inbox-list" role="list">${data.threads
+        .map((thread) => renderThreadRow(thread, data.now, thread === selected))
+        .join("")}</div>
+      ${renderConversation(selected, data.now)}
+      ${renderFilesPanel(selected, data.now)}
+    </div>`
     }
   </div>`;
 }
 
-function closestToggle(value: EventTarget | null): HTMLElement | null {
+function closestThreadRow(value: EventTarget | null): HTMLElement | null {
   if (typeof value !== "object" || value === null || !("closest" in value)) {
     return null;
   }
@@ -151,49 +217,39 @@ function closestToggle(value: EventTarget | null): HTMLElement | null {
     return null;
   }
 
-  // Clicks on the portal control (or any nested link/button) keep their own behavior.
+  // Clicks on nested links/buttons (none today, but a row may grow them) keep their behavior.
   if (closest.call(value, "a,button")) {
     return null;
   }
 
-  return closest.call(value, "[data-thread-toggle]") as HTMLElement | null;
+  return closest.call(value, "[data-thread-row]") as HTMLElement | null;
 }
 
-function toggleThread(head: HTMLElement): void {
-  const engagementId = head.getAttribute("data-engagement-id");
-  const section = head.closest("[data-thread]");
-  const body = section?.querySelector<HTMLElement>("[data-thread-body]");
-  if (!engagementId || !section || !body) {
+function selectThread(row: HTMLElement, repaint: () => void): void {
+  const engagementId = row.getAttribute("data-engagement-id");
+  if (!engagementId) {
     return;
   }
 
-  const nowOpen = !openThreadIds.has(engagementId);
-  if (nowOpen) {
-    openThreadIds.add(engagementId);
-  } else {
-    openThreadIds.delete(engagementId);
-  }
+  inboxSelection.threadId = engagementId;
 
-  // Patch the live DOM instead of repainting: the next poll re-renders from openThreadIds.
-  head.setAttribute("aria-expanded", nowOpen ? "true" : "false");
-  section.classList.toggle("is-open", nowOpen);
-  body.hidden = !nowOpen;
-
-  if (nowOpen && head.getAttribute("data-unread") === "true") {
-    // Best-effort: the badge and dots clear on the next poll tick even if this fails.
+  if (row.getAttribute("data-unread") === "true") {
+    // Best-effort: the badge and unread marks clear on the next poll tick even if this fails.
     void sendJson("POST", `/api/inbox/threads/${engagementId}/read`, null, z.null()).catch(() => {});
   }
+
+  repaint();
 }
 
 /**
  * One delegated listener on the workspace node — poll swaps replace the node, so handlers never
- * stack. Enter/Space mirror click because the head is a div acting as a disclosure button.
+ * stack. Enter/Space mirror click because the row is a div acting as a selection button.
  */
-function bindThreadToggles(root: HTMLElement): void {
+function bindThreadRows(root: HTMLElement, repaint: () => void): void {
   root.addEventListener("click", (event) => {
-    const head = closestToggle(event.target);
-    if (head) {
-      toggleThread(head);
+    const row = closestThreadRow(event.target);
+    if (row) {
+      selectThread(row, repaint);
     }
   });
 
@@ -202,10 +258,10 @@ function bindThreadToggles(root: HTMLElement): void {
       return;
     }
 
-    const head = closestToggle(event.target);
-    if (head) {
+    const row = closestThreadRow(event.target);
+    if (row) {
       event.preventDefault();
-      toggleThread(head);
+      selectThread(row, repaint);
     }
   });
 }
@@ -293,7 +349,7 @@ export const inboxPage: PageModule<InboxData> = {
   render: renderInbox,
   bind(root, _data, repaint) {
     bindPortalLinkControls(root);
-    bindThreadToggles(root);
+    bindThreadRows(root, repaint);
     bindComposeForms(root, repaint);
   },
   pollMs: POLL_INTERVAL_MS,

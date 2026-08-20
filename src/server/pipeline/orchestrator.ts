@@ -62,7 +62,8 @@ async function writeActivity(
   entry: Pick<
     Activity,
     "engagementId" | "action" | "detail" | "direction" | "documentId" | "requestItemId"
-  >,
+  > &
+    Partial<Pick<Activity, "actor">>,
 ): Promise<void> {
   const activity = activitySchema.parse({
     id: randomUUID(),
@@ -221,6 +222,27 @@ async function linkChecklistItem(
   return linked;
 }
 
+/**
+ * Releases the document from a checklist item whose type no longer matches. The item keeps
+ * collecting its other files; with none left, a received item reopens so the request reads as
+ * honestly outstanding again. Waived and needs-attention statuses are CPA decisions and stay.
+ */
+async function unlinkChecklistItem(db: Db, document: TaxDocument): Promise<TaxDocument> {
+  if (!document.requestItemId) return document;
+
+  const stored = await requestItemsCollection(db).findOne({ _id: document.requestItemId });
+  if (stored) {
+    const item = fromStored(requestItemSchema, stored);
+    const matchedDocumentIds = item.matchedDocumentIds.filter((id) => id !== document.id);
+    const status =
+      item.status === "received" && matchedDocumentIds.length === 0 ? "open" : item.status;
+    const next = requestItemSchema.parse({ ...item, status, matchedDocumentIds });
+    await requestItemsCollection(db).replaceOne({ _id: item.id }, toStored(next));
+  }
+
+  return patchDocument(db, document, { requestItemId: undefined });
+}
+
 async function extractDocument(
   db: Db,
   document: TaxDocument,
@@ -273,6 +295,89 @@ async function runStages(db: Db, received: TaxDocument, deps: PipelineDeps): Pro
   await extractDocument(db, linked, stageDocument, documentType, deps);
 }
 
+/** Shared terminal lane: the failure lands on top of whatever the stages already persisted. */
+async function recordPipelineFailure(
+  db: Db,
+  documentId: string,
+  fallback: TaxDocument,
+  error: unknown,
+): Promise<void> {
+  const message = messageOf(error);
+  const latest = (await loadDocument(db, documentId)) ?? fallback;
+  const failed = await patchDocument(db, latest, {
+    pipelineStatus: "failed",
+    failure: { message },
+  });
+  await writeActivity(db, {
+    engagementId: failed.engagementId,
+    action: "document-failed",
+    detail: `${failed.filename} — ${message}`,
+    direction: "internal",
+  });
+}
+
+const RECLASSIFY_REASONING = "Reclassified by reviewer";
+
+/**
+ * Extract-only continuation for a reviewer's type override. The classification is written as a
+ * human decision — confidence 1 with honest provenance, never a faked model rationale — and
+ * classify never re-runs, so the model cannot second-guess the reviewer. Everything after the
+ * document load shares the full pipeline's failure lane: a bad type or a throwing extract stage
+ * lands in `failed` with its real cause instead of leaving the document stuck mid-flight.
+ */
+export async function reclassifyDocument(
+  documentId: string,
+  documentTypeId: string,
+  deps: PipelineDeps,
+): Promise<void> {
+  const db = await connectDb();
+  const document = await loadDocument(db, documentId);
+  if (!document) {
+    throw new Error(`Reclassify cannot run: document ${documentId} was not found`);
+  }
+
+  try {
+    const stored = await documentTypesCollection(db).findOne({ _id: documentTypeId });
+    const documentType = stored ? fromStored(documentTypeSchema, stored) : null;
+    if (!documentType?.active) {
+      throw new Error(`Reclassify cannot run: ${documentTypeId} is not an active document type`);
+    }
+
+    // A link to an item of another type is released before the new type gets to match.
+    const currentItem = document.requestItemId
+      ? await findRequestItem(db, document.requestItemId, document.engagementId)
+      : null;
+    const unlinked =
+      currentItem && currentItem.documentTypeId !== documentType.id
+        ? await unlinkChecklistItem(db, document)
+        : document;
+
+    const reclassified = await patchDocument(db, unlinked, {
+      classification: {
+        documentTypeId: documentType.id,
+        confidence: 1,
+        reasoning: RECLASSIFY_REASONING,
+      },
+      extraction: undefined,
+      failure: undefined,
+    });
+    await writeActivity(db, {
+      engagementId: reclassified.engagementId,
+      actor: "cpa",
+      action: "document-reclassified",
+      detail: `${reclassified.filename} — reclassified as ${documentType.name}`,
+      direction: "internal",
+      documentId: reclassified.id,
+    });
+
+    const linked = await linkChecklistItem(db, reclassified, documentType.id);
+    const bytes = await readStoredFile(linked.storagePath);
+    await extractDocument(db, linked, { filename: linked.filename, bytes }, documentType, deps);
+  } catch (error) {
+    await recordPipelineFailure(db, documentId, document, error);
+  }
+}
+
 export async function runPipeline(documentId: string, deps: PipelineDeps): Promise<void> {
   const db = await connectDb();
   const document = await loadDocument(db, documentId);
@@ -283,18 +388,6 @@ export async function runPipeline(documentId: string, deps: PipelineDeps): Promi
   try {
     await runStages(db, document, deps);
   } catch (error) {
-    const message = messageOf(error);
-    // Re-read so the failure lands on top of whatever the stages already persisted.
-    const latest = (await loadDocument(db, documentId)) ?? document;
-    const failed = await patchDocument(db, latest, {
-      pipelineStatus: "failed",
-      failure: { message },
-    });
-    await writeActivity(db, {
-      engagementId: failed.engagementId,
-      action: "document-failed",
-      detail: `${failed.filename} — ${message}`,
-      direction: "internal",
-    });
+    await recordPipelineFailure(db, documentId, document, error);
   }
 }

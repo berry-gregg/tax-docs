@@ -60,6 +60,43 @@ function introLine(state: PortalState): string {
   return `${state.firmName} requested the following for ${state.clientName}'s ${state.taxYear} ${state.filingType} filing`;
 }
 
+/** Letterhead monogram — the first letter of the firm's first two words. */
+function firmInitials(firmName: string): string {
+  return firmName
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
+    .slice(0, 2)
+    .map((word) => (word[0] ?? "").toUpperCase())
+    .join("");
+}
+
+/**
+ * "N of M received" over the non-waived checklist — the one number a client actually wants.
+ * Hidden when nothing is tracked so an empty request never shows "0 of 0".
+ */
+function renderProgress(state: PortalState): string {
+  const tracked = state.items.filter((item) => item.status !== "waived");
+  if (tracked.length === 0) {
+    return "";
+  }
+
+  const received = tracked.filter((item) => item.status === "received").length;
+  const percent = Math.round((received / tracked.length) * 100);
+
+  return `<div class="portal-progress" data-portal-progress>
+    <span class="portal-progress-label">${received} of ${tracked.length} received</span>
+    <span class="portal-progress-track" aria-hidden="true"><span class="portal-progress-fill" style="width: ${percent}%"></span></span>
+  </div>`;
+}
+
+/** Card head row — title left, quiet meta right, hairline underneath. */
+function panelHead(title: string, meta?: string): string {
+  return `<header class="portal-panel-head">
+    <h2 class="portal-section-title">${escapeHtml(title)}</h2>
+    ${meta ? `<span class="portal-panel-meta">${escapeHtml(meta)}</span>` : ""}
+  </header>`;
+}
+
 /**
  * Client-facing pipeline vocabulary. Internal review states are the firm's work, not the
  * client's — a classified document reads as done, and every terminal failure reads as
@@ -178,7 +215,7 @@ function renderChecklistItem(item: PortalItem, token: string): string {
 
   return `<li class="portal-item" data-portal-item="${escapeHtml(item.id)}">
     <details class="portal-item-panel" data-portal-panel="${escapeHtml(item.id)}"${expanded ? " open" : ""}>
-      <summary class="portal-item-summary">${itemMark(item)}<span class="portal-item-title">${escapeHtml(item.title)}</span>${item.required ? `<span class="portal-required">Required</span>` : ""}${fileCount(item)}</summary>
+      <summary class="portal-item-summary">${itemMark(item)}<span class="portal-item-title">${escapeHtml(item.title)}</span>${item.required ? `<span class="portal-required">Required</span>` : ""}${fileCount(item)}<span class="portal-item-chevron" aria-hidden="true">${icons.chevron}</span></summary>
       <div class="portal-item-body">
         <p class="portal-item-description muted">${escapeHtml(item.description)}</p>
         ${waivedNote}
@@ -240,6 +277,7 @@ function prunePendingAgainst(state: PortalState): void {
 
 function renderDropzone(): string {
   return `<div class="dropzone portal-dropzone" data-portal-dropzone tabindex="0" role="button" aria-label="Upload PDF documents">
+    <span class="portal-dropzone-icon" aria-hidden="true">${icons.upload}</span>
     <span class="portal-dropzone-title">Drop PDFs here or click to browse</span>
     <span class="portal-dropzone-hint muted">Files are matched to the request list automatically</span>
     <input type="file" accept="application/pdf,.pdf" multiple hidden data-portal-file />
@@ -260,8 +298,11 @@ function renderMessagesPanel(state: PortalState): string {
       ? state.messages.map((message) => renderMessageRow(message, state.firmName)).join("")
       : `<li class="portal-messages-empty muted">No messages yet — questions about this request start here</li>`;
 
+  const count = state.messages.length;
+  const meta = count > 0 ? (count === 1 ? "1 message" : `${count} messages`) : undefined;
+
   return `<aside class="portal-messages portal-card" aria-label="Messages">
-    <h2 class="portal-section-title">Messages</h2>
+    ${panelHead("Messages", meta)}
     <p class="portal-messages-hint muted">Questions for ${escapeHtml(state.firmName)} about this request</p>
     <ul class="portal-message-list" data-portal-messages aria-live="polite">${rows}</ul>
     <form class="portal-compose" data-portal-compose data-preserve-focus>
@@ -277,23 +318,33 @@ function renderValidPortal(data: Extract<PortalData, { kind: "valid" }>): string
   const { state, token } = data;
   prunePendingAgainst(state);
 
+  const itemCount = state.items.length === 1 ? "1 item" : `${state.items.length} items`;
+
   return `<div class="portal-page">
     <header class="portal-header">
-      <h1 class="portal-firm">${escapeHtml(state.firmName)}</h1>
-      <p class="portal-intro">${escapeHtml(introLine(state))}</p>
+      <div class="portal-identity">
+        <span class="portal-monogram" aria-hidden="true">${escapeHtml(firmInitials(state.firmName))}</span>
+        <h1 class="portal-firm">${escapeHtml(state.firmName)}</h1>
+      </div>
+      <div class="portal-heading">
+        <p class="portal-title">Document request</p>
+        <p class="portal-intro">${escapeHtml(introLine(state))}</p>
+      </div>
+      ${renderProgress(state)}
     </header>
     <p class="load-error-message" data-portal-error hidden></p>
     <div class="portal-layout">
       <aside class="portal-checklist portal-card" aria-label="Requested documents">
-        <h2 class="portal-section-title">Requested documents</h2>
+        ${panelHead("Requested documents", itemCount)}
         <ul class="portal-item-list">
           ${state.items.map((item) => renderChecklistItem(item, token)).join("")}
         </ul>
       </aside>
       <section class="portal-main portal-card">
+        ${panelHead("Upload files")}
         ${renderDropzone()}
         <section class="portal-uploads">
-          <h2 class="portal-section-title">Recent uploads</h2>
+          <h3 class="portal-section-title portal-subsection-title">Recent uploads</h3>
           <ul class="portal-upload-list" data-portal-uploads aria-live="polite">${renderUploadRows(state)}</ul>
         </section>
       </section>

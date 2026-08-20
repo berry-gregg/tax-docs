@@ -281,6 +281,7 @@ Tests run on `bun:test` and mock only at system boundaries. Persistence tests us
 - `PATCH /api/documents/:id/fields/:key` - edit a field (`{ action: "edit", value }`)
 - `POST /api/documents/:id/trust` - mark trusted; auto-finalizes unreviewed fields as accepted
 - `POST /api/documents/:id/rerun` - `failed`, `unclassified`, or `rejected`
+- `POST /api/documents/:id/reclassify` - reviewer overrides a mis-classification with `{ documentTypeId }` (`needs-review` or `unclassified` only); clears extraction and re-extracts against the chosen type without re-running classify
 - `POST /api/documents/:id/draft-type` - propose a schema, not persisted
 
 **Types and templates**
@@ -299,11 +300,15 @@ Tests run on `bun:test` and mock only at system boundaries. Persistence tests us
 
 **Inbox and metrics**
 
-- `GET /api/inbox` - conversation threads (one per engagement with messages or visible activity): client/engagement head fields plus a chronological timeline of messages interleaved with quiet system events
+- `GET /api/inbox` - conversation threads (one per engagement with messages or visible activity): client/engagement head fields, a chronological timeline of messages interleaved with quiet system events, and the engagement's `documents` (newest first) for the files panel
 - `GET /api/inbox/unread-count` - count of threads with unread client messages or unread inbound activity (the CPA's own outbound never counts)
 - `POST /api/inbox/threads/:engagementId/messages` - CPA sends a message `{ body }`, 201 with the created message
 - `POST /api/inbox/threads/:engagementId/read` - marks the thread's client messages and visible activity read, 204
 - `GET /api/metrics` - `documentsAutoProcessed`, `fieldsAwaitingReview`, `straightThroughRate`, `needsReviewCount`, `outstandingRequests`, `activeClients`
+
+**Search**
+
+- `GET /api/search?q=` - powers the command palette (Ctrl+K): case-insensitive literal substring match across clients (name, EIN), engagements (client, year, filing type), documents (filename, type, client), and document types (name, description), capped at 8 rows per group
 
 `documentsAutoProcessed` and `straightThroughRate` count **trusted** documents only. Straight-through is `round(100 * trusted / terminal-ish)`, and `0` on an empty denominator; terminal-ish is `needs-review`, `trusted`, `rejected`, `unclassified`, `failed`.
 

@@ -932,111 +932,178 @@
   }
 }
 
-/* Inbox threads — one disclosure section per engagement conversation: a dense head row
-   (client · latest-message preview · time · portal control) over the message timeline and a
-   compose box. Hairlines only; monochrome; no cards-within-cards. */
-.inbox-threads {
-  display: grid;
-  border-top: 1px solid var(--color-hairline);
+/* Inbox — a two-pane chat: thread list | active conversation | files panel. Three columns
+   separated by hairlines inside one full-height frame; each column scrolls independently and
+   the composer stays pinned under the message timeline. */
+.page-inbox {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100vh - var(--spacing-24) - var(--spacing-48));
 }
 
-.inbox-thread {
-  border-bottom: 1px solid var(--color-hairline);
+.inbox-shell {
+  display: grid;
+  grid-template-columns: 312px minmax(0, 1fr) 260px;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--surface-card);
 }
 
-.inbox-thread-head {
-  display: grid;
-  grid-template-columns: var(--icon-size-nav) minmax(0, auto) minmax(0, 1fr) auto auto var(--icon-size-nav);
+/* Left column — the scrollable thread list. */
+.inbox-list {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: 1px solid var(--color-hairline);
+}
+
+.inbox-row {
+  display: flex;
   gap: var(--spacing-12);
-  align-items: center;
-  padding-block: var(--spacing-12);
+  align-items: flex-start;
+  padding: var(--spacing-12) var(--spacing-16);
+  border-bottom: 1px solid var(--color-hairline);
   cursor: pointer;
 }
 
-.inbox-thread-head .unread-dot {
-  width: var(--spacing-8);
-  height: var(--spacing-8);
-  border-radius: var(--radius-badge);
-  background: transparent;
-  justify-self: center;
+.inbox-row:hover:not(.is-selected) {
+  background: var(--surface-section);
 }
 
-.inbox-thread-head.is-unread .unread-dot {
-  background: var(--color-ink);
+.inbox-row.is-selected {
+  background: var(--surface-nav-active);
 }
 
-.inbox-thread-title {
-  display: flex;
-  gap: var(--spacing-8);
-  align-items: baseline;
+.inbox-row-body {
+  display: grid;
+  gap: var(--spacing-4);
+  flex: 1;
   min-width: 0;
+}
+
+.inbox-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--spacing-8);
+  min-width: 0;
+}
+
+.inbox-row-name {
+  color: var(--color-ink);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.inbox-thread-client {
-  color: var(--color-ink);
-}
-
-.inbox-thread-head:not(.is-unread) .inbox-thread-client,
-.inbox-thread-head:not(.is-unread) .inbox-thread-preview {
+.inbox-row:not(.is-unread) .inbox-row-name,
+.inbox-row:not(.is-unread) .inbox-row-preview {
   font-weight: var(--font-weight-light);
 }
 
-.inbox-thread-preview {
+.inbox-row-time {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: var(--text-micro);
+}
+
+.inbox-row-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-8);
+  min-width: 0;
+}
+
+.inbox-row-preview {
+  flex: 1;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.inbox-thread-time {
-  white-space: nowrap;
+.inbox-row-badge {
+  flex-shrink: 0;
+}
+
+/* Center column — the active conversation: header, scrolling timeline, pinned composer. */
+.inbox-convo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.inbox-convo-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+
+.inbox-convo-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-16);
+  padding: var(--spacing-12) var(--spacing-16);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.inbox-convo-title {
+  display: grid;
+  gap: var(--spacing-4);
+  min-width: 0;
+}
+
+.inbox-convo-name {
+  color: var(--color-ink);
+}
+
+.inbox-convo-meta {
   font-size: var(--text-micro);
 }
 
-.inbox-thread-chevron {
-  display: inline-flex;
-  color: var(--color-ash);
-  transition: transform 120ms ease;
-}
-
-.inbox-thread.is-open .inbox-thread-chevron {
-  transform: rotate(180deg);
-}
-
-/* The conversation indents under the head's dot column so rows align with the client name. */
-.inbox-thread-body {
+.inbox-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
-  gap: var(--spacing-12);
-  padding: 0 0 var(--spacing-16) calc(var(--icon-size-nav) + var(--spacing-12));
-}
-
-.inbox-conversation {
-  display: grid;
+  align-content: start;
   gap: var(--spacing-8);
-  padding-top: var(--spacing-12);
-  border-top: 1px solid var(--color-hairline);
+  padding: var(--spacing-16);
 }
 
-/* Messages are quiet blocks, not consumer chat bubbles: the CPA's own messages sit right on
-   the section wash, the client's left on the deeper wash, both hairline-framed. */
+.inbox-messages-empty {
+  margin: 0;
+  justify-self: center;
+}
+
+/* Bubbles: client inbound left on the section wash, CPA outbound right on ink with paper text. */
 .inbox-msg {
   display: grid;
   gap: var(--spacing-4);
-  max-width: 560px;
+  max-width: 70%;
   padding: var(--spacing-8) var(--spacing-12);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-md);
-}
-
-.inbox-msg-cpa {
-  justify-self: end;
-  background: var(--surface-section);
+  border-radius: var(--radius-xl);
 }
 
 .inbox-msg-client {
   justify-self: start;
-  background: var(--surface-wash);
+  background: var(--surface-section);
+  border: 1px solid var(--color-hairline);
+}
+
+.inbox-msg-cpa {
+  justify-self: end;
+  background: var(--color-ink);
+  color: var(--color-paper);
 }
 
 .inbox-msg-meta {
@@ -1050,19 +1117,31 @@
   color: var(--color-ink);
 }
 
+/* Micro text inside the ink bubble stays readable: paper at reduced strength, never ash. */
+.inbox-msg-cpa .inbox-msg-sender,
+.inbox-msg-cpa .muted {
+  color: var(--color-paper);
+}
+
+.inbox-msg-cpa .inbox-msg-time {
+  opacity: 0.65;
+}
+
 .inbox-msg-body {
   margin: 0;
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
 
-/* System events read as quiet single lines between messages — muted, smaller, no chips. */
+/* System events read as quiet centered lines between bubbles — muted, smaller, no chips. */
 .inbox-event {
+  justify-self: center;
   display: flex;
   gap: var(--spacing-8);
   align-items: baseline;
   color: var(--color-ash);
   font-size: var(--text-micro);
+  text-align: center;
 }
 
 .inbox-event-link {
@@ -1078,17 +1157,11 @@
   white-space: nowrap;
 }
 
-.inbox-thread-empty {
-  padding-top: var(--spacing-12);
-  border-top: 1px solid var(--color-hairline);
-  margin: 0;
-}
-
-/* Compose — data-preserve-focus in the markup keeps poll repaints away while typing. */
+/* Compose — pinned under the timeline; data-preserve-focus keeps poll repaints away while typing. */
 .inbox-compose {
   display: grid;
   gap: var(--spacing-8);
-  padding-top: var(--spacing-12);
+  padding: var(--spacing-12) var(--spacing-16);
   border-top: 1px solid var(--color-hairline);
 }
 
@@ -1114,6 +1187,91 @@
 .inbox-compose-error {
   color: var(--color-warning);
   font-size: var(--text-micro);
+}
+
+/* Right column — files/context for the selected thread. */
+.inbox-files {
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--color-hairline);
+  padding: var(--spacing-16);
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-24);
+}
+
+.inbox-files-summary {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.inbox-files-client {
+  color: var(--color-ink);
+}
+
+.inbox-files-portal {
+  font-size: var(--text-micro);
+}
+
+.inbox-files-docs {
+  display: grid;
+  gap: var(--spacing-8);
+}
+
+.inbox-files-empty {
+  margin: 0;
+}
+
+.inbox-doc {
+  display: grid;
+  gap: var(--spacing-4);
+  padding-bottom: var(--spacing-8);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.inbox-doc:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.inbox-doc-name {
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.inbox-doc-name:hover {
+  text-decoration: underline;
+}
+
+.inbox-doc-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.inbox-doc-time {
+  font-size: var(--text-micro);
+  white-space: nowrap;
+}
+
+/* Stacked layout: the shell loses its fixed height and the columns flow vertically. */
+@media (max-width: 960px) {
+  .page-inbox {
+    height: auto;
+  }
+
+  .inbox-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .inbox-list,
+  .inbox-files {
+    border-right: 0;
+    border-left: 0;
+    border-bottom: 1px solid var(--color-hairline);
+    max-height: 40vh;
+  }
 }
 
 /* Portal link control — SHARED compact copy + open pair rendered by portalLinkControl()
@@ -1395,6 +1553,32 @@
 
 .review-panel-title .section-title {
   margin-bottom: 0;
+}
+
+/* Reviewer type override in the panel head: quiet label · select · secondary Apply on one line. */
+.review-reclassify {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.review-reclassify-label {
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+  white-space: nowrap;
+}
+
+.review-reclassify-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Micro hint under the select — re-classifying clears extracted fields, said up front. */
+.review-reclassify-hint {
+  margin: 0;
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
 }
 
 .review-fields {
@@ -1827,27 +2011,69 @@
 }
 
 /*
- * Client portal — chromeless, low-friction upload surface. Three white cards over the bone
- * wash: the compact request checklist (one summary line per item, details behind disclosure),
- * one common drop zone plus a live status list, and the message thread with the firm.
- * Hairlines only, sentence case, the shared `.chip` recipe for status — never highlighter.
+ * Client portal — chromeless, low-friction upload surface. A letterhead header (firm monogram
+ * + name, "Document request" title, received-count progress line) over three white cards on
+ * the bone wash: the compact request checklist (one summary line per item, details behind a
+ * chevron disclosure), one common drop zone plus a live status list, and the message thread
+ * with the firm (bubbles mirroring the inbox recipe). Each card leads with a `.portal-panel-head`
+ * rule. Hairlines only, sentence case, the shared `.chip` recipe for status — never highlighter.
  */
 .portal-page {
   display: grid;
-  gap: var(--spacing-24);
+  gap: var(--spacing-32);
   width: min(100%, 1240px);
 }
 
+/* Letterhead: identity row, then title + intro, then the received-count progress line. */
 .portal-header {
+  display: grid;
+  gap: var(--spacing-16);
+  justify-items: start;
+}
+
+.portal-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-12);
+}
+
+/* Ink monogram block — the firm's mark on a chromeless page that has no sidebar brand. */
+.portal-monogram {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-32);
+  height: var(--spacing-32);
+  border-radius: var(--radius-nav);
+  background: var(--color-ink);
+  color: var(--color-bone);
+  font-size: var(--text-micro);
+  font-weight: var(--font-weight-regular);
+  letter-spacing: var(--tracking-caption);
+  line-height: 1;
+}
+
+.portal-firm {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+}
+
+.portal-heading {
   display: grid;
   gap: var(--spacing-4);
 }
 
-.portal-firm {
+.portal-title {
+  margin: 0;
   color: var(--color-ink);
-  font-size: var(--text-heading-sm);
+  font-size: var(--text-heading);
   font-weight: var(--font-weight-regular);
-  line-height: var(--leading-heading-sm);
+  letter-spacing: var(--tracking-heading);
+  line-height: var(--leading-heading);
 }
 
 /* Primary copy stays ink — ash on the bone wash was the operator's readability complaint. */
@@ -1858,10 +2084,37 @@
   line-height: var(--leading-ui);
 }
 
+.portal-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-12);
+}
+
+.portal-progress-label {
+  color: var(--color-ink);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-progress-track {
+  overflow: hidden;
+  width: 160px;
+  height: var(--spacing-4);
+  border-radius: var(--radius-badge);
+  background: var(--color-hairline);
+}
+
+.portal-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-badge);
+  background: var(--color-success);
+}
+
 .portal-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 0.95fr);
-  gap: var(--spacing-16);
+  gap: var(--spacing-20);
   align-items: start;
 }
 
@@ -1870,15 +2123,41 @@
   background: var(--surface-card);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-cards);
-  padding: var(--spacing-20) var(--spacing-24);
+  padding: var(--spacing-24);
+}
+
+/* Card head row — ink title left, ash meta right, hairline rule aligning the three columns. */
+.portal-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-12);
+  margin: 0 0 var(--spacing-12);
+  padding-bottom: var(--spacing-12);
+  border-bottom: 1px solid var(--color-hairline);
 }
 
 .portal-section-title {
-  margin: 0 0 var(--spacing-12);
-  color: var(--color-ash);
+  margin: 0;
+  color: var(--color-ink);
   font-size: var(--text-ui);
   font-weight: var(--font-weight-regular);
   line-height: var(--leading-ui);
+}
+
+.portal-panel-meta {
+  flex: none;
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+/* In-card sub-label (Recent uploads) — quieter than the card head. */
+.portal-subsection-title {
+  margin: 0 0 var(--spacing-4);
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
 }
 
 /* Checklist rows — compact hairline-ruled summary lines; detail behind disclosure. */
@@ -1897,12 +2176,13 @@
   border-top: 0;
 }
 
-/* One ~36px summary line: mark, title, Required badge, file count. */
+/* One ~44px summary line: mark, title, Required badge, file count, chevron. */
 .portal-item-summary {
   display: flex;
   align-items: center;
-  gap: var(--spacing-8);
+  gap: var(--spacing-12);
   min-width: 0;
+  min-height: var(--spacing-40);
   padding: var(--spacing-8) 0;
   cursor: pointer;
   list-style: none;
@@ -1916,27 +2196,39 @@
   content: "";
 }
 
-/* 16px inline status marks: check received, dash waived, warning attention, circle open. */
+/* Fixed 20px circular status marks: check received, dash waived, warning attention, dashed open. */
 .portal-mark {
   display: inline-flex;
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-badge);
+}
+
+.portal-mark .icon {
+  width: 11px;
+  height: 11px;
 }
 
 .portal-mark-open {
-  border: 1px solid var(--color-outline);
-  border-radius: 50%;
+  border-style: dashed;
 }
 
 .portal-mark-received {
+  border-color: var(--color-success);
   color: var(--color-success);
 }
 
 .portal-mark-attention {
+  border-color: var(--color-warning);
   color: var(--color-warning);
+}
+
+.portal-mark-waived {
+  border-color: var(--color-hairline);
 }
 
 .portal-mark-waived::after {
@@ -1945,13 +2237,40 @@
   border-top: 1px solid var(--color-ash);
 }
 
-/* Expanded detail indents under the title, clear of the 16px mark column. */
+/* Disclosure affordance — ash chevron that turns ink on hover and flips when open. */
+.portal-item-chevron {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-left: auto;
+  color: var(--color-ash);
+  transition: transform 0.15s ease;
+}
+
+.portal-item-chevron .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.portal-item-count + .portal-item-chevron {
+  margin-left: 0;
+}
+
+.portal-item-summary:hover .portal-item-chevron {
+  color: var(--color-ink);
+}
+
+.portal-item-panel[open] > .portal-item-summary .portal-item-chevron {
+  transform: rotate(180deg);
+}
+
+/* Expanded detail indents under the title, clear of the 20px mark column. */
 .portal-item-body {
   display: grid;
   gap: var(--spacing-8);
   justify-items: start;
   min-width: 0;
-  padding: 0 0 var(--spacing-12) calc(16px + var(--spacing-8));
+  padding: 0 0 var(--spacing-16) calc(20px + var(--spacing-12));
 }
 
 .portal-item-title {
@@ -1973,6 +2292,7 @@
   border-radius: var(--radius-badge);
   color: var(--color-ink);
   font-size: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
   line-height: var(--leading-caption);
 }
 
@@ -2007,6 +2327,7 @@
   align-items: center;
   gap: var(--spacing-8);
   min-width: 0;
+  padding: var(--spacing-4) 0;
   font-size: var(--text-micro);
   line-height: var(--leading-micro);
 }
@@ -2017,8 +2338,19 @@
   text-overflow: ellipsis;
 }
 
+/* Filename grows and truncates; the chip and view link sit right-aligned and quiet. */
+.portal-doc > .portal-doc-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--color-ink);
+}
+
+.portal-doc > .chip {
+  flex: none;
+}
+
 .portal-doc-view {
-  margin-left: auto;
+  flex: none;
   color: var(--color-ash);
   font-size: var(--text-micro);
   line-height: var(--leading-micro);
@@ -2062,13 +2394,34 @@
   gap: var(--spacing-8);
 }
 
-/* The one common drop zone — composes the shared .dropzone recipe, just larger. */
+/* The one common drop zone — composes the shared .dropzone recipe: taller, icon-led, centered. */
 .portal-dropzone {
-  min-height: 180px;
+  min-height: 220px;
   align-content: center;
+  gap: var(--spacing-4);
+  padding: var(--spacing-32);
+}
+
+/* Upload mark on a wash disc; the drag-over wash swaps it to the deeper nav-active fill. */
+.portal-dropzone-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-40);
+  height: var(--spacing-40);
+  margin-bottom: var(--spacing-8);
+  border-radius: var(--radius-badge);
+  background: var(--surface-wash);
+  color: var(--color-ink);
+}
+
+.portal-dropzone.is-dragover .portal-dropzone-icon,
+.portal-dropzone:focus-within .portal-dropzone-icon {
+  background: var(--surface-nav-active);
 }
 
 .portal-dropzone-title {
+  color: var(--color-ink);
   font-size: var(--text-ui);
   line-height: var(--leading-ui);
 }
@@ -2101,8 +2454,19 @@
   line-height: var(--leading-micro);
 }
 
-.portal-upload-row:last-child {
-  border-bottom: 1px solid var(--color-hairline);
+.portal-upload-row:first-child {
+  border-top: 0;
+}
+
+/* Filename grows and truncates; the stage chip holds the right edge. */
+.portal-upload-row > .portal-doc-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--color-ink);
+}
+
+.portal-upload-row > .chip {
+  flex: none;
 }
 
 .portal-upload-note {
@@ -2113,7 +2477,7 @@
 }
 
 .portal-upload-dismiss {
-  margin-left: auto;
+  flex: none;
   min-height: var(--spacing-24);
   padding: 0 var(--spacing-8);
   font-size: var(--text-micro);
@@ -2125,7 +2489,8 @@
   line-height: var(--leading-micro);
 }
 
-/* Messages — the client side of the CPA↔client thread. Quiet hairline rows, no bubbles. */
+/* Messages — light bubbles mirroring the inbox recipe from the client's side: the firm sits
+   left on the section tint, "You" sits right on the wash. Hairline + radius, never shadows. */
 .portal-messages-hint {
   margin: 0 0 var(--spacing-12);
   font-size: var(--text-micro);
@@ -2134,6 +2499,8 @@
 
 .portal-message-list {
   display: grid;
+  gap: var(--spacing-8);
+  align-content: start;
   overflow-y: auto;
   max-height: 360px;
   margin: 0 0 var(--spacing-16);
@@ -2144,17 +2511,28 @@
 .portal-message {
   display: grid;
   gap: var(--spacing-4);
-  padding: var(--spacing-8) 0;
-  border-top: 1px solid var(--color-hairline);
+  max-width: 88%;
+  min-width: 0;
+  padding: var(--spacing-8) var(--spacing-12);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-section);
 }
 
-.portal-message:first-child {
-  border-top: 0;
+.portal-message-cpa {
+  justify-self: start;
 }
 
+.portal-message-client {
+  justify-self: end;
+  background: var(--surface-wash);
+}
+
+/* Micro-size sender caption — small tracking, no uppercase transform. */
 .portal-message-sender {
   color: var(--color-ash);
   font-size: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
   line-height: var(--leading-caption);
 }
 
@@ -2177,9 +2555,12 @@
   line-height: var(--leading-micro);
 }
 
+/* Compose anchors the panel behind a hairline rule. */
 .portal-compose {
   display: grid;
   gap: var(--spacing-8);
+  padding-top: var(--spacing-12);
+  border-top: 1px solid var(--color-hairline);
 }
 
 .portal-compose-input {
@@ -2226,11 +2607,39 @@
 }
 
 @media (max-width: 760px) {
+  .portal-page {
+    gap: var(--spacing-24);
+  }
+
   .portal-layout {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--spacing-16);
   }
 
   .portal-messages {
     grid-column: auto;
+  }
+
+  .portal-card {
+    padding: var(--spacing-16) var(--spacing-20);
+  }
+
+  .portal-title {
+    font-size: var(--text-heading-sm);
+    line-height: var(--leading-heading-sm);
+  }
+
+  .portal-progress {
+    justify-self: stretch;
+  }
+
+  .portal-progress-track {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  .portal-dropzone {
+    min-height: 180px;
+    padding: var(--spacing-24);
   }
 }

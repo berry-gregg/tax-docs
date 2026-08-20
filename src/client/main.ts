@@ -1,18 +1,9 @@
 import "./styles/main.css";
-import {
-  clientListResponseSchema,
-  documentListResponseSchema,
-  inboxUnreadCountSchema,
-  metricsSchema,
-} from "@shared/schemas/api";
+import { inboxUnreadCountSchema, metricsSchema } from "@shared/schemas/api";
 import { healthResponseSchema } from "@shared/schemas/health";
+import { searchResponseSchema, type SearchResult } from "@shared/schemas/search";
 import { getJson, startPolling } from "./app/api.ts";
-import {
-  emptyPaletteIndex,
-  flattenPalette,
-  searchPalette,
-  type PaletteIndex,
-} from "./app/command-palette.ts";
+import { flattenPalette, searchPalette } from "./app/command-palette.ts";
 import { clearNewEngagementDraftIfLeft } from "./app/pages/new-engagement.ts";
 import { moduleFor, type PageModule } from "./app/pages/registry.ts";
 import {
@@ -178,6 +169,93 @@ export function handleShellKeydown(event: ShellKeydownEvent, deps: ShellKeydownD
   }
 }
 
+export type PaletteSearchTimer = {
+  set(fn: () => void, ms: number): unknown;
+  clear(id: unknown): void;
+};
+
+export type PaletteSearchOptions = {
+  fetchResults(query: string): Promise<SearchResult[]>;
+  onResults(results: SearchResult[]): void;
+  debounceMs?: number;
+  /** Injectable clock for tests; defaults to the real setTimeout/clearTimeout. */
+  timer?: PaletteSearchTimer;
+  logError?(message: string): void;
+};
+
+export type PaletteSearch = {
+  setQuery(query: string): void;
+  reset(): void;
+};
+
+const realTimer: PaletteSearchTimer = {
+  set: (fn, ms) => setTimeout(fn, ms),
+  clear: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
+};
+
+const PALETTE_DEBOUNCE_MS = 175;
+
+/**
+ * Debounced entity search behind the command palette. Each keystroke re-arms one timer; only
+ * the query that survives the debounce window fetches. A sequence number guards ordering: a
+ * response is dropped unless it belongs to the most recently fired fetch, so a slow stale
+ * response can never overwrite a newer one. An empty query clears the entity rows without a
+ * request and invalidates anything still in flight.
+ */
+export function createPaletteSearch({
+  fetchResults,
+  onResults,
+  debounceMs = PALETTE_DEBOUNCE_MS,
+  timer = realTimer,
+  logError,
+}: PaletteSearchOptions): PaletteSearch {
+  let sequence = 0;
+  let pendingTimer: unknown = null;
+
+  function clearPending(): void {
+    if (pendingTimer !== null) {
+      timer.clear(pendingTimer);
+      pendingTimer = null;
+    }
+  }
+
+  function setQuery(query: string): void {
+    clearPending();
+    const trimmed = query.trim();
+
+    if (trimmed.length === 0) {
+      sequence += 1;
+      onResults([]);
+      return;
+    }
+
+    pendingTimer = timer.set(() => {
+      pendingTimer = null;
+      const fired = ++sequence;
+      fetchResults(trimmed).then(
+        (results) => {
+          if (fired === sequence) {
+            onResults(results);
+          }
+        },
+        (error: unknown) => {
+          if (fired === sequence) {
+            logError?.(`Palette search failed: ${messageFor(error)}`);
+          }
+        },
+      );
+    }, debounceMs);
+  }
+
+  function reset(): void {
+    clearPending();
+    sequence += 1;
+    onResults([]);
+  }
+
+  return { setQuery, reset };
+}
+
 export type ReplaceWorkspaceBodyResult<T> = {
   changed: boolean;
   workspace: T | null;
@@ -226,8 +304,8 @@ const root = typeof document === "undefined" ? null : document.querySelector("#a
 let navCollapsed = false;
 let paletteQuery = "";
 let paletteActiveIndex = 0;
-let paletteIndex: PaletteIndex = emptyPaletteIndex;
-let paletteIndexRequested = false;
+/** Entity rows from the latest `/api/search` response for the current palette query. */
+let paletteEntityResults: SearchResult[] = [];
 let inboxUnreadCount = 0;
 let documentsNeedsReviewCount = 0;
 let stopPolling: (() => void) | null = null;
@@ -251,7 +329,6 @@ function renderShell(body: string): void {
     body,
     inboxUnreadCount,
     documentsNeedsReviewCount,
-    paletteIndex,
   });
 
   if (navCollapsed) {
@@ -395,7 +472,9 @@ function bindShell(): void {
   input?.addEventListener("input", () => {
     paletteQuery = input.value;
     paletteActiveIndex = 0;
+    // Actions and Pages filter on the keystroke; entity rows land when the debounced fetch does.
     refreshPaletteResults();
+    paletteSearch.setQuery(paletteQuery);
   });
 }
 
@@ -413,12 +492,13 @@ function setPalette(open: boolean): void {
   palette.hidden = !open;
   paletteQuery = "";
   paletteActiveIndex = 0;
+  // Opening or closing drops the previous query's entity rows and cancels any in-flight fetch.
+  paletteSearch.reset();
 
   if (!open) {
     return;
   }
 
-  void ensurePaletteIndex();
   refreshPaletteResults();
   const input = root?.querySelector<HTMLInputElement>("[data-command-input]");
   if (input) {
@@ -428,41 +508,24 @@ function setPalette(open: boolean): void {
 }
 
 /**
- * The palette searches entities the shell already fetched, so typing never fires a request. The
- * index is pulled the first time the palette opens.
+ * The palette searches the whole database: every keystroke debounces one `GET /api/search?q=`
+ * fetch (clients, engagements, documents, document types), while the static Actions and Pages
+ * groups keep filtering locally for instant feedback.
  */
-async function ensurePaletteIndex(): Promise<void> {
-  if (paletteIndexRequested) {
-    return;
-  }
-
-  paletteIndexRequested = true;
-
-  try {
-    const [documents, clients] = await Promise.all([
-      getJson("/api/documents", documentListResponseSchema),
-      getJson("/api/clients", clientListResponseSchema),
-    ]);
-
-    paletteIndex = {
-      documents: documents.documents.map((row) => ({
-        id: row.id,
-        label: `${row.documentTypeName ?? "Unclassified"} · ${row.clientName}`,
-        href: `/documents/${row.id}`,
-      })),
-      clients: clients.clients.map((client) => ({
-        id: client.id,
-        label: client.legalName,
-        href: `/clients/${client.id}`,
-      })),
-    };
-
+const paletteSearch = createPaletteSearch({
+  fetchResults: async (query) => {
+    const payload = await getJson(
+      `/api/search?q=${encodeURIComponent(query)}`,
+      searchResponseSchema,
+    );
+    return payload.results;
+  },
+  onResults: (results) => {
+    paletteEntityResults = results;
     refreshPaletteResults();
-  } catch (error) {
-    paletteIndexRequested = false;
-    console.error(`Command palette index failed to load: ${messageFor(error)}`);
-  }
-}
+  },
+  logError: (message) => console.error(message),
+});
 
 function refreshPaletteResults(): void {
   const current = root?.querySelector("[data-palette-results]");
@@ -470,7 +533,7 @@ function refreshPaletteResults(): void {
     return;
   }
 
-  const groups = searchPalette(paletteQuery, paletteIndex);
+  const groups = searchPalette(paletteQuery, paletteEntityResults);
   const items = flattenPalette(groups);
   paletteActiveIndex =
     items.length > 0 ? Math.min(Math.max(paletteActiveIndex, 0), items.length - 1) : 0;
@@ -506,7 +569,7 @@ function syncActiveDescendant(): void {
 }
 
 function movePaletteSelection(delta: number): void {
-  const items = flattenPalette(searchPalette(paletteQuery, paletteIndex));
+  const items = flattenPalette(searchPalette(paletteQuery, paletteEntityResults));
   if (items.length === 0) {
     return;
   }

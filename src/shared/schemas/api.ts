@@ -57,6 +57,15 @@ export const documentTypesResponseSchema = z.object({
   documentTypes: z.array(documentTypeSchema),
 });
 
+/** Reviewer override of the pipeline's classification — the target must be an active type. */
+export const reclassifyDocumentInputSchema = z.object({
+  // zodIssueSummary carries only issue messages, so the message itself must name the field.
+  documentTypeId: z
+    .string({ required_error: "documentTypeId is required" })
+    .min(1, "documentTypeId is required"),
+});
+export type ReclassifyDocumentInput = z.infer<typeof reclassifyDocumentInputSchema>;
+
 export const inboxUnreadCountSchema = z.object({
   count: countSchema,
 });

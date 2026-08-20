@@ -323,6 +323,57 @@ describe("portal layout", () => {
   });
 });
 
+describe("portal letterhead and visual structure", () => {
+  test("identity row renders the firm monogram beside the firm name", () => {
+    const html = renderPortal(validData());
+
+    expect(html).toContain('class="portal-identity"');
+    // "Tax Docs LLP" → TD
+    expect(html).toMatch(/class="portal-monogram"[^>]*>TD</);
+  });
+
+  test("header leads with a document-request title over the intro line", () => {
+    const html = renderPortal(validData());
+
+    expect(html).toContain(">Document request<");
+    expect(html.indexOf(">Document request<")).toBeLessThan(html.indexOf("portal-intro"));
+  });
+
+  test("progress summary counts received items over non-waived items", () => {
+    const html = renderPortal(validData());
+
+    // Fixture: 4 non-waived items, 1 received.
+    expect(html).toContain("data-portal-progress");
+    expect(html).toContain(">1 of 4 received<");
+  });
+
+  test("progress summary is omitted when every item is waived or the list is empty", () => {
+    const html = renderPortal(validData(portalState({ items: [] })));
+
+    expect(html).not.toContain("data-portal-progress");
+  });
+
+  test("each of the three cards leads with a panel head row", () => {
+    const html = renderPortal(validData());
+
+    expect(html.split('class="portal-panel-head"').length - 1).toBe(3);
+  });
+
+  test("dropzone leads with an upload mark", () => {
+    const html = renderPortal(validData());
+
+    expect(html).toContain('data-icon="upload"');
+  });
+
+  test("every checklist summary row carries a disclosure chevron", () => {
+    const html = renderPortal(validData());
+
+    const summaries = html.match(/<summary class="portal-item-summary">[\s\S]*?<\/summary>/g) ?? [];
+    expect(summaries).toHaveLength(5);
+    expect(summaries.every((s) => s.includes('data-icon="chevron-down"'))).toBe(true);
+  });
+});
+
 describe("portal checklist items", () => {
   test("received items render a check mark", () => {
     const html = renderPortal(validData());

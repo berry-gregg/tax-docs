@@ -13,6 +13,7 @@ import { metricsRoutes } from "./routes/metrics.ts";
 import { createPortalRoutes } from "./routes/portal.ts";
 import { recordRoutes } from "./routes/records.ts";
 import { requestTemplateRoutes } from "./routes/request-templates.ts";
+import { searchRoutes } from "./routes/search.ts";
 
 /**
  * Default for the routes that call a model directly. A test or a caller that never exercises
@@ -46,6 +47,7 @@ export function createApp(opts: { runner?: PipelineRunner; ai?: OpenRouterClient
   app.route("/api/exports", exportRoutes);
   app.route("/api/inbox", inboxRoutes);
   app.route("/api/metrics", metricsRoutes);
+  app.route("/api/search", searchRoutes);
   app.route("/api/documents", createDocumentRoutes(runner, ai));
   app.route("/api/portal", createPortalRoutes(runner));
 

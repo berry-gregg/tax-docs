@@ -44,9 +44,16 @@ const storagePaths: string[] = [];
 
 function recordingRunner() {
   const started: string[] = [];
+  const reclassified: Array<{ documentId: string; documentTypeId: string }> = [];
   return {
     started,
-    runner: { start(documentId: string) { started.push(documentId); } },
+    reclassified,
+    runner: {
+      start(documentId: string) { started.push(documentId); },
+      startReclassify(documentId: string, documentTypeId: string) {
+        reclassified.push({ documentId, documentTypeId });
+      },
+    },
   };
 }
 
@@ -604,6 +611,210 @@ describe("document routes", () => {
     const badSortBody = await badSort.json() as { error: string };
     expect(badSort.status).toBe(400);
     expect(badSortBody.error).toContain("Invalid enum value");
+  });
+
+  async function seedReclassifyTypes() {
+    const db = await connectDb();
+    const activeType: DocumentType = {
+      id: "dt-form-941",
+      name: "Form 941",
+      description: "Employer's quarterly federal tax return.",
+      active: true,
+      createdBy: "seed",
+      fields: [{
+        key: "employer_ein",
+        label: "Employer EIN",
+        metadataType: "ein-tin",
+        dataType: "string",
+        required: true,
+        description: "Employer identification number.",
+      }],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const inactiveType: DocumentType = {
+      ...activeType,
+      id: "dt-retired",
+      name: "Retired form",
+      active: false,
+    };
+    await documentTypesCollection(db).insertOne(toStored(activeType));
+    await documentTypesCollection(db).insertOne(toStored(inactiveType));
+    return { activeType, inactiveType };
+  }
+
+  test("reclassify flips a needs-review document to extracting and kicks the background continuation", async () => {
+    const { started, reclassified, runner } = recordingRunner();
+    const app = createApp({ runner });
+    const engagement = await createEngagement(app);
+    const { activeType } = await seedReclassifyTypes();
+    const document = await insertDocument({
+      id: "doc-reclassify",
+      engagementId: engagement.id,
+      filename: "pl.pdf",
+      mimeType: "application/pdf",
+      size: 12,
+      storagePath: "data/uploads/doc-reclassify.pdf",
+      uploadedBy: "cpa",
+      pipelineStatus: "needs-review",
+      classification: { documentTypeId: "dt-profit-loss", confidence: 0.9, reasoning: "Looks like a P&L" },
+      extraction: { fields: [wagesField] },
+    });
+
+    const response = await app.request(`/api/documents/${document.id}/reclassify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentTypeId: activeType.id }),
+    });
+    const body = await response.json() as { document: TaxDocument };
+
+    expect(response.status).toBe(200);
+    expect(body.document.pipelineStatus).toBe("extracting");
+    expect(reclassified).toEqual([{ documentId: document.id, documentTypeId: activeType.id }]);
+    expect(started).toEqual([]);
+
+    const db = await connectDb();
+    const stored = await taxDocumentsCollection(db).findOne({ _id: document.id });
+    expect(stored?.pipelineStatus).toBe("extracting");
+  });
+
+  test("reclassify accepts an unclassified document", async () => {
+    const { reclassified, runner } = recordingRunner();
+    const app = createApp({ runner });
+    const engagement = await createEngagement(app);
+    const { activeType } = await seedReclassifyTypes();
+    const document = await insertDocument({
+      id: "doc-reclassify-unclassified",
+      engagementId: engagement.id,
+      filename: "mystery.pdf",
+      mimeType: "application/pdf",
+      size: 12,
+      storagePath: "data/uploads/doc-reclassify-unclassified.pdf",
+      uploadedBy: "client",
+      pipelineStatus: "unclassified",
+      classification: { documentTypeId: null, confidence: 0.3, reasoning: "No confident match" },
+    });
+
+    const response = await app.request(`/api/documents/${document.id}/reclassify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentTypeId: activeType.id }),
+    });
+    const body = await response.json() as { document: TaxDocument };
+
+    expect(response.status).toBe(200);
+    expect(body.document.pipelineStatus).toBe("extracting");
+    expect(reclassified).toEqual([{ documentId: document.id, documentTypeId: activeType.id }]);
+  });
+
+  test("reclassify is 404 for an unknown document and 400 for a bad body", async () => {
+    const { reclassified, runner } = recordingRunner();
+    const app = createApp({ runner });
+    await seedReclassifyTypes();
+
+    const missing = await app.request("/api/documents/doc-nowhere/reclassify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentTypeId: "dt-form-941" }),
+    });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: "Not found" });
+
+    const engagement = await createEngagement(app);
+    const document = await insertDocument({
+      id: "doc-reclassify-bad-body",
+      engagementId: engagement.id,
+      filename: "pl.pdf",
+      mimeType: "application/pdf",
+      size: 12,
+      storagePath: "data/uploads/doc-reclassify-bad-body.pdf",
+      uploadedBy: "cpa",
+      pipelineStatus: "needs-review",
+      extraction: { fields: [wagesField] },
+    });
+
+    const badBody = await app.request(`/api/documents/${document.id}/reclassify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const badBodyError = await badBody.json() as { error: string };
+    expect(badBody.status).toBe(400);
+    expect(badBodyError.error).toContain("documentTypeId");
+    expect(reclassified).toEqual([]);
+  });
+
+  test("reclassify refuses an unknown or inactive document type with the real reason", async () => {
+    const { reclassified, runner } = recordingRunner();
+    const app = createApp({ runner });
+    const engagement = await createEngagement(app);
+    const { inactiveType } = await seedReclassifyTypes();
+    const document = await insertDocument({
+      id: "doc-reclassify-bad-type",
+      engagementId: engagement.id,
+      filename: "pl.pdf",
+      mimeType: "application/pdf",
+      size: 12,
+      storagePath: "data/uploads/doc-reclassify-bad-type.pdf",
+      uploadedBy: "cpa",
+      pipelineStatus: "needs-review",
+      extraction: { fields: [wagesField] },
+    });
+
+    const unknown = await app.request(`/api/documents/${document.id}/reclassify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentTypeId: "dt-nowhere" }),
+    });
+    const unknownError = await unknown.json() as { error: string };
+    expect(unknown.status).toBe(400);
+    expect(unknownError.error).toContain("dt-nowhere");
+
+    const inactive = await app.request(`/api/documents/${document.id}/reclassify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ documentTypeId: inactiveType.id }),
+    });
+    const inactiveError = await inactive.json() as { error: string };
+    expect(inactive.status).toBe(400);
+    expect(inactiveError.error.toLowerCase()).toContain("active");
+    expect(reclassified).toEqual([]);
+
+    const db = await connectDb();
+    const stored = await taxDocumentsCollection(db).findOne({ _id: document.id });
+    expect(stored?.pipelineStatus).toBe("needs-review");
+  });
+
+  test("reclassify is 409 for trusted and in-flight documents", async () => {
+    const { reclassified, runner } = recordingRunner();
+    const app = createApp({ runner });
+    const engagement = await createEngagement(app);
+    const { activeType } = await seedReclassifyTypes();
+
+    for (const [id, pipelineStatus] of [
+      ["doc-reclassify-trusted", "trusted"],
+      ["doc-reclassify-extracting", "extracting"],
+    ] as const) {
+      await insertDocument({
+        id,
+        engagementId: engagement.id,
+        filename: "ok.pdf",
+        mimeType: "application/pdf",
+        size: 12,
+        storagePath: `data/uploads/${id}.pdf`,
+        uploadedBy: "cpa",
+        pipelineStatus,
+      });
+
+      const response = await app.request(`/api/documents/${id}/reclassify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentTypeId: activeType.id }),
+      });
+      const body = await response.json() as { error: string };
+      expect(response.status).toBe(409);
+      expect(body.error).toContain("cannot be reclassified");
+    }
+    expect(reclassified).toEqual([]);
   });
 
   test("rerun is refused unless the document failed, is unclassified, or was rejected", async () => {

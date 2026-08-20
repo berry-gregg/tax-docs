@@ -18,7 +18,7 @@ Do not mock internal modules, Zod schemas, Hono routes, or the MongoDB driver.
 | Time | Clock injection when the assertion depends on it |
 | Filesystem | Specific file reads, not the whole module |
 
-Persistence tests use the real driver via `connectDb()` (in-memory Mongo when `MONGODB_URI` is unset). Clean up documents you insert. Do not `vi.fn()` — if you must stub a seam, use `mock` from `bun:test`.
+Persistence tests use the real driver via `connectDb()`. Under `bun test` (NODE_ENV=test) the connection always uses an isolated in-memory Mongo — a configured `MONGODB_URI` is ignored so test wipes (`deleteMany({})`) can never touch the dev database (`shouldUseMemoryServer` in `src/server/db/client.ts`). Tests also never reach the network: `tests/preload.ts` (wired via `bunfig.toml`) replaces `globalThis.fetch` with a thrower, so an unstubbed fetch fails loudly instead of hitting a running dev server. Clean up documents you insert. Do not `vi.fn()` — if you must stub a seam, use `mock` from `bun:test`.
 
 ## What to test
 

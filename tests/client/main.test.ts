@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   closeOpenDialog,
+  createPaletteSearch,
   dialogOpen,
   handleShellKeydown,
   refreshBadgeState,
@@ -8,6 +9,7 @@ import {
   type ShellKeydownDeps,
 } from "../../src/client/main.ts";
 import { renderNewEngagementModal } from "../../src/client/app/pages/new-engagement.ts";
+import type { SearchResult } from "../../src/shared/schemas/search.ts";
 
 type Badge = {
   hidden: boolean;
@@ -281,6 +283,168 @@ describe("handleShellKeydown", () => {
     handleShellKeydown(new FakeKeyEvent("ArrowUp"), openShell.deps);
     handleShellKeydown(new FakeKeyEvent("Enter"), openShell.deps);
     expect(openShell.calls).toEqual(["move:1", "move:-1", "activate"]);
+  });
+});
+
+type ScheduledTimer = { fn: () => void; ms: number; cleared: boolean };
+
+class FakeTimer {
+  scheduled: ScheduledTimer[] = [];
+
+  set(fn: () => void, ms: number): unknown {
+    const entry: ScheduledTimer = { fn, ms, cleared: false };
+    this.scheduled.push(entry);
+    return entry;
+  }
+
+  clear(id: unknown): void {
+    (id as ScheduledTimer).cleared = true;
+  }
+
+  fireLast(): void {
+    const entry = this.scheduled.at(-1);
+    if (entry && !entry.cleared) {
+      // One-shot semantics: a fired timer is spent and no longer pending.
+      entry.cleared = true;
+      entry.fn();
+    }
+  }
+
+  get pending(): ScheduledTimer[] {
+    return this.scheduled.filter((entry) => !entry.cleared);
+  }
+}
+
+function clientResult(id: string): SearchResult {
+  return { id, group: "Clients", label: `Client ${id}`, href: `/clients/${id}` };
+}
+
+describe("createPaletteSearch", () => {
+  test("debounces keystrokes: only the final query fetches, once, after the delay", async () => {
+    const timer = new FakeTimer();
+    const fetched: string[] = [];
+    const painted: SearchResult[][] = [];
+
+    const search = createPaletteSearch({
+      fetchResults: (query) => {
+        fetched.push(query);
+        return Promise.resolve([clientResult(query)]);
+      },
+      onResults: (results) => painted.push(results),
+      debounceMs: 175,
+      timer,
+    });
+
+    search.setQuery("n");
+    search.setQuery("no");
+    search.setQuery("nor");
+
+    expect(fetched).toEqual([]);
+    expect(timer.pending).toHaveLength(1);
+    expect(timer.pending[0]?.ms).toBe(175);
+
+    timer.fireLast();
+    await Promise.resolve();
+
+    expect(fetched).toEqual(["nor"]);
+    expect(painted).toEqual([[clientResult("nor")]]);
+  });
+
+  test("an empty query clears results without fetching and discards the in-flight fetch", async () => {
+    const timer = new FakeTimer();
+    let resolveFetch: (results: SearchResult[]) => void = () => {};
+    const painted: SearchResult[][] = [];
+
+    const search = createPaletteSearch({
+      fetchResults: () =>
+        new Promise<SearchResult[]>((resolve) => {
+          resolveFetch = resolve;
+        }),
+      onResults: (results) => painted.push(results),
+      timer,
+    });
+
+    search.setQuery("northwind");
+    timer.fireLast();
+    search.setQuery("   ");
+
+    expect(painted).toEqual([[]]);
+    expect(timer.pending).toHaveLength(0);
+
+    resolveFetch([clientResult("stale")]);
+    await Promise.resolve();
+
+    expect(painted).toEqual([[]]);
+  });
+
+  test("a stale response never overwrites a newer one", async () => {
+    const timer = new FakeTimer();
+    const resolvers = new Map<string, (results: SearchResult[]) => void>();
+    const painted: SearchResult[][] = [];
+
+    const search = createPaletteSearch({
+      fetchResults: (query) =>
+        new Promise<SearchResult[]>((resolve) => {
+          resolvers.set(query, resolve);
+        }),
+      onResults: (results) => painted.push(results),
+      timer,
+    });
+
+    search.setQuery("alpha");
+    timer.fireLast();
+    search.setQuery("beta");
+    timer.fireLast();
+
+    resolvers.get("beta")?.([clientResult("beta")]);
+    await Promise.resolve();
+    resolvers.get("alpha")?.([clientResult("alpha")]);
+    await Promise.resolve();
+
+    expect(painted).toEqual([[clientResult("beta")]]);
+  });
+
+  test("a failed fetch logs the cause and leaves the current results alone", async () => {
+    const timer = new FakeTimer();
+    const logged: string[] = [];
+    const painted: SearchResult[][] = [];
+
+    const search = createPaletteSearch({
+      fetchResults: () => Promise.reject(new Error("db unreachable")),
+      onResults: (results) => painted.push(results),
+      logError: (message) => logged.push(message),
+      timer,
+    });
+
+    search.setQuery("northwind");
+    timer.fireLast();
+    await Promise.resolve();
+
+    expect(painted).toEqual([]);
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toContain("db unreachable");
+  });
+
+  test("reset cancels the pending fetch and empties the results", () => {
+    const timer = new FakeTimer();
+    const fetched: string[] = [];
+    const painted: SearchResult[][] = [];
+
+    const search = createPaletteSearch({
+      fetchResults: (query) => {
+        fetched.push(query);
+        return Promise.resolve([]);
+      },
+      onResults: (results) => painted.push(results),
+      timer,
+    });
+
+    search.setQuery("northwind");
+    search.reset();
+    timer.fireLast();
+
+    expect(fetched).toEqual([]);
+    expect(painted).toEqual([[]]);
   });
 });
 

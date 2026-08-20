@@ -16,6 +16,10 @@ import {
   validationCheckSchema,
   type ValidationCheck,
 } from "../../../shared/schemas/validation.ts";
+import {
+  documentTypesResponseSchema,
+  type ReclassifyDocumentInput,
+} from "../../../shared/schemas/api.ts";
 import { getJson, sendJson } from "../api.ts";
 import { bindSchemaBuilder, renderSchemaBuilder } from "../components/schema-builder.ts";
 import { formatMoney } from "../format.ts";
@@ -34,6 +38,8 @@ export type ReviewData = {
   engagementId: string;
   document: TaxDocument;
   documentType: DocumentType | null;
+  /** Active types only — the reclassify options a reviewer can move the document to. */
+  documentTypes: DocumentType[];
   validations: ValidationCheck[];
 };
 
@@ -261,6 +267,35 @@ function renderProcessingVariant(): string {
   </div>`;
 }
 
+/**
+ * The reviewer's type override: a select of active types plus a gated Apply, offered only while
+ * the document is sitting with a reviewer. Applying re-runs extraction against the chosen type's
+ * schema, so the hint says up front that the current extracted fields are cleared — no dialogs.
+ */
+function renderReclassifyRow(data: ReviewData): string {
+  const status = data.document.pipelineStatus;
+  if (status !== "needs-review" && status !== "unclassified") {
+    return "";
+  }
+
+  const currentTypeId = data.documentType?.id ?? "";
+  const placeholder =
+    currentTypeId === "" ? '<option value="" disabled selected>Unclassified</option>' : "";
+  const options = data.documentTypes
+    .map(
+      (type) =>
+        `<option value="${escapeHtml(type.id)}"${type.id === currentTypeId ? " selected" : ""}>${escapeHtml(type.name)}</option>`,
+    )
+    .join("");
+
+  return `<div class="review-reclassify">
+      <label class="review-reclassify-label" for="reclassify-select">Document type</label>
+      <select class="review-field-input review-reclassify-select" id="reclassify-select" data-reclassify-select>${placeholder}${options}</select>
+      <button class="btn-secondary" type="button" data-reclassify-apply disabled>Apply</button>
+    </div>
+    <p class="muted review-reclassify-hint">Applying a different type re-runs extraction and clears the extracted fields.</p>`;
+}
+
 function renderPanelHead(data: ReviewData, typeName: string): string {
   const classification = data.document.classification;
 
@@ -271,6 +306,7 @@ function renderPanelHead(data: ReviewData, typeName: string): string {
       ${classification ? confidenceChip(classification.confidence) : ""}
     </div>
     <p class="muted">${escapeHtml(classification?.reasoning ?? "Classification has not run for this document yet.")}</p>
+    ${renderReclassifyRow(data)}
     <p class="load-error-message" data-review-error hidden></p>
   </header>`;
 }
@@ -485,6 +521,49 @@ function bindRerun(root: HTMLElement, data: ReviewData, repaint: () => void): vo
 }
 
 /**
+ * Apply stays disabled until the selection differs from the current type, then POSTs the
+ * override. On success the repaint shows the processing variant and the page's own polling
+ * carries the document to its re-extracted state; on failure the server's message lands inline.
+ */
+function bindReclassify(root: HTMLElement, data: ReviewData, repaint: () => void): void {
+  const select = root.querySelector<HTMLSelectElement>("[data-reclassify-select]");
+  const apply = root.querySelector<HTMLButtonElement>("[data-reclassify-apply]");
+  if (!select || !apply) {
+    return;
+  }
+
+  const currentTypeId = data.documentType?.id ?? "";
+  const selectionChanged = () => select.value !== "" && select.value !== currentTypeId;
+
+  select.addEventListener("change", () => {
+    apply.disabled = !selectionChanged();
+  });
+
+  apply.addEventListener("click", () => {
+    if (!selectionChanged()) {
+      return;
+    }
+
+    const input: ReclassifyDocumentInput = { documentTypeId: select.value };
+    apply.disabled = true;
+    void sendJson(
+      "POST",
+      `/api/documents/${encodeURIComponent(data.document.id)}/reclassify`,
+      input,
+      documentResponseSchema,
+    ).then(
+      () => {
+        repaint();
+      },
+      (error: unknown) => {
+        apply.disabled = false;
+        showError(root, messageFor(error));
+      },
+    );
+  });
+}
+
+/**
  * The fail-soft loop: the model drafts a schema, a person edits and saves it, and the originating
  * document re-runs against the type they just created. Polling picks the document up from there.
  */
@@ -567,10 +646,13 @@ export const reviewPage: PageModule<ReviewData> = {
   async load(route) {
     assertReviewRoute(route);
 
-    const detail = await getJson(
-      `/api/documents/${encodeURIComponent(route.documentId)}`,
-      documentDetailResponseSchema,
-    );
+    const [detail, types] = await Promise.all([
+      getJson(
+        `/api/documents/${encodeURIComponent(route.documentId)}`,
+        documentDetailResponseSchema,
+      ),
+      getJson("/api/document-types", documentTypesResponseSchema),
+    ]);
     // The engagement is derived from the document, so its validations load second.
     const validations = await getJson(
       `/api/engagements/${encodeURIComponent(detail.document.engagementId)}/validations`,
@@ -581,6 +663,7 @@ export const reviewPage: PageModule<ReviewData> = {
       engagementId: detail.document.engagementId,
       document: detail.document,
       documentType: detail.documentType ?? null,
+      documentTypes: types.documentTypes.filter((type) => type.active),
       validations: validations.checks,
     };
   },
@@ -590,6 +673,7 @@ export const reviewPage: PageModule<ReviewData> = {
     bindSourceToggles(root);
     bindTrust(root, data, repaint);
     bindRerun(root, data, repaint);
+    bindReclassify(root, data, repaint);
     bindDefineDocumentType(root, data, repaint);
   },
   pollMs: POLL_INTERVAL_MS,

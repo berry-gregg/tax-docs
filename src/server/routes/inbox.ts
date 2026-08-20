@@ -9,6 +9,7 @@ import {
   inboxMessageResponseSchema,
   inboxThreadSchema,
   inboxThreadsResponseSchema,
+  type InboxDocument,
   type InboxThread,
   type InboxTimelineEntry,
 } from "../../shared/schemas/inbox.ts";
@@ -41,8 +42,14 @@ function isUnread(entry: { readAt?: string }): boolean {
   return entry.readAt === undefined;
 }
 
-/** Lookup slices for grounding event lines: document filenames and request-item titles. */
-const eventDocumentSchema = taxDocumentSchema.pick({ id: true, filename: true });
+/** Lookup slices for grounding event lines and the files panel; request-item titles. */
+const threadDocumentSchema = taxDocumentSchema.pick({
+  id: true,
+  engagementId: true,
+  filename: true,
+  pipelineStatus: true,
+  createdAt: true,
+});
 const eventRequestItemSchema = requestItemSchema.pick({ id: true, title: true });
 
 /**
@@ -160,7 +167,11 @@ inboxRoutes.get("/", async (c) => {
       .find({ _id: { $in: engagementIds } })
       .toArray(),
     taxDocumentsCollection(db)
-      .find({ engagementId: { $in: engagementIds } }, { projection: { _id: 1, filename: 1 } })
+      .find(
+        { engagementId: { $in: engagementIds } },
+        { projection: { _id: 1, engagementId: 1, filename: 1, pipelineStatus: 1, createdAt: 1 } },
+      )
+      .sort({ createdAt: -1, _id: -1 })
       .toArray(),
     requestItemsCollection(db)
       .find({ engagementId: { $in: engagementIds } }, { projection: { _id: 1, title: 1 } })
@@ -186,12 +197,25 @@ inboxRoutes.get("/", async (c) => {
       return [client.id, client] as const;
     }),
   );
-  const filenames = new Map(
-    documentDocs.map((doc) => {
-      const document = fromStored(eventDocumentSchema, doc);
-      return [document.id, document.filename] as const;
-    }),
-  );
+  const filenames = new Map<string, string>();
+  /** Newest first per engagement — the find is already sorted `createdAt` descending. */
+  const documentsByEngagement = new Map<string, InboxDocument[]>();
+  for (const doc of documentDocs) {
+    const document = fromStored(threadDocumentSchema, doc);
+    filenames.set(document.id, document.filename);
+    const row: InboxDocument = {
+      id: document.id,
+      filename: document.filename,
+      pipelineStatus: document.pipelineStatus,
+      createdAt: document.createdAt,
+    };
+    const group = documentsByEngagement.get(document.engagementId);
+    if (group) {
+      group.push(row);
+    } else {
+      documentsByEngagement.set(document.engagementId, [row]);
+    }
+  }
   const itemTitles = new Map(
     requestItemDocs.map((doc) => {
       const item = fromStored(eventRequestItemSchema, doc);
@@ -222,6 +246,7 @@ inboxRoutes.get("/", async (c) => {
         unread: unreadCount > 0,
         unreadCount,
         timeline: toTimeline(messages, activities, filenames, itemTitles),
+        documents: documentsByEngagement.get(engagementId) ?? [],
       }),
     );
   }

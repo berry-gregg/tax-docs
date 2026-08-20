@@ -398,6 +398,34 @@ describe("inbox routes", () => {
     expect(quiet.timeline.map((entry) => entry.kind)).toEqual(["event", "message"]);
   });
 
+  test("threads carry the engagement's documents newest first, empty when none", async () => {
+    await seedThreads();
+    const app = createApp();
+
+    const response = await app.request("/api/inbox");
+    const { threads } = inboxThreadsResponseSchema.parse(await response.json());
+
+    const main = threads.find((thread) => thread.engagementId === engagement.id);
+    expect(main?.documents).toEqual([
+      {
+        id: "doc-w2-new",
+        filename: "w2-final.pdf",
+        pipelineStatus: "needs-review",
+        createdAt: "2026-03-03T01:00:00.000Z",
+      },
+      {
+        id: "doc-w2-old",
+        filename: "w2-draft.pdf",
+        pipelineStatus: "trusted",
+        createdAt: "2026-03-01T02:00:00.000Z",
+      },
+    ]);
+
+    // An engagement with no uploads still threads — with an honest empty documents list.
+    const quiet = threads.find((thread) => thread.engagementId === quietEngagement.id);
+    expect(quiet?.documents).toEqual([]);
+  });
+
   test("unread count is the number of threads with unread inbound items only", async () => {
     await seedThreads();
     const app = createApp();

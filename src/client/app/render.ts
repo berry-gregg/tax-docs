@@ -1,11 +1,5 @@
 import { brandMarkSrc } from "./brand.ts";
-import {
-  emptyPaletteIndex,
-  flattenPalette,
-  searchPalette,
-  type PaletteGroup,
-  type PaletteIndex,
-} from "./command-palette.ts";
+import { flattenPalette, searchPalette, type PaletteGroup } from "./command-palette.ts";
 import { formatConfidence } from "./format.ts";
 import { icons, paletteIcons } from "./icons.ts";
 import { navIdForRoute, navItems, type NavBadge, type NavItem } from "./nav.ts";
@@ -22,7 +16,6 @@ export type RenderInput = {
   inboxUnreadCount?: number;
   /** `needsReviewCount` from `/api/metrics` — the same count the documents Needs review tab shows. */
   documentsNeedsReviewCount?: number;
-  paletteIndex?: PaletteIndex;
 };
 
 type NavBadgeCounts = Record<NavBadge, number>;
@@ -42,7 +35,7 @@ export function renderApp(input: RenderInput): string {
     <div class="workspace">
       ${input.body}
     </div>
-    ${renderCommandPalette(input.paletteIndex ?? emptyPaletteIndex)}
+    ${renderCommandPalette()}
   </div>`;
 }
 
@@ -442,7 +435,8 @@ export function initialsFor(name: string): string {
   return `${first[0] ?? ""}${second?.[0] ?? ""}`.toUpperCase() || "—";
 }
 
-function renderCommandPalette(index: PaletteIndex): string {
+/** Initial palette markup renders the empty-query state: Actions and Pages, no entity rows yet. */
+function renderCommandPalette(): string {
   return `<div class="palette" hidden data-command-palette>
     <div class="palette-panel" role="dialog" aria-modal="true" aria-label="Search Tax Docs">
       <div class="palette-header">
@@ -461,7 +455,7 @@ function renderCommandPalette(index: PaletteIndex): string {
           <span class="palette-search-icon">${icons.searchLg}</span>
         </label>
       </div>
-      ${renderPaletteResults(searchPalette("", index), 0)}
+      ${renderPaletteResults(searchPalette(""), 0)}
     </div>
   </div>`;
 }

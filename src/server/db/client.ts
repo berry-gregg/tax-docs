@@ -7,8 +7,17 @@ let client: MongoClient | null = null;
 let db: Db | null = null;
 let memoryServer: MongoMemoryServer | null = null;
 
+/**
+ * Tests always isolate: `bun test` sets NODE_ENV=test, and test setup wipes collections with
+ * deleteMany({}) — pointing that at a configured MONGODB_URI would destroy the dev database
+ * (and race a running dev server). Everything else honors the configured URI.
+ */
+export function shouldUseMemoryServer(nodeEnv: string, mongodbUri: string | undefined): boolean {
+  return nodeEnv === "test" || !mongodbUri;
+}
+
 async function resolveMongoUri(): Promise<string> {
-  if (config.mongodbUri) {
+  if (!shouldUseMemoryServer(config.nodeEnv, config.mongodbUri) && config.mongodbUri) {
     return config.mongodbUri;
   }
 

@@ -6,6 +6,7 @@ import { activitySchema, type Activity } from "../../shared/schemas/activity.ts"
 import {
   documentListResponseSchema,
   documentListRowSchema,
+  reclassifyDocumentInputSchema,
 } from "../../shared/schemas/api.ts";
 import { clientSchema } from "../../shared/schemas/client.ts";
 import {
@@ -64,6 +65,9 @@ const fieldActionSchema = z.object({
 type PipelineStatus = TaxDocument["pipelineStatus"];
 
 const RERUN_STATUSES = new Set<PipelineStatus>(["failed", "unclassified", "rejected"]);
+
+/** Reclassify is a review-time correction: only documents sitting with a reviewer qualify. */
+const RECLASSIFY_STATUSES = new Set<PipelineStatus>(["needs-review", "unclassified"]);
 
 function isPdfFile(file: File): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
@@ -446,6 +450,47 @@ export function createDocumentRoutes(runner: PipelineRunner, ai: OpenRouterClien
     });
     await replaceDocument(updated);
     runner.start(updated.id);
+    return c.json({ document: updated });
+  });
+
+  /**
+   * The reviewer's type override. The route validates and flips the document to `extracting`
+   * so the response (and the page's next poll) reads as in-flight, then the runner picks up the
+   * extract-only continuation — never a full pipeline re-run, so the AI cannot override the
+   * human's type choice with its own re-classification.
+   */
+  documentRoutes.post("/:id/reclassify", async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = reclassifyDocumentInputSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: zodIssueSummary(parsed.error) }, 400);
+    }
+
+    const document = await findDocument(c.req.param("id"));
+    if (!document) {
+      return c.json({ error: "Not found" }, 404);
+    }
+    if (!RECLASSIFY_STATUSES.has(document.pipelineStatus)) {
+      return c.json({ error: "Document cannot be reclassified from its current status" }, 409);
+    }
+
+    const db = await connectDb();
+    const typeDoc = await documentTypesCollection(db).findOne({ _id: parsed.data.documentTypeId });
+    const documentType = typeDoc ? fromStored(documentTypeSchema, typeDoc) : null;
+    if (!documentType) {
+      return c.json({ error: `Document type ${parsed.data.documentTypeId} does not exist` }, 400);
+    }
+    if (!documentType.active) {
+      return c.json({ error: `Document type ${documentType.name} is not active` }, 400);
+    }
+
+    const updated = taxDocumentSchema.parse({
+      ...document,
+      pipelineStatus: "extracting",
+      updatedAt: new Date().toISOString(),
+    });
+    await replaceDocument(updated);
+    runner.startReclassify(updated.id, documentType.id);
     return c.json({ document: updated });
   });
 
