@@ -1,0 +1,271 @@
+import { randomUUID } from "node:crypto";
+import type { Db } from "mongodb";
+import { CLASSIFY_CONFIDENCE_THRESHOLD } from "../../shared/constants.ts";
+import { activitySchema, type Activity } from "../../shared/schemas/activity.ts";
+import { taxDocumentSchema, type TaxDocument } from "../../shared/schemas/document.ts";
+import { documentTypeSchema, type DocumentType } from "../../shared/schemas/document-type.ts";
+import { engagementSchema } from "../../shared/schemas/engagement.ts";
+import { requestItemSchema, type RequestItem } from "../../shared/schemas/request.ts";
+import type { OpenRouterClient } from "../ai/openrouter.ts";
+import { connectDb } from "../db/client.ts";
+import {
+  activitiesCollection,
+  documentTypesCollection,
+  engagementsCollection,
+  fromStored,
+  requestItemsCollection,
+  taxDocumentsCollection,
+  toStored,
+} from "../db/collections.ts";
+import { readStoredFile } from "../files/storage.ts";
+import { finalizeFields } from "./postprocess.ts";
+import {
+  runClassifyStage,
+  runExtractStage,
+  runQualityStage,
+  type ClassifyResult,
+  type QualityResult,
+} from "./stages.ts";
+
+export type PipelineDeps = { ai: OpenRouterClient };
+
+type StageDocument = { filename: string; bytes: Uint8Array };
+
+const UNSTATED_REJECTION_REASON = "The quality stage rejected the document without stating a reason";
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function loadDocument(db: Db, documentId: string): Promise<TaxDocument | null> {
+  const stored = await taxDocumentsCollection(db).findOne({ _id: documentId });
+  return stored ? fromStored(taxDocumentSchema, stored) : null;
+}
+
+/** Every state transition round-trips the whole document through the schema before it persists. */
+async function patchDocument(
+  db: Db,
+  document: TaxDocument,
+  patch: Partial<TaxDocument>,
+): Promise<TaxDocument> {
+  const next = taxDocumentSchema.parse({
+    ...document,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
+  await taxDocumentsCollection(db).replaceOne({ _id: next.id }, toStored(next));
+  return next;
+}
+
+async function writeActivity(
+  db: Db,
+  entry: Pick<Activity, "engagementId" | "action" | "detail" | "direction">,
+): Promise<void> {
+  const activity = activitySchema.parse({
+    id: randomUUID(),
+    actor: "agent",
+    createdAt: new Date().toISOString(),
+    ...entry,
+  });
+  await activitiesCollection(db).insertOne(toStored(activity));
+}
+
+async function activeDocumentTypes(db: Db): Promise<DocumentType[]> {
+  const docs = await documentTypesCollection(db).find({ active: true }).toArray();
+  return docs.map((doc) => fromStored(documentTypeSchema, doc));
+}
+
+async function setRequestItemStatus(
+  db: Db,
+  itemId: string,
+  status: RequestItem["status"],
+  documentId?: string,
+): Promise<RequestItem | null> {
+  const stored = await requestItemsCollection(db).findOne({ _id: itemId });
+  if (!stored) return null;
+
+  const existing = fromStored(requestItemSchema, stored);
+  const matchedDocumentIds =
+    documentId && !existing.matchedDocumentIds.includes(documentId)
+      ? [...existing.matchedDocumentIds, documentId]
+      : existing.matchedDocumentIds;
+  const next = requestItemSchema.parse({ ...existing, status, matchedDocumentIds });
+  await requestItemsCollection(db).replaceOne({ _id: itemId }, toStored(next));
+  return next;
+}
+
+/**
+ * Request items carry no timestamp, so the collection's natural (insertion) order is the
+ * oldest-first proxy the checklist was built in.
+ */
+async function findOldestOpenItem(
+  db: Db,
+  engagementId: string,
+  documentTypeId: string,
+): Promise<RequestItem | null> {
+  const stored = await requestItemsCollection(db).findOne({
+    engagementId,
+    documentTypeId,
+    status: "open",
+  });
+  return stored ? fromStored(requestItemSchema, stored) : null;
+}
+
+async function promoteEngagementToReview(db: Db, engagementId: string): Promise<void> {
+  const stored = await engagementsCollection(db).findOne({ _id: engagementId });
+  if (!stored) return;
+
+  const engagement = fromStored(engagementSchema, stored);
+  if (engagement.status !== "collecting") return;
+
+  const next = engagementSchema.parse({
+    ...engagement,
+    status: "in-review",
+    updatedAt: new Date().toISOString(),
+  });
+  await engagementsCollection(db).replaceOne({ _id: engagementId }, toStored(next));
+}
+
+async function rejectDocument(
+  db: Db,
+  document: TaxDocument,
+  quality: QualityResult,
+): Promise<void> {
+  const reason = quality.reason.trim() || UNSTATED_REJECTION_REASON;
+  const rejected = await patchDocument(db, document, {
+    pipelineStatus: "rejected",
+    rejection: { kind: quality.relevant ? "unreadable" : "irrelevant", reason },
+  });
+
+  if (rejected.requestItemId) {
+    await setRequestItemStatus(db, rejected.requestItemId, "needs-attention");
+  }
+
+  await writeActivity(db, {
+    engagementId: rejected.engagementId,
+    action: "document-rejected",
+    detail: `${rejected.filename} — ${reason}`,
+    direction: "inbound",
+  });
+}
+
+async function markUnclassified(
+  db: Db,
+  document: TaxDocument,
+  classification: ClassifyResult,
+): Promise<void> {
+  const unclassified = await patchDocument(db, document, {
+    classification,
+    pipelineStatus: "unclassified",
+  });
+  await writeActivity(db, {
+    engagementId: unclassified.engagementId,
+    action: "document-unclassified",
+    // The model's reasoning is untrusted prose and stays on the document, out of the feed.
+    detail: `${unclassified.filename} — no confident document type match (confidence ${classification.confidence.toFixed(2)})`,
+    direction: "inbound",
+  });
+}
+
+/** Links the document to a checklist item — the one it was uploaded against, or the oldest open match. */
+async function linkChecklistItem(
+  db: Db,
+  document: TaxDocument,
+  documentTypeId: string,
+): Promise<TaxDocument> {
+  const itemId =
+    document.requestItemId ??
+    (await findOldestOpenItem(db, document.engagementId, documentTypeId))?.id;
+  if (!itemId) return document;
+
+  const item = await setRequestItemStatus(db, itemId, "received", document.id);
+  if (!item) return document;
+
+  const linked = document.requestItemId
+    ? document
+    : await patchDocument(db, document, { requestItemId: itemId });
+  await writeActivity(db, {
+    engagementId: linked.engagementId,
+    action: "checklist-item-matched",
+    detail: `${item.title} — ${linked.filename}`,
+    direction: "internal",
+  });
+  return linked;
+}
+
+async function extractDocument(
+  db: Db,
+  document: TaxDocument,
+  stageDocument: StageDocument,
+  documentType: DocumentType,
+  deps: PipelineDeps,
+): Promise<void> {
+  const extracting = await patchDocument(db, document, { pipelineStatus: "extracting" });
+  const raw = await runExtractStage(deps.ai, stageDocument, documentType);
+  const fields = finalizeFields(raw, documentType);
+  const reviewed = await patchDocument(db, extracting, {
+    extraction: { fields },
+    pipelineStatus: "needs-review",
+  });
+
+  const notFound = fields.filter((field) => field.notFound).length;
+  await writeActivity(db, {
+    engagementId: reviewed.engagementId,
+    action: "document-extracted",
+    detail: `${reviewed.filename} — ${fields.length} fields extracted, ${notFound} not found`,
+    direction: "inbound",
+  });
+  await promoteEngagementToReview(db, reviewed.engagementId);
+}
+
+async function runStages(db: Db, received: TaxDocument, deps: PipelineDeps): Promise<void> {
+  const bytes = await readStoredFile(received.storagePath);
+  const stageDocument: StageDocument = { filename: received.filename, bytes };
+
+  const inQualityReview = await patchDocument(db, received, { pipelineStatus: "quality-review" });
+  const quality = await runQualityStage(deps.ai, stageDocument);
+  if (!quality.relevant || !quality.legible) {
+    await rejectDocument(db, inQualityReview, quality);
+    return;
+  }
+
+  const classifying = await patchDocument(db, inQualityReview, { pipelineStatus: "classifying" });
+  const candidates = await activeDocumentTypes(db);
+  const classification = await runClassifyStage(deps.ai, stageDocument, candidates);
+  // An id the model invented is a miss, not a system fault — it belongs in the unclassified lane.
+  const documentType = candidates.find((type) => type.id === classification.documentTypeId);
+  if (!documentType || classification.confidence < CLASSIFY_CONFIDENCE_THRESHOLD) {
+    await markUnclassified(db, classifying, classification);
+    return;
+  }
+
+  const classified = await patchDocument(db, classifying, { classification });
+  const linked = await linkChecklistItem(db, classified, documentType.id);
+  await extractDocument(db, linked, stageDocument, documentType, deps);
+}
+
+export async function runPipeline(documentId: string, deps: PipelineDeps): Promise<void> {
+  const db = await connectDb();
+  const document = await loadDocument(db, documentId);
+  if (!document) {
+    throw new Error(`Pipeline cannot run: document ${documentId} was not found`);
+  }
+
+  try {
+    await runStages(db, document, deps);
+  } catch (error) {
+    const message = messageOf(error);
+    // Re-read so the failure lands on top of whatever the stages already persisted.
+    const latest = (await loadDocument(db, documentId)) ?? document;
+    const failed = await patchDocument(db, latest, {
+      pipelineStatus: "failed",
+      failure: { message },
+    });
+    await writeActivity(db, {
+      engagementId: failed.engagementId,
+      action: "document-failed",
+      detail: `${failed.filename} — ${message}`,
+      direction: "internal",
+    });
+  }
+}

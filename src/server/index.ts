@@ -1,8 +1,10 @@
+import { createOpenRouterClient } from "./ai/openrouter.ts";
 import { createApp } from "./app.ts";
 import { config } from "./config.ts";
 import { connectDb } from "./db/client.ts";
+import { createRunner } from "./pipeline/runner.ts";
 
-const app = createApp();
+const app = createApp({ runner: createRunner({ ai: createOpenRouterClient() }) });
 
 await connectDb();
 
