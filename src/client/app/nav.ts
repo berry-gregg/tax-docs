@@ -38,11 +38,11 @@ export const navItems: NavItem[] = [
   {
     id: "documents",
     label: "Documents",
-    href: "/documents",
+    href: "/documents?tab=needs-review",
     icon: "documents",
     section: "main",
     children: [
-      { id: "documents-all", label: "All", href: "/documents" },
+      { id: "documents-all", label: "All", href: "/documents?tab=all" },
       { id: "documents-needs-review", label: "Needs review", href: "/documents?tab=needs-review" },
     ],
   },

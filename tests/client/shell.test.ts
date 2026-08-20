@@ -29,8 +29,9 @@ describe("nav tree", () => {
   test("documents nests All and the needs-review lens", () => {
     const documents = navItems.find((item) => item.id === "documents");
 
+    expect(documents?.href).toBe("/documents?tab=needs-review");
     expect(documents?.children).toEqual([
-      { id: "documents-all", label: "All", href: "/documents" },
+      { id: "documents-all", label: "All", href: "/documents?tab=all" },
       { id: "documents-needs-review", label: "Needs review", href: "/documents?tab=needs-review" },
     ]);
   });
@@ -66,7 +67,11 @@ describe("app shell chrome", () => {
   });
 
   test("documents expands its children and marks the lens matching the query string", () => {
-    const all = renderApp({ pathname: "/documents", body: "" });
+    const all = renderApp({
+      pathname: "/documents",
+      search: "?tab=all",
+      body: "",
+    });
     const needsReview = renderApp({
       pathname: "/documents",
       search: "?tab=needs-review",
@@ -79,6 +84,13 @@ describe("app shell chrome", () => {
       'data-nav-child="documents-needs-review" class="nav-child is-current"',
     );
     expect(needsReview).not.toContain('data-nav-child="documents-all" class="nav-child is-current"');
+  });
+
+  test("bare /documents does not punch out All", () => {
+    const html = renderApp({ pathname: "/documents", body: "" });
+
+    expect(html).toContain('data-nav-group="documents" class="nav-group is-active"');
+    expect(html).not.toContain('data-nav-child="documents-all" class="nav-child is-current"');
   });
 
   test("an unmatched documents ?tab= lens does not punch out All", () => {
