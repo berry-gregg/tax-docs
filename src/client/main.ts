@@ -35,6 +35,42 @@ function applyInboxBadgeCount(badge: InboxBadgeElement, count: number): void {
   badge.hidden = count === 0;
 }
 
+export type WorkspaceNode<T = unknown> = {
+  className: string;
+  innerHTML: string;
+  localName: string;
+  ownerDocument: {
+    createElement(tagName: string): T;
+  };
+  replaceWith(node: T): void;
+};
+
+export type ReplaceWorkspaceBodyResult<T> = {
+  changed: boolean;
+  workspace: T | null;
+};
+
+/**
+ * Poll ticks rewrite page HTML. Mutating `innerHTML` on the surviving `.workspace` node
+ * leaves delegated click listeners in place, so one Waive/Add-item click fires once per
+ * tick. Swap in a fresh node with the same class so old handlers die with the old element.
+ */
+export function replaceWorkspaceBody<T extends WorkspaceNode<T>>(
+  workspace: T | null,
+  previousBody: string,
+  nextBody: string,
+): ReplaceWorkspaceBodyResult<T> {
+  if (!workspace || nextBody === previousBody) {
+    return { changed: false, workspace };
+  }
+
+  const next = workspace.ownerDocument.createElement(workspace.localName);
+  next.className = workspace.className;
+  next.innerHTML = nextBody;
+  workspace.replaceWith(next);
+  return { changed: true, workspace: next };
+}
+
 export async function refreshInboxBadgeState({
   fetchUnreadCount,
   queryBadge,
@@ -93,14 +129,14 @@ function renderShell(body: string): void {
 }
 
 function replaceBody(body: string): boolean {
-  const workspace = root?.querySelector(".workspace");
-  if (!workspace || body === renderedBody) {
+  const workspace = root?.querySelector<HTMLElement>(".workspace") ?? null;
+  const result = replaceWorkspaceBody(workspace, renderedBody, body);
+  if (!result.changed || !result.workspace) {
     return false;
   }
 
   renderedBody = body;
-  workspace.innerHTML = body;
-  bindNavLinks(workspace);
+  bindNavLinks(result.workspace);
   return true;
 }
 
