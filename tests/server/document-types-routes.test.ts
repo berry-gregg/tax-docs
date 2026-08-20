@@ -124,6 +124,16 @@ describe("request-templates routes", () => {
     await disconnectDb();
   });
 
+  test("GET returns 400 for invalid filingType query", async () => {
+    await connectDb();
+    const app = createApp();
+
+    const response = await app.request("/api/request-templates?filingType=1120s");
+    expect(response.status).toBe(400);
+
+    await disconnectDb();
+  });
+
   test("PATCH replaces items on a template", async () => {
     await connectDb();
     const db = await connectDb();

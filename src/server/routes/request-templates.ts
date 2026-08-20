@@ -17,10 +17,17 @@ export const requestTemplateRoutes = new Hono();
 
 requestTemplateRoutes.get("/", async (c) => {
   const filingTypeParam = c.req.query("filingType");
-  const parsedFilingType = filingTypeSchema.safeParse(filingTypeParam);
+
+  let filter: { filingType?: "1120-S" | "1065" } = {};
+  if (filingTypeParam !== undefined) {
+    const parsedFilingType = filingTypeSchema.safeParse(filingTypeParam);
+    if (!parsedFilingType.success) {
+      return c.json({ error: "Invalid query parameter" }, 400);
+    }
+    filter = { filingType: parsedFilingType.data };
+  }
 
   const db = await connectDb();
-  const filter = parsedFilingType.success ? { filingType: parsedFilingType.data } : {};
   const docs = await requestTemplatesCollection(db).find(filter).toArray();
 
   const templates = docs.map((doc) => fromStored(requestTemplateSchema, doc));
