@@ -1121,3 +1121,54 @@
   font-size: var(--text-ui);
   line-height: var(--leading-ui);
 }
+
+/* Form fields — modal create flows (clients, engagements). */
+.form-grid {
+  display: grid;
+  gap: var(--spacing-16);
+}
+
+.form-field {
+  display: grid;
+  gap: var(--spacing-8);
+}
+
+.form-label {
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 0 var(--spacing-12);
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.form-hint {
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.modal-error {
+  margin: 0;
+  color: var(--color-warning);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.data-table tr[data-href] {
+  cursor: pointer;
+}
+
+.data-table tr[data-href]:hover {
+  background: var(--surface-wash);
+}
