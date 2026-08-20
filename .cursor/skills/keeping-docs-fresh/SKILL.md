@@ -16,7 +16,6 @@ Stale agent instructions actively mislead. Update them in the same change. "Docs
 | `.cursor/rules/*.mdc` | New patterns, invariants, anti-patterns |
 | `.cursor/skills/*/SKILL.md` | New or changed workflows |
 | `design-system/docs/DESIGN.md` | Token, type, or component language changes |
-| `docs/**` | Architecture notes, ADRs, runbooks |
 | `.env.example` | New env vars or changed defaults |
 | `README.md` | Dev commands, project shape |
 

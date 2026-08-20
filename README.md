@@ -318,6 +318,5 @@ Tests run on `bun:test` and mock only at system boundaries. Persistence tests us
 | [design-system/docs/DESIGN.md](./design-system/docs/DESIGN.md) | Tokens, typography, components, product chrome |
 | [demo-docs/README.md](./demo-docs/README.md) | Document pack: inventory, planted discrepancy, sources |
 | [.cursor/rules/](./.cursor/rules) | Area contracts: server, data store, security, testing, UI |
-| [docs/](./docs) | Product spec and implementation plan |
 
 Private prototype. Every client, EIN, address, and figure in this repository is fictional.
