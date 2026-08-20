@@ -80,12 +80,12 @@ function renderEngagementRow(row: EngagementListRow): string {
   const needsReview =
     row.docCounts.needsReview === 1 ? "1 needs review" : `${row.docCounts.needsReview} need review`;
 
-  return `<tr>
-    <td><a href="/engagements/${encodeURIComponent(row.id)}" data-nav-link>${entityCell(
+  return `<tr data-href="/engagements/${escapeHtml(row.id)}" tabindex="0">
+    <td>${entityCell(
       initialsFor(row.clientName),
       row.clientName,
       row.clientId,
-    )}</a></td>
+    )}</td>
     <td>${escapeHtml(row.filingType)}</td>
     <td>${row.taxYear}</td>
     <td>${stageChip(row.status)}</td>
@@ -96,6 +96,27 @@ function renderEngagementRow(row: EngagementListRow): string {
 
 function stageChip(status: EngagementListRow["status"]): string {
   return `<span class="chip chip-${stageTones[status]}">${escapeHtml(stageLabels[status])}</span>`;
+}
+
+function bindTableRows(root: HTMLElement, repaint: () => void): void {
+  root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
+    row.addEventListener("click", () => {
+      const href = row.getAttribute("data-href");
+      if (!href) {
+        return;
+      }
+
+      window.history.pushState({}, "", href);
+      repaint();
+    });
+
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        row.click();
+      }
+    });
+  });
 }
 
 function modalRequested(): { show: boolean; clientId?: string; filingType?: "1120-S" | "1065" } {
@@ -128,6 +149,7 @@ export const engagementsPage: PageModule<EngagementsData> = {
   },
   render: renderEngagements,
   bind(root, data, repaint) {
+    bindTableRows(root, repaint);
     if (!data.newEngagement) return;
 
     let modalState = data.newEngagement;

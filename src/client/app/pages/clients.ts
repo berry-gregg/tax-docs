@@ -5,10 +5,10 @@ import {
 import {
   clientSchema,
   createClientInputSchema,
-  entityTypeSchema,
   type Client,
 } from "../../../shared/schemas/client.ts";
 import { ApiError, getJson, sendJson } from "../api.ts";
+import { entityTypeLabels, newClientFields } from "../components/new-client-fields.ts";
 import {
   dataTable,
   entityCell,
@@ -20,13 +20,6 @@ import {
 import type { PageModule } from "./registry.ts";
 
 const createClientResponseSchema = z.object({ client: clientSchema });
-
-const entityTypeLabels: Record<z.infer<typeof entityTypeSchema>, string> = {
-  "s-corp": "S corporation",
-  partnership: "Partnership",
-  "c-corp": "C corporation",
-  llc: "LLC",
-};
 
 export type ClientsData = {
   clients: Client[];
@@ -44,42 +37,7 @@ function renderNewClientModal(open: boolean, error: string | null): string {
       <h2 class="modal-title" id="new-client-title">New client</h2>
       <form class="form-grid" data-new-client-form>
         ${error ? `<p class="modal-error" data-new-client-error>${escapeHtml(error)}</p>` : `<p class="modal-error" data-new-client-error hidden></p>`}
-        <label class="form-field">
-          <span class="form-label">Legal name</span>
-          <input type="text" name="legalName" required autocomplete="organization" />
-        </label>
-        <label class="form-field">
-          <span class="form-label">Entity type</span>
-          <select name="entityType" required>
-            ${entityTypeSchema.options
-              .map(
-                (value) =>
-                  `<option value="${value}">${escapeHtml(entityTypeLabels[value])}</option>`,
-              )
-              .join("")}
-          </select>
-        </label>
-        <label class="form-field">
-          <span class="form-label">EIN</span>
-          <input type="text" name="ein" required placeholder="XX-XXXXXXX" autocomplete="off" />
-          <span class="form-hint">Format: XX-XXXXXXX</span>
-        </label>
-        <label class="form-field">
-          <span class="form-label">Contact name</span>
-          <input type="text" name="contactName" required autocomplete="name" />
-        </label>
-        <label class="form-field">
-          <span class="form-label">Contact email</span>
-          <input type="email" name="contactEmail" required autocomplete="email" />
-        </label>
-        <label class="form-field">
-          <span class="form-label">City</span>
-          <input type="text" name="city" required autocomplete="address-level2" />
-        </label>
-        <label class="form-field">
-          <span class="form-label">State</span>
-          <input type="text" name="state" required autocomplete="address-level1" />
-        </label>
+        ${newClientFields()}
         <div class="modal-actions">
           <button class="btn-secondary" type="button" data-close-new-client>Cancel</button>
           <button class="btn-primary" type="submit" data-submit-new-client>Create client</button>

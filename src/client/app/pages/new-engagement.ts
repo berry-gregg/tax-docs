@@ -17,6 +17,7 @@ import {
   requestTemplateSchema,
   type RequestTemplate,
 } from "../../../shared/schemas/request.ts";
+import { newClientFields } from "../components/new-client-fields.ts";
 import { getJson, sendJson } from "../api.ts";
 import { escapeHtml } from "../render.ts";
 
@@ -45,6 +46,7 @@ export type NewEngagementModalState = {
   clients: ClientOption[];
   documentTypes: DocumentTypeOption[];
   items: ChecklistItemDraft[];
+  itemsLoadedFor?: FilingType;
   newClient?: NewClientDraft;
   portalToken?: string;
   engagementId?: string;
@@ -104,13 +106,14 @@ export function initialNewEngagementState(opts: {
   }));
   return {
     step: 1,
-    mode: "existing",
+    mode: clients.length === 0 ? "new" : "existing",
     selectedClientId: opts.selectedClientId ?? clients[0]?.id ?? "",
     taxYear: 2025,
     filingType: opts.template?.filingType ?? "1120-S",
     clients,
     documentTypes,
     items: opts.template?.items.map((item) => ({ ...item })) ?? [],
+    itemsLoadedFor: opts.template?.filingType,
     newClient: {
       legalName: "",
       entityType: "s-corp",
@@ -153,7 +156,7 @@ export function renderNewEngagementModal(state: NewEngagementModalState): string
         : renderDetailsStep(state);
 
   return `<div class="modal" data-new-engagement-modal>
-    <section class="modal-panel" aria-labelledby="new-engagement-title">
+    <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-engagement-title">
       <h2 class="modal-title" id="new-engagement-title">Create engagement</h2>
       ${state.error ? `<p class="load-error-message">${escapeHtml(state.error)}</p>` : ""}
       ${body}
@@ -163,38 +166,43 @@ export function renderNewEngagementModal(state: NewEngagementModalState): string
 
 function renderDetailsStep(state: NewEngagementModalState): string {
   const selectedClientId = state.selectedClientId;
+  const hasClients = state.clients.length > 0;
+  const creatingClient = !hasClients || state.mode === "new";
 
-  return `<form data-new-engagement-step="1">
-    <div class="definition-grid">
-      <label>
-        <span class="muted">Client</span>
-        <select name="clientId">
-          ${state.clients
-            .map(
-              (client) =>
-                `<option value="${escapeHtml(client.id)}" ${
-                  client.id === selectedClientId ? "selected" : ""
-                }>${escapeHtml(client.legalName)}</option>`,
-            )
-            .join("")}
-        </select>
-      </label>
-      <label>
-        <span class="muted">Tax year</span>
-        <input name="taxYear" type="number" min="2000" max="2100" value="${state.taxYear}" />
-      </label>
-    </div>
-    <fieldset>
-      <legend class="muted">Client mode</legend>
+  return `<form class="form-grid" data-new-engagement-step="1">
+    ${
+      hasClients
+        ? `<label class="form-field">
+      <span class="form-label">Client</span>
+      <select name="clientId">
+        ${state.clients
+          .map(
+            (client) =>
+              `<option value="${escapeHtml(client.id)}" ${
+                client.id === selectedClientId ? "selected" : ""
+              }>${escapeHtml(client.legalName)}</option>`,
+          )
+          .join("")}
+      </select>
+    </label>
+    <fieldset class="form-field">
+      <legend class="form-label">Client mode</legend>
       <label><input type="radio" name="mode" value="existing" ${
         state.mode === "existing" ? "checked" : ""
       } /> Use selected client</label>
       <label><input type="radio" name="mode" value="new" ${
         state.mode === "new" ? "checked" : ""
       } /> Create new client</label>
-    </fieldset>
-    <fieldset>
-      <legend class="muted">Filing type</legend>
+    </fieldset>`
+        : `<p class="form-hint" data-no-clients>No clients yet. Create one to start this engagement.</p>
+    <input type="hidden" name="mode" value="new" />`
+    }
+    <label class="form-field">
+      <span class="form-label">Tax year</span>
+      <input name="taxYear" type="number" min="2000" max="2100" value="${state.taxYear}" />
+    </label>
+    <fieldset class="form-field">
+      <legend class="form-label">Filing type</legend>
       ${(["1120-S", "1065"] as const)
         .map(
           (filingType) =>
@@ -204,51 +212,30 @@ function renderDetailsStep(state: NewEngagementModalState): string {
         )
         .join("")}
     </fieldset>
-    <fieldset>
-      <legend class="muted">Create new client</legend>
-      <label><span class="muted">Legal name</span><input name="legalName" value="${escapeHtml(
-        state.newClient?.legalName ?? "",
-      )}" /></label>
-      <label><span class="muted">Entity type</span><select name="entityType">
-        ${["s-corp", "partnership", "c-corp", "llc"]
-          .map(
-            (entityType) =>
-              `<option value="${entityType}" ${
-                state.newClient?.entityType === entityType ? "selected" : ""
-              }>${entityType}</option>`,
-          )
-          .join("")}
-      </select></label>
-      <label><span class="muted">EIN</span><input name="ein" value="${escapeHtml(
-        state.newClient?.ein ?? "",
-      )}" /></label>
-      <label><span class="muted">Contact name</span><input name="contactName" value="${escapeHtml(
-        state.newClient?.contactName ?? "",
-      )}" /></label>
-      <label><span class="muted">Contact email</span><input name="contactEmail" value="${escapeHtml(
-        state.newClient?.contactEmail ?? "",
-      )}" /></label>
-      <label><span class="muted">City</span><input name="city" value="${escapeHtml(
-        state.newClient?.city ?? "",
-      )}" /></label>
-      <label><span class="muted">State</span><input name="state" value="${escapeHtml(
-        state.newClient?.state ?? "",
-      )}" /></label>
-    </fieldset>
+    ${
+      creatingClient
+        ? `<fieldset>
+      <legend class="form-label">Create new client</legend>
+      ${newClientFields(state.newClient)}
+    </fieldset>`
+        : ""
+    }
     <div class="modal-actions">
+      <button class="btn-secondary" type="button" data-close-new-engagement>Cancel</button>
       <button class="btn-primary" type="button" data-new-engagement-next>Continue</button>
     </div>
   </form>`;
 }
 
 function renderChecklistStep(state: NewEngagementModalState): string {
-  return `<form data-new-engagement-step="2">
+  return `<form class="form-grid" data-new-engagement-step="2">
     <h3 class="section-title">Request checklist</h3>
     <div class="row-list">
       ${state.items.map((item, index) => renderChecklistItem(state, item, index)).join("")}
     </div>
     <button class="btn-secondary" type="button" data-add-request-item>Add item</button>
     <div class="modal-actions">
+      <button class="btn-secondary" type="button" data-close-new-engagement>Cancel</button>
       <button class="btn-secondary" type="button" data-new-engagement-back>Back</button>
       <button class="btn-primary" type="button" data-create-engagement>Create engagement</button>
     </div>
@@ -263,13 +250,13 @@ function renderChecklistItem(
   const documentTypes = state.documentTypes.filter((type) => type.active);
   return `<div class="list-row" data-checklist-index="${index}">
     <span class="list-row-body">
-      <label><span class="muted">Title</span><input name="title-${index}" value="${escapeHtml(
+      <label class="form-field"><span class="form-label">Title</span><input name="title-${index}" value="${escapeHtml(
         item.title,
       )}" /></label>
-      <label><span class="muted">Description</span><input name="description-${index}" value="${escapeHtml(
+      <label class="form-field"><span class="form-label">Description</span><input name="description-${index}" value="${escapeHtml(
         item.description,
       )}" /></label>
-      <label><span class="muted">Document type</span><select name="documentTypeId-${index}">
+      <label class="form-field"><span class="form-label">Document type</span><select name="documentTypeId-${index}">
         ${documentTypes
           .map(
             (type) =>
@@ -279,7 +266,7 @@ function renderChecklistItem(
           )
           .join("")}
       </select></label>
-      <label><input type="checkbox" name="required-${index}" ${item.required ? "checked" : ""} /> Required</label>
+      <label class="form-field"><input type="checkbox" name="required-${index}" ${item.required ? "checked" : ""} /> Required</label>
     </span>
     <button class="btn-ghost" type="button" data-remove-request-item="${index}">Remove</button>
   </div>`;
@@ -306,24 +293,31 @@ function valueFrom(form: FormData, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
-function stateFromStepOne(state: NewEngagementModalState, form: FormData): NewEngagementModalState {
+export function applyDetailsDraft(state: NewEngagementModalState, form: FormData): NewEngagementModalState {
   const filingType = valueFrom(form, "filingType");
-  const mode = valueFrom(form, "mode");
+  const parsedYear = Number(valueFrom(form, "taxYear"));
+  const mode = state.clients.length === 0 || valueFrom(form, "mode") === "new" ? "new" : "existing";
+  const entityType = createClientInputSchema.shape.entityType.safeParse(valueFrom(form, "entityType"));
   return {
     ...state,
-    mode: mode === "new" ? "new" : "existing",
-    selectedClientId: valueFrom(form, "clientId"),
-    taxYear: Number(valueFrom(form, "taxYear")),
-    filingType: filingType === "1065" ? "1065" : "1120-S",
-    newClient: {
-      legalName: valueFrom(form, "legalName"),
-      entityType: createClientInputSchema.shape.entityType.parse(valueFrom(form, "entityType")),
-      ein: valueFrom(form, "ein"),
-      contactName: valueFrom(form, "contactName"),
-      contactEmail: valueFrom(form, "contactEmail"),
-      city: valueFrom(form, "city"),
-      state: valueFrom(form, "state"),
-    },
+    mode,
+    selectedClientId: valueFrom(form, "clientId") || state.selectedClientId,
+    taxYear: Number.isFinite(parsedYear) ? parsedYear : state.taxYear,
+    filingType: filingType === "1065" ? "1065" : filingType === "1120-S" ? "1120-S" : state.filingType,
+    newClient:
+      mode === "new"
+        ? {
+            legalName: valueFrom(form, "legalName"),
+            entityType: entityType.success
+              ? entityType.data
+              : (state.newClient?.entityType ?? "s-corp"),
+            ein: valueFrom(form, "ein"),
+            contactName: valueFrom(form, "contactName"),
+            contactEmail: valueFrom(form, "contactEmail"),
+            city: valueFrom(form, "city"),
+            state: valueFrom(form, "state"),
+          }
+        : state.newClient,
   };
 }
 
@@ -339,6 +333,19 @@ function stateFromStepTwo(state: NewEngagementModalState, root: HTMLElement): Ne
       required: row.querySelector<HTMLInputElement>(`[name="required-${index}"]`)?.checked ?? false,
     })),
   };
+}
+
+export async function advanceToChecklist(
+  current: NewEngagementModalState,
+  next: NewEngagementModalState,
+): Promise<NewEngagementModalState> {
+  const loadedFor = current.itemsLoadedFor;
+  if (loadedFor === next.filingType && current.items.length > 0) {
+    return { ...next, step: 2, items: current.items, itemsLoadedFor: loadedFor, error: undefined };
+  }
+
+  const items = await loadTemplateItemsForFilingType(next.filingType);
+  return { ...next, step: 2, items, itemsLoadedFor: next.filingType, error: undefined };
 }
 
 export function bindNewEngagementModal(
@@ -364,18 +371,69 @@ export function bindNewEngagementModal(
     }
   };
 
+  const closeModal = () => {
+    const currentModal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
+    currentModal?.setAttribute("hidden", "");
+    clearNewEngagementDraft();
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      window.history.replaceState({}, "", "/engagements");
+    }
+  };
+
+  const persistOpenDraft = (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const currentModal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
+    if (!currentModal || currentModal.hasAttribute("hidden") || !currentModal.contains(target)) {
+      return;
+    }
+
+    const detailsForm = target.closest<HTMLFormElement>("[data-new-engagement-step='1']");
+    if (detailsForm) {
+      const next = applyDetailsDraft(currentState, new FormData(detailsForm));
+      const modeChanged = next.mode !== currentState.mode;
+      setState(next);
+      if (modeChanged) {
+        renderCurrent();
+      }
+      return;
+    }
+
+    if (currentModal.querySelector("[data-new-engagement-step='2']")) {
+      setState(stateFromStepTwo(currentState, currentModal));
+    }
+  };
+
+  root.addEventListener("input", persistOpenDraft);
+  root.addEventListener("change", persistOpenDraft);
+
+  root.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeModal();
+    }
+  });
+
   root.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
 
+    if (target.matches("[data-close-new-engagement]") || target.matches("[data-new-engagement-modal]")) {
+      closeModal();
+      return;
+    }
+
     if (target.matches("[data-new-engagement-next]")) {
       const form = target.closest("form");
       if (!form) return;
-      const next = stateFromStepOne(currentState, new FormData(form));
-      void loadTemplateItemsForFilingType(next.filingType)
-        .then((items) => {
-          setState({ ...next, step: 2, items });
-          writeModalQuery(next.filingType);
+      const next = applyDetailsDraft(currentState, new FormData(form));
+      void advanceToChecklist(currentState, next)
+        .then((advanced) => {
+          setState(advanced);
+          writeModalQuery(advanced.filingType);
           renderCurrent();
         })
         .catch((error: unknown) => {
@@ -491,5 +549,5 @@ export async function loadNewEngagementState(
     documentTypes: documentTypes.documentTypes,
     selectedClientId,
   });
-  return { ...state, filingType, items };
+  return { ...state, filingType, items, itemsLoadedFor: filingType };
 }

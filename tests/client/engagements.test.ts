@@ -45,7 +45,8 @@ describe("engagements page", () => {
     expect(html).toContain('class="chip chip-processing"');
     expect(html).toContain("4 of 7 received");
     expect(html).toContain("2 need review");
-    expect(html).toContain('href="/engagements/eng-1"');
+    expect(html).toContain('<tr data-href="/engagements/eng-1" tabindex="0">');
+    expect(html).not.toContain('<a href="/engagements/eng-1"');
   });
 
   test("opens the modal when query state requests it", () => {
