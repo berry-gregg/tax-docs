@@ -1,0 +1,242 @@
+{
+  "companies": [
+    {
+      "name": "Northgate Millwork, Inc.",
+      "ein": "88-3104927",
+      "entityType": "S corporation",
+      "filingType": "1120-S",
+      "taxYear": 2025,
+      "documents": [
+        {
+          "file": "demo-docs/northgate-profit-and-loss-2025.pdf",
+          "documentTypeId": "dt-profit-loss",
+          "fields": {
+            "business_name": "Northgate Millwork, Inc.",
+            "period_start": "2025-01-01",
+            "period_end": "2025-12-31",
+            "gross_receipts": 4286400,
+            "total_expenses": 3680000,
+            "net_income": 606400,
+            "officer_compensation": 264000,
+            "salaries_wages": 936000,
+            "rents": 172800,
+            "taxes_licenses": 118060,
+            "depreciation": 138600,
+            "advertising": 41250
+          }
+        },
+        {
+          "file": "demo-docs/northgate-balance-sheet-2025.pdf",
+          "documentTypeId": "dt-balance-sheet",
+          "fields": {
+            "business_name": "Northgate Millwork, Inc.",
+            "period_end": "2025-12-31",
+            "total_assets": 2130350,
+            "total_liabilities": 682550,
+            "total_equity": 1447800,
+            "cash": 428750,
+            "accounts_receivable": 612400
+          }
+        },
+        {
+          "file": "demo-docs/northgate-trial-balance-2025.pdf",
+          "documentTypeId": "dt-trial-balance",
+          "fields": {
+            "business_name": "Northgate Millwork, Inc.",
+            "period_end": "2025-12-31",
+            "total_debits": 6623350,
+            "total_credits": 6623350
+          }
+        },
+        {
+          "file": "demo-docs/northgate-fixed-asset-schedule-2025.pdf",
+          "documentTypeId": "dt-fixed-assets",
+          "fields": {
+            "business_name": "Northgate Millwork, Inc.",
+            "period_end": "2025-12-31",
+            "total_cost_basis": 1144600,
+            "total_accumulated_depreciation": 393000,
+            "current_year_depreciation": 138600
+          }
+        },
+        {
+          "file": "demo-docs/northgate-form-941-2025-q1.pdf",
+          "documentTypeId": "dt-941",
+          "fields": {
+            "business_name": "Northgate Millwork, Inc.",
+            "employer_ein": "88-3104927",
+            "quarter": "Q1",
+            "tax_year": 2025,
+            "wages_tips_compensation": 292400,
+            "federal_tax_withheld": 33626
+          }
+        },
+        {
+          "file": "demo-docs/northgate-form-941-2025-q2.pdf",
+          "documentTypeId": "dt-941",
+          "fields": {
+            "business_name": "Northgate Millwork, Inc.",
+            "employer_ein": "88-3104927",
+            "quarter": "Q2",
+            "tax_year": 2025,
+            "wages_tips_compensation": 305600,
+            "federal_tax_withheld": 35144
+          }
+        },
+        {
+          "file": "demo-docs/northgate-form-941-2025-q3.pdf",
+          "documentTypeId": "dt-941",
+          "fields": {
+            "business_name": "Northgate Millwork, Inc.",
+            "employer_ein": "88-3104927",
+            "quarter": "Q3",
+            "tax_year": 2025,
+            "wages_tips_compensation": 298900,
+            "federal_tax_withheld": 34373.5
+          }
+        },
+        {
+          "file": "demo-docs/northgate-form-941-2025-q4.pdf",
+          "documentTypeId": "dt-941",
+          "fields": {
+            "business_name": "Northgate Millwork, Inc.",
+            "employer_ein": "88-3104927",
+            "quarter": "Q4",
+            "tax_year": 2025,
+            "wages_tips_compensation": 321600,
+            "federal_tax_withheld": 36984
+          }
+        },
+        {
+          "file": "demo-docs/northgate-1099-nec-2025-halvorsen.pdf",
+          "documentTypeId": "dt-1099-nec",
+          "fields": {
+            "payer_name": "Northgate Millwork, Inc.",
+            "payer_tin": "88-3104927",
+            "recipient_name": "Halvorsen Finish Carpentry LLC",
+            "recipient_tin": "93-2846015",
+            "nonemployee_compensation": 132850,
+            "tax_year": 2025
+          }
+        },
+        {
+          "file": "demo-docs/northgate-1099-nec-2025-delgado.pdf",
+          "documentTypeId": "dt-1099-nec",
+          "fields": {
+            "payer_name": "Northgate Millwork, Inc.",
+            "payer_tin": "88-3104927",
+            "recipient_name": "Ramon Delgado Installation Services",
+            "recipient_tin": "541-88-2073",
+            "nonemployee_compensation": 104600,
+            "tax_year": 2025
+          }
+        },
+        {
+          "file": "demo-docs/northgate-1099-nec-2025-sightline.pdf",
+          "documentTypeId": "dt-1099-nec",
+          "fields": {
+            "payer_name": "Northgate Millwork, Inc.",
+            "payer_tin": "88-3104927",
+            "recipient_name": "Sightline CAD Drafting LLC",
+            "recipient_tin": "87-4419266",
+            "nonemployee_compensation": 58950,
+            "tax_year": 2025
+          }
+        },
+        {
+          "file": "demo-docs/northgate-k1-1120s-2025-hale.pdf",
+          "documentTypeId": "dt-k1-1120s",
+          "fields": {
+            "corporation_name": "Northgate Millwork, Inc.",
+            "corporation_ein": "88-3104927",
+            "shareholder_name": "Marcus T. Hale",
+            "ordinary_business_income": 394160,
+            "tax_year": 2025
+          }
+        },
+        {
+          "file": "demo-docs/northgate-k1-1120s-2025-raman.pdf",
+          "documentTypeId": "dt-k1-1120s",
+          "fields": {
+            "corporation_name": "Northgate Millwork, Inc.",
+            "corporation_ein": "88-3104927",
+            "shareholder_name": "Priya N. Raman",
+            "ordinary_business_income": 212240,
+            "tax_year": 2025
+          }
+        },
+        {
+          "file": "demo-docs/lease-agreement.pdf",
+          "documentTypeId": null,
+          "fields": {}
+        },
+        {
+          "file": "demo-docs/state-apportionment-schedule.pdf",
+          "documentTypeId": null,
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "name": "Alder Creek Design Studio LLC",
+      "ein": "92-7551408",
+      "entityType": "Limited liability company",
+      "filingType": "1065",
+      "taxYear": 2025,
+      "documents": [
+        {
+          "file": "demo-docs/alder-creek-profit-and-loss-2025.pdf",
+          "documentTypeId": "dt-profit-loss",
+          "fields": {
+            "business_name": "Alder Creek Design Studio LLC",
+            "period_start": "2025-01-01",
+            "period_end": "2025-12-31",
+            "gross_receipts": 1342800,
+            "total_expenses": 1087200,
+            "net_income": 255600,
+            "salaries_wages": 486000,
+            "rents": 66000,
+            "taxes_licenses": 44880,
+            "depreciation": 18400,
+            "advertising": 12750
+          }
+        },
+        {
+          "file": "demo-docs/alder-creek-balance-sheet-2025.pdf",
+          "documentTypeId": "dt-balance-sheet",
+          "fields": {
+            "business_name": "Alder Creek Design Studio LLC",
+            "period_end": "2025-12-31",
+            "total_assets": 558750,
+            "total_liabilities": 184450,
+            "total_equity": 374300,
+            "cash": 186450,
+            "accounts_receivable": 214800
+          }
+        },
+        {
+          "file": "demo-docs/alder-creek-k1-1065-2024-vasquez.pdf",
+          "documentTypeId": "dt-k1-1065",
+          "fields": {
+            "partnership_name": "Alder Creek Design Studio LLC",
+            "partnership_ein": "92-7551408",
+            "partner_name": "Elena M. Vasquez",
+            "ordinary_business_income": 160800,
+            "tax_year": 2024
+          }
+        },
+        {
+          "file": "demo-docs/alder-creek-k1-1065-2024-okafor.pdf",
+          "documentTypeId": "dt-k1-1065",
+          "fields": {
+            "partnership_name": "Alder Creek Design Studio LLC",
+            "partnership_ein": "92-7551408",
+            "partner_name": "Daniel R. Okafor",
+            "ordinary_business_income": 107200,
+            "tax_year": 2024
+          }
+        }
+      ]
+    }
+  ]
+}
