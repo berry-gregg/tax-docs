@@ -1,11 +1,14 @@
 import { z } from "zod";
-import { clientListResponseSchema } from "../../../shared/schemas/api.ts";
+import {
+  clientListResponseSchema,
+  documentTypesResponseSchema,
+} from "../../../shared/schemas/api.ts";
 import {
   clientSchema,
   createClientInputSchema,
   type Client,
 } from "../../../shared/schemas/client.ts";
-import { documentTypeSchema, type DocumentType } from "../../../shared/schemas/document-type.ts";
+import { type DocumentType } from "../../../shared/schemas/document-type.ts";
 import {
   createEngagementInputSchema,
   engagementSchema,
@@ -53,10 +56,6 @@ export type NewEngagementModalState = {
   engagementId?: string;
   error?: string;
 };
-
-export const documentTypesResponseSchema = z.object({
-  documentTypes: z.array(documentTypeSchema),
-});
 
 export const requestTemplatesResponseSchema = z.object({
   templates: z.array(requestTemplateSchema),
@@ -183,6 +182,24 @@ export function renderNewEngagementModal(state: NewEngagementModalState): string
   </div>`;
 }
 
+/**
+ * Two-option segmented selector: real radios stay in the DOM (visually hidden, still focusable)
+ * inside styled labels, so keyboard and form semantics survive the redesign. The selected option
+ * reads as ink border on wash — never a chip, never highlighter.
+ */
+function segmentedRadios(
+  name: string,
+  options: readonly { value: string; label: string }[],
+  selected: string,
+): string {
+  return `<div class="segmented">${options
+    .map(
+      (option) =>
+        `<label class="segmented-option${option.value === selected ? " is-selected" : ""}"><input class="visually-hidden-input" type="radio" name="${name}" value="${escapeHtml(option.value)}"${option.value === selected ? " checked" : ""} /><span>${escapeHtml(option.label)}</span></label>`,
+    )
+    .join("")}</div>`;
+}
+
 function renderDetailsStep(state: NewEngagementModalState): string {
   const selectedClientId = state.selectedClientId;
   const hasClients = state.clients.length > 0;
@@ -206,12 +223,14 @@ function renderDetailsStep(state: NewEngagementModalState): string {
     </label>
     <fieldset class="form-field">
       <legend class="form-label">Client mode</legend>
-      <label><input type="radio" name="mode" value="existing" ${
-        state.mode === "existing" ? "checked" : ""
-      } /> Use selected client</label>
-      <label><input type="radio" name="mode" value="new" ${
-        state.mode === "new" ? "checked" : ""
-      } /> Create new client</label>
+      ${segmentedRadios(
+        "mode",
+        [
+          { value: "existing", label: "Use selected client" },
+          { value: "new", label: "Create new client" },
+        ],
+        state.mode,
+      )}
     </fieldset>`
         : `<p class="form-hint" data-no-clients>No clients yet. Create one to start this engagement.</p>
     <input type="hidden" name="mode" value="new" />`
@@ -222,14 +241,14 @@ function renderDetailsStep(state: NewEngagementModalState): string {
     </label>
     <fieldset class="form-field">
       <legend class="form-label">Filing type</legend>
-      ${(["1120-S", "1065"] as const)
-        .map(
-          (filingType) =>
-            `<label><input type="radio" name="filingType" value="${filingType}" ${
-              state.filingType === filingType ? "checked" : ""
-            } /> ${filingType}</label>`,
-        )
-        .join("")}
+      ${segmentedRadios(
+        "filingType",
+        [
+          { value: "1120-S", label: "1120-S" },
+          { value: "1065", label: "1065" },
+        ],
+        state.filingType,
+      )}
     </fieldset>
     ${
       creatingClient

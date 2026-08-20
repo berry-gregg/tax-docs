@@ -3,6 +3,7 @@ import {
   clientListResponseSchema,
   documentListResponseSchema,
   inboxUnreadCountSchema,
+  metricsSchema,
 } from "@shared/schemas/api";
 import { healthResponseSchema } from "@shared/schemas/health";
 import { getJson, startPolling } from "./app/api.ts";
@@ -22,16 +23,17 @@ import {
 } from "./app/render.ts";
 import { parseRoute, type Route } from "./app/router.ts";
 
-type InboxBadgeElement = Pick<HTMLElement, "hidden" | "textContent">;
+type BadgeElement = Pick<HTMLElement, "hidden" | "textContent">;
 
-export type InboxBadgeRefreshOptions = {
-  fetchUnreadCount: () => Promise<number>;
-  queryBadge: () => InboxBadgeElement | null;
-  writeUnreadCount: (count: number) => void;
+/** One refresh recipe for every live nav badge (inbox unread, documents needs-review). */
+export type BadgeRefreshOptions = {
+  fetchCount: () => Promise<number>;
+  queryBadge: () => BadgeElement | null;
+  writeCount: (count: number) => void;
   logError?: (message: string) => void;
 };
 
-function applyInboxBadgeCount(badge: InboxBadgeElement, count: number): void {
+function applyBadgeCount(badge: BadgeElement, count: number): void {
   badge.textContent = count > 0 ? String(count) : "";
   badge.hidden = count === 0;
 }
@@ -51,6 +53,8 @@ const OPEN_DIALOG_SELECTORS = [
   "[data-new-engagement-modal]:not([hidden])",
   ".side-panel",
   "[data-export-confirm-modal]:not([hidden])",
+  // Portal waive note: a poll repaint while the client types would steal focus mid-note.
+  "[data-portal-waive-form]:not([hidden])",
 ] as const;
 
 /** Poll must not swap `.workspace` while a modal or side panel holds focus. */
@@ -198,21 +202,21 @@ export function replaceWorkspaceBody<T extends WorkspaceNode<T>>(
   return { changed: true, workspace: next };
 }
 
-export async function refreshInboxBadgeState({
-  fetchUnreadCount,
+export async function refreshBadgeState({
+  fetchCount,
   queryBadge,
-  writeUnreadCount,
+  writeCount,
   logError,
-}: InboxBadgeRefreshOptions): Promise<void> {
+}: BadgeRefreshOptions): Promise<void> {
   try {
-    const count = await fetchUnreadCount();
-    writeUnreadCount(count);
+    const count = await fetchCount();
+    writeCount(count);
     const badge = queryBadge();
     if (badge) {
-      applyInboxBadgeCount(badge, count);
+      applyBadgeCount(badge, count);
     }
   } catch (error) {
-    logError?.(`Inbox unread count failed to load: ${messageFor(error)}`);
+    logError?.(`Nav badge count failed to load: ${messageFor(error)}`);
   }
 }
 
@@ -223,6 +227,7 @@ let paletteActiveIndex = 0;
 let paletteIndex: PaletteIndex = emptyPaletteIndex;
 let paletteIndexRequested = false;
 let inboxUnreadCount = 0;
+let documentsNeedsReviewCount = 0;
 let stopPolling: (() => void) | null = null;
 /** Guards against a slow load painting over a newer navigation. */
 let paintSequence = 0;
@@ -243,6 +248,7 @@ function renderShell(body: string): void {
     search: window.location.search,
     body,
     inboxUnreadCount,
+    documentsNeedsReviewCount,
     paletteIndex,
   });
 
@@ -294,7 +300,7 @@ async function paint(): Promise<void> {
   const module = moduleFor(route);
 
   renderShell(renderPageSkeleton());
-  void refreshInboxBadge();
+  void refreshNavBadges();
 
   try {
     const data = await module.load(route);
@@ -303,7 +309,7 @@ async function paint(): Promise<void> {
     }
 
     renderShell(module.render(data));
-    await refreshInboxBadge();
+    await refreshNavBadges();
     if (sequence !== paintSequence) {
       return;
     }
@@ -324,7 +330,7 @@ async function paint(): Promise<void> {
         if (replaceBody(module.render(next))) {
           bindPage(module, next, sequence);
         }
-        await refreshInboxBadge();
+        await refreshNavBadges();
       }, module.pollMs);
     }
   } catch (error) {
@@ -440,7 +446,7 @@ async function ensurePaletteIndex(): Promise<void> {
       documents: documents.documents.map((row) => ({
         id: row.id,
         label: `${row.documentTypeName ?? "Unclassified"} · ${row.clientName}`,
-        href: `/engagements/${row.engagementId}/review/${row.id}`,
+        href: `/documents/${row.id}`,
       })),
       clients: clients.clients.map((client) => ({
         id: client.id,
@@ -513,17 +519,36 @@ function activatePaletteSelection(): void {
 }
 
 async function refreshInboxBadge(): Promise<void> {
-  await refreshInboxBadgeState({
-    fetchUnreadCount: async () => {
+  await refreshBadgeState({
+    fetchCount: async () => {
       const payload = await getJson("/api/inbox/unread-count", inboxUnreadCountSchema);
       return payload.count;
     },
     queryBadge: () => root?.querySelector<HTMLElement>("[data-inbox-badge]") ?? null,
-    writeUnreadCount: (count) => {
+    writeCount: (count) => {
       inboxUnreadCount = count;
     },
     logError: (message) => console.error(message),
   });
+}
+
+/** The documents pill mirrors the Needs review tab: `needsReviewCount` from `/api/metrics`. */
+async function refreshDocumentsBadge(): Promise<void> {
+  await refreshBadgeState({
+    fetchCount: async () => {
+      const payload = await getJson("/api/metrics", metricsSchema);
+      return payload.needsReviewCount;
+    },
+    queryBadge: () => root?.querySelector<HTMLElement>("[data-documents-badge]") ?? null,
+    writeCount: (count) => {
+      documentsNeedsReviewCount = count;
+    },
+    logError: (message) => console.error(message),
+  });
+}
+
+async function refreshNavBadges(): Promise<void> {
+  await Promise.all([refreshInboxBadge(), refreshDocumentsBadge()]);
 }
 
 async function refreshHealth(): Promise<void> {

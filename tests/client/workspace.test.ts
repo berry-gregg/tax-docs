@@ -173,6 +173,67 @@ describe("engagement workspace", () => {
     expect(html).toContain("1 passed");
   });
 
+  test("filing type and tax year are a muted subtitle, not the header count slot", () => {
+    const html = renderEngagementWorkspace(data());
+
+    expect(html).toContain('<p class="page-subtitle">1120-S · 2025</p>');
+    expect(html).not.toContain('<span class="count">1120-S · 2025</span>');
+  });
+
+  test("breadcrumbs lead back to Engagements above the page header", () => {
+    const html = renderEngagementWorkspace(data());
+
+    expect(html).toMatch(
+      /<a class="breadcrumb-link" href="\/engagements" data-nav-link>Engagements<\/a>/,
+    );
+    expect(html).toContain('aria-current="page">Northwind Partners LLC</span>');
+    expect(html.indexOf('class="breadcrumbs"')).toBeGreaterThan(-1);
+    expect(html.indexOf('class="breadcrumbs"')).toBeLessThan(html.indexOf('class="page-header"'));
+  });
+
+  test("a single-line status strip reports stage, checklist, review, and trusted counts", () => {
+    const html = renderEngagementWorkspace(data());
+    const stripAt = html.indexOf("data-engagement-status");
+    const strip = html.slice(stripAt, html.indexOf("Validation checks"));
+
+    expect(html).toContain('class="engagement-status" data-engagement-status');
+    expect(stripAt).toBeLessThan(html.indexOf("Validation checks"));
+    expect(strip).toContain("In review");
+    expect(strip).toContain("1 of 2</span> checklist items received");
+    expect(strip).toContain("0</span> need review");
+    expect(strip).toContain("1</span> trusted");
+    expect(strip).toContain("data-portal-link-control");
+  });
+
+  test("the needs-review count deep-links to the documents table anchor", () => {
+    const withNeedsReview = detail({
+      documents: detail().documents.map((document) => ({
+        ...document,
+        pipelineStatus: "needs-review" as const,
+      })),
+    });
+    const html = renderEngagementWorkspace(data({ detail: withNeedsReview }));
+
+    expect(html).toMatch(
+      /<a class="engagement-status-item engagement-status-link" href="#engagement-documents">/,
+    );
+    expect(html).toContain("2</span> need review");
+    expect(html).toContain('id="engagement-documents"');
+  });
+
+  test("validation checks live under an explicit advisory section title", () => {
+    const html = renderEngagementWorkspace(data());
+    const section = html.slice(html.indexOf("Validation checks"), html.indexOf("Request checklist"));
+
+    expect(section).toContain('class="row-list validation-list"');
+    expect(section).toContain("Payroll ties to P&amp;L");
+    expect(section).toContain("1 passed");
+    expect(section).toContain("advisory");
+    expect(section).toContain("chip chip-warning");
+    expect(section).not.toContain("chip chip-success");
+    expect(section.indexOf("Payroll ties to P&amp;L")).toBeLessThan(section.indexOf("1 passed"));
+  });
+
   test("hides Export until at least one document is trusted", () => {
     const withoutTrusted = detail({
       documents: detail().documents.map((document) => ({ ...document, pipelineStatus: "needs-review" })),
@@ -193,18 +254,68 @@ describe("engagement workspace", () => {
     expect(html).toContain("Waive");
   });
 
-  test("checklist rows are dense single-line rows with the description as a tooltip", () => {
+  test("checklist rows show the description as a visible second line, not a tooltip", () => {
     const html = renderEngagementWorkspace(data());
     const start = html.indexOf("Request checklist");
     const end = html.indexOf(">Documents<");
     const checklist = html.slice(start, end);
 
     expect(checklist).toContain('class="row-list checklist-list"');
-    expect(checklist).not.toContain("list-row-body");
-    expect(checklist).toContain('title="Upload every shareholder K-1."');
-    expect(checklist).not.toContain(">Upload every shareholder K-1.<");
-    expect(checklist).toContain('title="Full-year statement."');
-    expect(checklist).not.toContain(">Full-year statement.<");
+    expect(checklist).toContain("list-row-body");
+    expect(checklist).toContain(">Upload every shareholder K-1.<");
+    expect(checklist).not.toContain('title="Upload every shareholder K-1."');
+    expect(checklist).toContain(">Full-year statement.<");
+    expect(checklist).not.toContain('title="Full-year statement."');
+  });
+
+  test("received checklist items link to the matched document's review page", () => {
+    const html = renderEngagementWorkspace(data());
+    const checklist = html.slice(html.indexOf("Request checklist"), html.indexOf(">Documents<"));
+
+    expect(checklist).toMatch(
+      /<a class="checklist-doc-link" href="\/documents\/doc-trusted" data-nav-link>View<\/a>/,
+    );
+    expect(checklist).toMatch(
+      /<button class="btn-ghost" type="button" data-waive-request-item="item-open">Waive<\/button>/,
+    );
+  });
+
+  test("needs-attention items offer Review and waived items surface the note", () => {
+    const withStatuses = detail({
+      requestItems: [
+        {
+          id: "item-attention",
+          engagementId: "eng-1",
+          documentTypeId: "dt-pl",
+          title: "Form 941",
+          description: "Quarterly payroll filings.",
+          required: true,
+          status: "needs-attention",
+          matchedDocumentIds: ["doc-failed"],
+          createdAt: "2026-08-19T18:02:00.000Z",
+        },
+        {
+          id: "item-waived",
+          engagementId: "eng-1",
+          documentTypeId: "dt-k1",
+          title: "Vehicle logs",
+          description: "Mileage support.",
+          required: false,
+          status: "waived",
+          waiveNote: "No company vehicles this year.",
+          matchedDocumentIds: [],
+          createdAt: "2026-08-19T18:03:00.000Z",
+        },
+      ],
+    });
+    const html = renderEngagementWorkspace(data({ detail: withStatuses }));
+    const checklist = html.slice(html.indexOf("Request checklist"), html.indexOf(">Documents<"));
+
+    expect(checklist).toMatch(
+      /<a class="checklist-doc-link" href="\/documents\/doc-failed" data-nav-link>Review<\/a>/,
+    );
+    expect(checklist).toContain("Waived — No company vehicles this year.");
+    expect(checklist).not.toContain('data-waive-request-item="item-waived"');
   });
 
   test("the portal link is the shared compact control, not a secondary-button cluster", () => {
@@ -226,7 +337,7 @@ describe("engagement workspace", () => {
     expect(html).toContain("Trusted");
     expect(html).toContain('class="chip confidence-high">94%');
     expect(html).toContain("client");
-    expect(html).toContain('href="/engagements/eng-1/review/doc-trusted"');
+    expect(html).toContain('href="/documents/doc-trusted"');
     expect(html).toContain("trial-balance.pdf");
     expect(html).toContain("Unclassified");
     expect(html).toContain("OpenRouter timed out after retry");
@@ -237,7 +348,7 @@ describe("engagement workspace", () => {
   test("makes the whole document row navigable to review", () => {
     const html = renderEngagementWorkspace(data());
 
-    expect(html).toContain('data-href="/engagements/eng-1/review/doc-trusted"');
+    expect(html).toContain('data-href="/documents/doc-trusted"');
     expect(html).toContain('tabindex="0"');
   });
 
@@ -248,6 +359,16 @@ describe("engagement workspace", () => {
     expect(html).toContain('data-engagement-id="eng-1"');
     expect(html).toContain('type="file"');
     expect(html).toContain("Drop a PDF here");
+  });
+
+  test("the dropzone hides the native file input but keeps it focusable", () => {
+    const html = renderEngagementWorkspace(data());
+
+    expect(html).toContain("or browse");
+    expect(html).not.toContain("choose a file");
+    expect(html).toMatch(
+      /<input class="visually-hidden-input" type="file"[^>]*data-document-upload/,
+    );
   });
 
   test("shows activity feed and rail widgets with relative times", () => {

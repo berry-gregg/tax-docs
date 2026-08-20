@@ -5,11 +5,17 @@
   background: var(--surface-canvas);
 }
 
+/* Sticky rail: the document scrolls, the nav column stays pinned and scrolls on its own. */
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-8);
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   padding: var(--spacing-8) 0 var(--spacing-12);
   background: var(--surface-sidebar);
   color: var(--color-ink);
@@ -358,6 +364,11 @@
   background: var(--surface-wash);
 }
 
+/* A chip is always its natural pill width — never stretched by a row's flexible track. */
+.list-row > .chip {
+  justify-self: end;
+}
+
 .list-row-body {
   display: grid;
   gap: 2px;
@@ -650,40 +661,6 @@
   flex-shrink: 0;
 }
 
-/* Ticker strip — product hairline band under Home's recent rows. One single-line
-   horizontal band: label and value sit side by side, never stacked cards. */
-.ticker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-8) var(--spacing-32);
-  margin-top: var(--spacing-32);
-  padding: var(--spacing-12) 0;
-  border-top: 1px solid var(--color-hairline);
-  border-radius: 0;
-  background: transparent;
-}
-
-.ticker-item {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-8);
-  min-width: 0;
-}
-
-.ticker-label {
-  color: var(--color-ash);
-  font-size: var(--text-caption);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--leading-ui);
-}
-
-.ticker-value {
-  color: var(--color-ink);
-  font-size: var(--text-ui);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--leading-ui);
-}
-
 /*
  * Status chips — the one status-token recipe. Semantic tone modifiers (`.chip-*`) and the
  * confidence tiers (`.confidence-*` from formatConfidence) both compose with this base;
@@ -813,21 +790,25 @@
   border-top: 1px solid var(--color-hairline);
 }
 
-/* Dropzone — upload target on the engagement workspace and the client portal. */
+/* Dropzone — upload target on the engagement workspace and the client portal. Compact by
+   default; the native file input is visually hidden but stays focusable inside the label. */
 .dropzone {
+  position: relative;
   display: grid;
-  gap: var(--spacing-8);
+  gap: var(--spacing-4);
   place-items: center;
-  padding: var(--spacing-24);
+  padding: var(--spacing-16);
   border: 1px dashed var(--color-input-hairline);
   border-radius: var(--radius-xl);
   color: var(--color-ash);
   font-size: var(--text-ui);
   line-height: var(--leading-ui);
   text-align: center;
+  cursor: pointer;
 }
 
-.dropzone.is-dragover {
+.dropzone.is-dragover,
+.dropzone:focus-within {
   border-color: var(--color-outline);
   background: var(--surface-wash);
   color: var(--color-ink);
@@ -887,17 +868,17 @@
     grid-template-columns: 1fr;
   }
 
+  /* Stacked layout: the rail flows with the page again, so sticky must not apply. */
   .sidebar {
+    position: static;
+    height: auto;
+    max-height: none;
     min-height: auto;
+    overflow-y: visible;
   }
 
   .page-home {
     grid-template-columns: 1fr;
-  }
-
-  .ticker {
-    flex-direction: column;
-    gap: var(--spacing-8);
   }
 
   .definition-grid {
@@ -905,80 +886,123 @@
   }
 }
 
-/* Inbox ledger — grouped client headers over dense single-line rows. */
-.inbox-groups {
+/* Inbox threads — one disclosure section per outbound request: a dense head row over
+   nested request-item lines. Hairlines only; no cards-within-cards. */
+.inbox-threads {
   display: grid;
-  gap: var(--spacing-24);
+  border-top: 1px solid var(--color-hairline);
 }
 
-.inbox-group {
+.inbox-thread {
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.inbox-thread-head {
   display: grid;
-  gap: var(--spacing-8);
+  grid-template-columns: var(--icon-size-nav) minmax(0, 1fr) auto auto var(--icon-size-nav);
+  gap: var(--spacing-12);
+  align-items: center;
+  padding-block: var(--spacing-12);
+  cursor: pointer;
 }
 
-.inbox-group-head {
-  justify-self: start;
-  color: var(--color-ink);
-  font-size: var(--text-ui);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--leading-ui);
-}
-
-.inbox-group-head:hover {
-  text-decoration: underline;
-}
-
-/* Extends .list-row: tighter rhythm, unread dot and direction glyph inside the row grid. */
-.inbox-row {
-  grid-template-columns: var(--icon-size-nav) var(--icon-size-nav) minmax(0, 1fr) auto;
-  gap: var(--spacing-8);
-  padding-block: var(--spacing-8);
-}
-
-.inbox-row-outbound {
-  grid-template-columns: var(--icon-size-nav) var(--icon-size-nav) minmax(0, 1fr) auto auto;
-}
-
-.inbox-row .unread-dot {
+.inbox-thread-head .unread-dot {
   width: var(--spacing-8);
   height: var(--spacing-8);
   border-radius: var(--radius-badge);
-  background: var(--color-ink);
+  background: transparent;
   justify-self: center;
 }
 
-.inbox-row:not(.is-unread) .unread-dot {
-  background: transparent;
+.inbox-thread-head.is-unread .unread-dot {
+  background: var(--color-ink);
 }
 
-.inbox-row:not(.is-unread) .list-row-title {
-  font-weight: var(--font-weight-light);
-}
-
-.inbox-direction {
-  display: inline-flex;
-  color: var(--color-ash);
-}
-
-.inbox-row-text {
+.inbox-thread-title {
   display: flex;
   gap: var(--spacing-8);
   align-items: baseline;
   min-width: 0;
-}
-
-.inbox-row-text .list-row-title,
-.inbox-row-text .muted {
   white-space: nowrap;
-}
-
-.inbox-row-text .muted {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.inbox-time {
+.inbox-thread-client {
+  color: var(--color-ink);
+}
+
+.inbox-thread-head:not(.is-unread) .inbox-thread-client {
+  font-weight: var(--font-weight-light);
+}
+
+.inbox-thread-summary {
+  white-space: nowrap;
+  font-size: var(--text-micro);
+}
+
+.inbox-thread-chevron {
+  display: inline-flex;
+  color: var(--color-ash);
+  transition: transform 120ms ease;
+}
+
+.inbox-thread.is-open .inbox-thread-chevron {
+  transform: rotate(180deg);
+}
+
+/* Item lines indent under the head's dot column so titles align with the client name. */
+.inbox-thread-body {
+  padding: 0 0 var(--spacing-12) calc(var(--icon-size-nav) + var(--spacing-12));
+}
+
+.inbox-thread-items {
+  display: grid;
+}
+
+.inbox-item-row {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr) minmax(0, auto) auto;
+  gap: var(--spacing-12);
+  align-items: center;
+  padding-block: var(--spacing-8);
+  border-top: 1px solid var(--color-hairline);
+}
+
+a.inbox-item-row:hover {
+  background: var(--surface-nav-active);
+}
+
+.inbox-item-row .chip {
+  justify-self: start;
+}
+
+.inbox-item-title {
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-item-phrase {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-item-time {
   justify-self: end;
+  font-size: var(--text-micro);
+}
+
+.inbox-thread-empty {
+  padding-block: var(--spacing-8);
+  border-top: 1px solid var(--color-hairline);
+}
+
+.inbox-thread-foot {
+  padding-top: var(--spacing-8);
+  border-top: 1px solid var(--color-hairline);
   font-size: var(--text-micro);
 }
 
@@ -1009,117 +1033,28 @@
   text-decoration: underline;
 }
 
-/* Client portal — centered checklist on bone, paper cards, item states. */
-.portal-page {
-  display: grid;
-  gap: var(--spacing-24);
-  width: min(100%, 640px);
-}
-
-.portal-header {
-  display: grid;
-  gap: var(--spacing-8);
-  text-align: center;
-}
-
-.portal-firm {
-  font-size: var(--text-heading);
-  font-weight: var(--font-weight-regular);
-  line-height: 32px;
-  letter-spacing: var(--tracking-heading);
-}
-
-.portal-intro {
-  color: var(--color-ash);
-  font-size: var(--text-ui);
-  line-height: var(--leading-ui);
-}
-
-.portal-checklist {
-  display: grid;
-  gap: var(--spacing-16);
-}
-
-.portal-card {
-  display: grid;
-  gap: var(--spacing-12);
-  padding: var(--spacing-24);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-cards);
-  background: var(--surface-card);
-}
-
-.portal-card-title {
-  font-size: var(--text-subheading);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--leading-subheading);
-}
-
-.portal-card-description {
-  margin: 0;
-}
-
-.portal-status {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-8);
-  font-size: var(--text-ui);
-  line-height: var(--leading-ui);
-}
-
-.portal-status-processing {
-  color: var(--color-ash);
-}
-
-.portal-status-received {
-  color: var(--color-success);
-}
-
-.portal-status-attention {
-  color: var(--color-warning);
-}
-
-.portal-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--color-hairline);
-  border-top-color: var(--color-ash);
-  border-radius: 50%;
-  animation: portal-spin 0.8s linear infinite;
-}
-
-@keyframes portal-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.portal-general {
-  display: grid;
-  gap: var(--spacing-12);
-}
-
-.portal-general-title {
-  font-size: var(--text-subheading);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--leading-subheading);
-}
-
-.portal-invalid {
-  place-items: center;
-  min-height: 40vh;
-  text-align: center;
-}
-
-.portal-invalid-message {
-  font-size: var(--text-ui);
-  line-height: var(--leading-ui);
-}
-
 /* Form fields — modal create flows and the settings schema builder share one recipe. */
 .form-grid {
   display: grid;
   gap: var(--spacing-16);
+}
+
+/* Modal forms sit tighter than settings forms; fieldsets are grouping, not chrome. */
+.modal-panel .form-grid {
+  gap: var(--spacing-12);
+}
+
+.modal-panel fieldset {
+  display: grid;
+  gap: var(--spacing-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.modal-panel legend {
+  padding: 0;
 }
 
 .form-field {
@@ -1307,22 +1242,23 @@
   margin-bottom: 0;
 }
 
-.review-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-12);
-}
-
 .review-fields {
   display: grid;
 }
 
+/*
+ * Compact inline field rows: name · always-editable input · confidence, one ~40px
+ * hairline-ruled line each. The value rests in a real input (no edit mode); the source
+ * snippet hides behind a per-row disclosure so it never adds resting row height.
+ */
 .review-field {
   display: grid;
-  gap: var(--spacing-8);
-  justify-items: start;
-  padding: var(--spacing-16) 0;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr) auto;
+  align-items: center;
+  column-gap: var(--spacing-12);
+  row-gap: var(--spacing-4);
+  min-height: 40px;
+  padding: var(--spacing-4) 0;
   border-top: 1px solid var(--color-hairline);
 }
 
@@ -1330,11 +1266,11 @@
   border-bottom: 1px solid var(--color-hairline);
 }
 
-.review-field-head {
+.review-field-name {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   gap: var(--spacing-8);
+  min-width: 0;
 }
 
 .review-field-label {
@@ -1351,18 +1287,66 @@
   line-height: var(--leading-caption);
 }
 
-.review-field-value {
+.review-field-control {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  min-width: 0;
+}
+
+.review-field-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  padding: var(--spacing-4) var(--spacing-8);
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+  color: var(--color-ink);
   font-size: var(--text-ui);
   line-height: var(--leading-ui);
 }
 
-.review-field-note {
+.review-field-input::placeholder {
+  color: var(--color-ash);
+}
+
+.review-field-input:disabled {
+  border-color: var(--color-hairline);
+  background: var(--surface-wash);
+  color: var(--color-ash);
+}
+
+.review-field-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-8);
+}
+
+/* Quiet saving/saved/edited hint beside the confidence chip — ash, never a status colour. */
+.review-field-state {
   color: var(--color-ash);
   font-size: var(--text-micro);
   line-height: var(--leading-micro);
 }
 
+.review-source-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+  cursor: pointer;
+}
+
+.review-source-toggle:hover {
+  color: var(--color-ink);
+}
+
 .review-source {
+  grid-column: 1 / -1;
   margin: 0;
   padding: var(--spacing-4) var(--spacing-12);
   border-left: 1px solid var(--color-hairline);
@@ -1371,30 +1355,8 @@
   line-height: var(--leading-micro);
 }
 
-.review-field-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-8);
-}
-
-.review-field-edit {
-  display: grid;
-  gap: var(--spacing-8);
-  width: 100%;
-}
-
-.review-field-edit[hidden] {
+.review-source[hidden] {
   display: none;
-}
-
-.review-field-edit select {
-  min-height: var(--control-height);
-  padding: var(--spacing-8) var(--spacing-12);
-  border: 1px solid var(--color-input-hairline);
-  border-radius: var(--radius-inputs);
-  background: var(--surface-card);
-  color: var(--color-ink);
-  font: inherit;
 }
 
 .review-foot {
@@ -1462,17 +1424,18 @@
 }
 
 /*
- * Engagement workspace — dense checklist and activity rows. Single-line anatomy: the
- * checklist item description lives in the title tooltip, the trailing cluster is the
- * 22px chip plus a compact ghost Waive; activity rows are muted time · action · target.
- * Both compose .list-row rather than forking it.
+ * Engagement workspace — checklist, validation, and activity rows. Checklist rows are
+ * title + muted description with a trailing chip plus one per-status action (Waive /
+ * View / Review); validation rows are a two-column template so the chip keeps its natural
+ * width; activity rows are muted time · action · target. All compose .list-row.
  */
 .checklist-list .list-row {
   grid-template-columns: minmax(0, 1fr) auto;
   padding-block: var(--spacing-8);
 }
 
-.checklist-list .list-row-title {
+.checklist-list .list-row-title,
+.checklist-list .list-row-body .muted {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1489,6 +1452,21 @@
   min-height: var(--spacing-24);
   padding: 0 var(--spacing-8);
   font-size: var(--text-micro);
+}
+
+.checklist-doc-link {
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-ui);
+}
+
+.checklist-doc-link:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
+.validation-list .list-row {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .activity-list .list-row {
@@ -1511,4 +1489,469 @@
 
 .page-home .wash-card {
   padding-block: var(--spacing-20);
+}
+
+/*
+ * Filter bar — the list-page filter toolbar (Documents, Engagements). Labeled native
+ * selects bound to real data and synced to the URL query string. A slimmer cousin of the
+ * .form-field input recipe: ~32px controls, ash inline labels, and a hairline separating
+ * the bar from the table below. The "Clear filters" link is a quiet text link pushed to
+ * the trailing edge.
+ */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-12);
+  margin-bottom: var(--spacing-16);
+  padding-bottom: var(--spacing-12);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.filter-label {
+  color: var(--color-ash);
+  white-space: nowrap;
+}
+
+.filter-field select {
+  min-height: 32px;
+  padding: var(--spacing-4) var(--spacing-8);
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.filter-clear {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/*
+ * Breadcrumbs — ash trail rendered by breadcrumbs() in render.ts, placed above pageHeader
+ * on detail pages. The current page is the last item: ink, never a link.
+ */
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-8);
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.breadcrumb-link {
+  color: var(--color-ash);
+}
+
+.breadcrumb-link:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
+.breadcrumb-current {
+  color: var(--color-ink);
+}
+
+/* Muted subtitle directly under a page title (e.g. "1120-S · 2025" on the workspace). */
+.page-subtitle {
+  margin-top: calc(-1 * var(--spacing-20));
+  margin-bottom: var(--spacing-16);
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+/*
+ * Engagement status strip — one hairline-ruled line of the engagement's working status
+ * (stage chip, checklist progress, review pressure, trusted count, portal link). This is
+ * live working state with actionable links, not a metrics ticker band.
+ */
+.engagement-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-16);
+  padding: var(--spacing-12) 0;
+  border-top: 1px solid var(--color-hairline);
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+}
+
+.engagement-status-item {
+  white-space: nowrap;
+}
+
+.engagement-status-value {
+  color: var(--color-ink);
+}
+
+.engagement-status-link:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
+.engagement-status .portal-link-control {
+  margin-left: auto;
+}
+
+/*
+ * Segmented selector — two-option choice in modal forms (client mode, filing type).
+ * Real radio inputs stay in the DOM via .visually-hidden-input; the selected label reads
+ * ink border on wash. Follows the underline-tab/wash-card spirit — never a chip, never
+ * highlighter.
+ */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-8);
+}
+
+.segmented-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-height);
+  padding: 0 var(--spacing-12);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-inputs);
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+  text-align: center;
+  cursor: pointer;
+}
+
+.segmented-option:hover {
+  color: var(--color-ink);
+}
+
+.segmented-option.is-selected,
+.segmented-option:has(input:checked) {
+  border-color: var(--color-ink);
+  background: var(--surface-wash);
+  color: var(--color-ink);
+}
+
+.segmented-option:has(input:focus-visible) {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/*
+ * Visually hidden inputs — clipped out of the visual layout but still focusable, so the
+ * dropzone file input and segmented radios keep keyboard and assistive-tech semantics.
+ * Never display: none (that removes the control from the tab order).
+ */
+.visually-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+/*
+ * Client portal — chromeless, low-friction upload surface. The request checklist sits in a
+ * left column with 16px inline status marks and collapsible nested files; the right column
+ * is one common drop zone plus a live status list for in-flight and unmatched uploads.
+ * Hairlines only, sentence case, the shared `.chip` recipe for status — never highlighter.
+ */
+.portal-page {
+  display: grid;
+  gap: var(--spacing-32);
+  width: min(100%, 960px);
+}
+
+.portal-header {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.portal-firm {
+  font-size: var(--text-heading-sm);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-heading-sm);
+}
+
+.portal-intro {
+  margin: 0;
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.portal-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--spacing-32);
+  align-items: start;
+}
+
+.portal-section-title {
+  margin: 0 0 var(--spacing-12);
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+}
+
+/* Checklist rows — hairline-ruled, never cards. */
+.portal-item-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portal-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: var(--spacing-12);
+  padding: var(--spacing-16) 0;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.portal-item:last-child {
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+/* 16px inline status marks: check received, dash waived, warning attention, circle open. */
+.portal-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.portal-mark-open {
+  border: 1px solid var(--color-outline);
+  border-radius: 50%;
+}
+
+.portal-mark-received {
+  color: var(--color-success);
+}
+
+.portal-mark-attention {
+  color: var(--color-warning);
+}
+
+.portal-mark-waived::after {
+  content: "";
+  width: 8px;
+  border-top: 1px solid var(--color-ash);
+}
+
+.portal-item-body {
+  display: grid;
+  gap: var(--spacing-4);
+  justify-items: start;
+  min-width: 0;
+}
+
+.portal-item-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-8);
+  margin: 0;
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.portal-required {
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-item-description,
+.portal-waived-note {
+  margin: 0;
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+/* Matched files nest under their item: collapsible, indented, hairline-left. */
+.portal-item-docs {
+  justify-self: stretch;
+  margin-top: var(--spacing-4);
+}
+
+.portal-item-docs-summary {
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+  cursor: pointer;
+}
+
+.portal-doc-list {
+  display: grid;
+  gap: var(--spacing-8);
+  margin: var(--spacing-8) 0 0;
+  padding: 0 0 0 var(--spacing-12);
+  border-left: 1px solid var(--color-hairline);
+  list-style: none;
+}
+
+.portal-doc {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  min-width: 0;
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-doc-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.portal-doc-view {
+  margin-left: auto;
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-doc-view:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+}
+
+/* Waive — a quiet ghost control revealing an inline note form. */
+.portal-waive {
+  justify-self: stretch;
+  margin-top: var(--spacing-4);
+}
+
+.portal-waive-toggle {
+  min-height: var(--spacing-24);
+  padding: 0;
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+}
+
+.portal-waive-toggle:hover {
+  color: var(--color-ink);
+}
+
+.portal-waive-form {
+  display: grid;
+  gap: var(--spacing-8);
+  margin-top: var(--spacing-8);
+}
+
+.portal-waive-form[hidden] {
+  display: none;
+}
+
+.portal-waive-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+/* The one common drop zone — composes the shared .dropzone recipe, just larger. */
+.portal-dropzone {
+  min-height: 180px;
+  align-content: center;
+}
+
+.portal-dropzone-title {
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.portal-dropzone-hint {
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+/* Live status list — one compact hairline row per in-flight or unmatched upload. */
+.portal-uploads {
+  margin-top: var(--spacing-24);
+}
+
+.portal-upload-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portal-upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-8);
+  padding: var(--spacing-8) 0;
+  border-top: 1px solid var(--color-hairline);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-upload-row:last-child {
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.portal-upload-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-upload-dismiss {
+  margin-left: auto;
+  min-height: var(--spacing-24);
+  padding: 0 var(--spacing-8);
+  font-size: var(--text-micro);
+}
+
+.portal-uploads-empty {
+  padding: var(--spacing-8) 0;
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.portal-invalid {
+  place-items: center;
+  min-height: 40vh;
+  text-align: center;
+}
+
+.portal-invalid-message {
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+@media (max-width: 760px) {
+  .portal-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

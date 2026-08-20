@@ -9,6 +9,8 @@ export const activitySchema = z.object({
   direction: z.enum(["inbound", "outbound", "internal"]),
   /** Set on document lifecycle activities so inbox rows can deep-link without parsing activity ids. */
   documentId: z.string().min(1).optional(),
+  /** Set on checklist-scoped activities (match, waive, request) so the inbox can nest updates under a request thread. */
+  requestItemId: z.string().min(1).optional(),
   readAt: z.string().datetime().optional(),
   createdAt: z.string().datetime(),
 });

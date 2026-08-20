@@ -170,6 +170,38 @@ describe("new-engagement modal", () => {
     expect(created).toContain("Contact email");
   });
 
+  test("client mode and filing type are segmented selectors with hidden real radios", () => {
+    const html = renderNewEngagementModal(state());
+
+    expect(html.match(/class="segmented"/g)?.length).toBe(2);
+    expect(html).toMatch(
+      /<label class="segmented-option is-selected"><input class="visually-hidden-input" type="radio" name="mode" value="existing" checked \/><span>Use selected client<\/span><\/label>/,
+    );
+    expect(html).toMatch(
+      /<label class="segmented-option"><input class="visually-hidden-input" type="radio" name="mode" value="new" \/><span>Create new client<\/span><\/label>/,
+    );
+    expect(html).toMatch(/name="filingType" value="1120-S" checked/);
+    expect(html).toMatch(/name="filingType" value="1065" \//);
+    expect(html).not.toMatch(/<label><input type="radio"/);
+  });
+
+  test("the selected segment follows modal state", () => {
+    const html = renderNewEngagementModal(state({ mode: "new", filingType: "1065" }));
+
+    expect(html).toMatch(/name="mode" value="new" checked/);
+    expect(html).toMatch(/name="filingType" value="1065" checked/);
+    expect(html).toMatch(/name="filingType" value="1120-S" \//);
+  });
+
+  test("zero clients keeps the hidden new-mode input and the filing-type segments", () => {
+    const empty = initialNewEngagementState({ clients: [], documentTypes: [] });
+    const html = renderNewEngagementModal({ ...empty, clients: [] });
+
+    expect(html).toContain('<input type="hidden" name="mode" value="new" />');
+    expect(html.match(/class="segmented"/g)?.length).toBe(1);
+    expect(html).toMatch(/name="filingType" value="1120-S" checked/);
+  });
+
   test("step 1 is a dismissable dialog using the clients form vocabulary", () => {
     const html = renderNewEngagementModal(state());
 

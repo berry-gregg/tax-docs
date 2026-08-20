@@ -77,3 +77,23 @@ export function activitiesCollection(db: Db): Collection<StoredDoc<Activity>> {
 export function engineExportsCollection(db: Db): Collection<StoredDoc<EngineExport>> {
   return db.collection<StoredDoc<EngineExport>>(collectionNames.engineExports);
 }
+
+/** Indexes behind the list filters, portal token lookups, and per-engagement feeds. Runs once per connect. */
+export async function ensureIndexes(db: Db): Promise<void> {
+  await Promise.all([
+    engagementsCollection(db).createIndexes([
+      { key: { clientId: 1 } },
+      { key: { taxYear: 1 } },
+      { key: { filingType: 1 } },
+      { key: { status: 1 } },
+      { key: { createdAt: -1 } },
+      { key: { portalToken: 1 }, unique: true },
+    ]),
+    taxDocumentsCollection(db).createIndexes([
+      { key: { engagementId: 1 } },
+      { key: { createdAt: -1 } },
+    ]),
+    activitiesCollection(db).createIndexes([{ key: { engagementId: 1 } }]),
+    requestItemsCollection(db).createIndexes([{ key: { engagementId: 1 } }]),
+  ]);
+}

@@ -4,6 +4,7 @@ import { navItems } from "../../src/client/app/nav.ts";
 import {
   bindPortalLinkControls,
   bindRowLinks,
+  breadcrumbs,
   confidenceChip,
   pageHeader,
   pipelineChip,
@@ -46,6 +47,16 @@ describe("nav tree", () => {
       { id: "documents-needs-review", label: "Needs review", href: "/documents?tab=needs-review" },
     ]);
   });
+
+  test("only Inbox and Documents carry a live badge", () => {
+    expect(navItems.find((item) => item.id === "inbox")?.badge).toBe("inbox-unread");
+    expect(navItems.find((item) => item.id === "documents")?.badge).toBe("documents-needs-review");
+    for (const item of navItems) {
+      if (item.id !== "inbox" && item.id !== "documents") {
+        expect(item.badge).toBeUndefined();
+      }
+    }
+  });
 });
 
 describe("app shell chrome", () => {
@@ -70,11 +81,25 @@ describe("app shell chrome", () => {
     expect(withoutUnread).not.toContain(">3</span>");
   });
 
-  test("engagement, review, and export deep links keep the Engagements group current", () => {
-    const html = renderApp({ pathname: "/engagements/eng-1/review/doc-1", body: "" });
+  test("the documents badge is the live needs-review count, hidden at zero", () => {
+    const withQueue = renderApp({ pathname: "/", body: "", documentsNeedsReviewCount: 4 });
+    const withoutQueue = renderApp({ pathname: "/", body: "", documentsNeedsReviewCount: 0 });
+
+    expect(withQueue).toContain('<span class="badge" data-documents-badge>4</span>');
+    expect(withoutQueue).toContain("data-documents-badge hidden");
+  });
+
+  test("engagement and export deep links keep the Engagements group current", () => {
+    const html = renderApp({ pathname: "/engagements/eng-1/export", body: "" });
 
     expect(html).toContain('data-nav-group="engagements" class="nav-group is-active"');
     expect(html).toContain('data-icon="briefcase"');
+  });
+
+  test("a document review deep link keeps the Documents group current", () => {
+    const html = renderApp({ pathname: "/documents/doc-1", body: "" });
+
+    expect(html).toContain('data-nav-group="documents" class="nav-group is-active"');
   });
 
   test("documents expands its children and marks the lens matching the query string", () => {
@@ -385,18 +410,112 @@ describe("product tokens", () => {
   });
 });
 
-describe("shell.css page furniture", () => {
-  test("adds the ticker strip, pipeline chips, modal, side panel, dropzone, and confidence badges", async () => {
+describe("global fixed sidebar", () => {
+  test("the sidebar is sticky, full-viewport, and independently scrollable", async () => {
     const css = await Bun.file("src/client/styles/shell.css").text();
 
-    expect(css).not.toMatch(/\.ticker \{[^}]*background:\s*var\(--surface-inverted\)/s);
-    expect(css).toMatch(/\.ticker \{[^}]*border-top:\s*1px solid var\(--color-hairline\)/s);
-    expect(css).not.toMatch(/\.ticker-label \{[^}]*text-transform:\s*uppercase/s);
-    expect(css).toMatch(/\.ticker-label \{[^}]*color:\s*var\(--color-ash\)/s);
-    expect(css).toMatch(/\.ticker-label \{[^}]*font-weight:\s*var\(--font-weight-regular\)/s);
-    expect(css).toMatch(/\.ticker-value \{[^}]*color:\s*var\(--color-ink\)/s);
-    expect(css).toMatch(/\.ticker-value \{[^}]*font-size:\s*var\(--text-ui\)/s);
-    expect(css).toMatch(/\.ticker-value \{[^}]*font-weight:\s*var\(--font-weight-regular\)/s);
+    expect(css).toMatch(/\.sidebar \{[^}]*position:\s*sticky/s);
+    expect(css).toMatch(/\.sidebar \{[^}]*top:\s*0/s);
+    expect(css).toMatch(/\.sidebar \{[^}]*align-self:\s*start/s);
+    expect(css).toMatch(/\.sidebar \{[^}]*height:\s*100vh/s);
+    expect(css).toMatch(/\.sidebar \{[^}]*max-height:\s*100vh/s);
+    expect(css).toMatch(/\.sidebar \{[^}]*overflow-y:\s*auto/s);
+  });
+
+  test("the stacked mobile layout reverts the sidebar to static flow", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+    const media = css.slice(css.indexOf("@media (max-width: 960px)"));
+
+    expect(media).toMatch(/\.sidebar \{[^}]*position:\s*static/s);
+    expect(media).toMatch(/\.sidebar \{[^}]*height:\s*auto/s);
+    expect(media).toMatch(/\.sidebar \{[^}]*overflow-y:\s*visible/s);
+  });
+});
+
+describe("breadcrumbs helper", () => {
+  test("renders ash links, / separators, and the current page as ink text", () => {
+    const html = breadcrumbs([
+      { label: "Engagements", href: "/engagements" },
+      { label: "Northwind Partners LLC" },
+    ]);
+
+    expect(html).toContain('<nav class="breadcrumbs" aria-label="Breadcrumb">');
+    expect(html).toMatch(
+      /<a class="breadcrumb-link" href="\/engagements" data-nav-link>Engagements<\/a>/,
+    );
+    expect(html).toContain('aria-hidden="true"> / </span>');
+    expect(html).toMatch(
+      /<span class="breadcrumb-current" aria-current="page">Northwind Partners LLC<\/span>/,
+    );
+  });
+
+  test("the last item never renders as a link even when it has an href", () => {
+    const html = breadcrumbs([
+      { label: "Engagements", href: "/engagements" },
+      { label: "Acme", href: "/engagements/eng-1" },
+    ]);
+
+    expect(html).not.toContain('href="/engagements/eng-1"');
+    expect(html).toContain('class="breadcrumb-current"');
+  });
+
+  test("escapes labels and hrefs", () => {
+    const html = breadcrumbs([{ label: '<img src="x">' }]);
+
+    expect(html).not.toContain('<img src="x">');
+  });
+});
+
+describe("workspace status and form furniture", () => {
+  test("the engagement status strip is one hairline-ruled line, not a ticker", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).toMatch(/\.engagement-status \{[^}]*border-top:\s*1px solid var\(--color-hairline\)/s);
+    expect(css).toMatch(/\.engagement-status \{[^}]*border-bottom:\s*1px solid var\(--color-hairline\)/s);
+    expect(css).toMatch(/\.engagement-status \{[^}]*color:\s*var\(--color-ash\)/s);
+    expect(css).toMatch(/\.engagement-status-value \{[^}]*color:\s*var\(--color-ink\)/s);
+  });
+
+  test("validation rows use a two-column template so chips keep natural width", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).toMatch(
+      /\.validation-list \.list-row \{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/s,
+    );
+    expect(css).toMatch(/\.list-row > \.chip \{[^}]*justify-self:\s*end/s);
+  });
+
+  test("hidden-but-focusable inputs use the clip recipe, never display none", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).toMatch(/\.visually-hidden-input \{[^}]*clip-path:\s*inset\(50%\)/s);
+    expect(css).not.toMatch(/\.visually-hidden-input \{[^}]*display:\s*none/s);
+  });
+
+  test("segmented selector marks the checked option with ink border and wash fill", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).toMatch(
+      /\.segmented-option\.is-selected,\s*\.segmented-option:has\(input:checked\) \{[^}]*border-color:\s*var\(--color-ink\)/s,
+    );
+    expect(css).toMatch(
+      /\.segmented-option\.is-selected,\s*\.segmented-option:has\(input:checked\) \{[^}]*background:\s*var\(--surface-wash\)/s,
+    );
+  });
+
+  test("breadcrumbs are ash with an ink current page", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).toMatch(/\.breadcrumbs \{[^}]*color:\s*var\(--color-ash\)/s);
+    expect(css).toMatch(/\.breadcrumb-current \{[^}]*color:\s*var\(--color-ink\)/s);
+  });
+});
+
+describe("shell.css page furniture", () => {
+  test("adds the pipeline chips, modal, side panel, dropzone, and confidence badges", async () => {
+    const css = await Bun.file("src/client/styles/shell.css").text();
+
+    expect(css).not.toContain(".ticker");
     expect(css).toMatch(/\.chip-processing \{[^}]*color:\s*var\(--color-ash\)/s);
     expect(css).toMatch(/\.chip-warning \{[^}]*color:\s*var\(--color-warning\)/s);
     expect(css).toMatch(/\.chip-success \{[^}]*color:\s*var\(--color-success\)/s);

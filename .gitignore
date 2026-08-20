@@ -26,3 +26,7 @@ data/
 # Common tax/doc working files
 *.tmp
 ~$*
+
+presentation/
+docs/
+.superpowers/

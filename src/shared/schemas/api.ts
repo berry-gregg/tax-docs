@@ -2,9 +2,10 @@ import { z } from "zod";
 import { FIRM_NAME } from "../constants.ts";
 import { activitySchema } from "./activity.ts";
 import { clientSchema } from "./client.ts";
-import { taxDocumentSchema } from "./document.ts";
+import { pipelineStatusSchema, taxDocumentSchema } from "./document.ts";
+import { documentTypeSchema } from "./document-type.ts";
 import { engagementSchema, filingTypeSchema } from "./engagement.ts";
-import { requestItemSchema } from "./request.ts";
+import { requestItemSchema, requestItemStatusSchema } from "./request.ts";
 
 /**
  * Wire shapes for `/api/*`. Server routes build their payloads through these schemas and the
@@ -51,15 +52,8 @@ export const clientListResponseSchema = z.object({
   clients: z.array(clientSchema),
 });
 
-export const inboxEntrySchema = activitySchema.extend({
-  clientName: z.string().min(1),
-  portalToken: z.string().min(1).optional(),
-  unread: z.boolean(),
-});
-export type InboxEntry = z.infer<typeof inboxEntrySchema>;
-
-export const inboxListResponseSchema = z.object({
-  entries: z.array(inboxEntrySchema),
+export const documentTypesResponseSchema = z.object({
+  documentTypes: z.array(documentTypeSchema),
 });
 
 export const inboxUnreadCountSchema = z.object({
@@ -89,19 +83,49 @@ export type Metrics = z.infer<typeof metricsSchema>;
 export const portalStatusSchema = z.enum(["waiting", "processing", "received", "needs-attention"]);
 export type PortalStatus = z.infer<typeof portalStatusSchema>;
 
+/**
+ * A client-safe projection of a TaxDocument: filename, pipeline stage, resolved type name, and
+ * upload time only. Confidence, reasoning, rejection detail, and extraction never cross this wire.
+ */
+export const portalDocumentSchema = z.object({
+  id: z.string().min(1),
+  filename: z.string().min(1),
+  pipelineStatus: pipelineStatusSchema,
+  documentTypeName: z.string().min(1).nullable(),
+  uploadedAt: z.string().datetime(),
+});
+export type PortalDocument = z.infer<typeof portalDocumentSchema>;
+
+export const portalItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  required: z.boolean(),
+  portalStatus: portalStatusSchema,
+  /** Raw request-item status so the portal can render waived items honestly. */
+  status: requestItemStatusSchema,
+  waiveNote: z.string().max(500).optional(),
+  /** The item's matched documents, resolved so they can nest under the checklist row. */
+  documents: z.array(portalDocumentSchema),
+});
+export type PortalItem = z.infer<typeof portalItemSchema>;
+
 export const portalStateSchema = z.object({
   firmName: z.literal(FIRM_NAME),
   clientName: z.string().min(1),
   taxYear: z.number().int(),
   filingType: filingTypeSchema,
-  items: z.array(
-    z.object({
-      id: z.string().min(1),
-      title: z.string().min(1),
-      description: z.string().min(1),
-      required: z.boolean(),
-      portalStatus: portalStatusSchema,
-    }),
-  ),
+  items: z.array(portalItemSchema),
+  /** Client portal uploads not (yet) matched to any item — in-flight, unclassified, or rejected. */
+  unmatched: z.array(portalDocumentSchema),
 });
 export type PortalState = z.infer<typeof portalStateSchema>;
+
+export const portalWaiveInputSchema = z.object({
+  note: z.string().max(500).optional(),
+});
+export type PortalWaiveInput = z.infer<typeof portalWaiveInputSchema>;
+
+export const portalWaiveResponseSchema = z.object({
+  item: portalItemSchema,
+});

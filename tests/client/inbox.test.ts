@@ -1,224 +1,222 @@
-import { describe, expect, test } from "bun:test";
-import { inboxPage, renderInbox, type InboxData } from "../../src/client/app/pages/inbox.ts";
+import { afterEach, describe, expect, test } from "bun:test";
+import {
+  inboxPage,
+  openThreadIds,
+  renderInbox,
+  type InboxData,
+} from "../../src/client/app/pages/inbox.ts";
 import { POLL_INTERVAL_MS } from "../../src/shared/constants.ts";
-import { inboxEntrySchema } from "../../src/shared/schemas/api.ts";
+import {
+  inboxThreadItemSchema,
+  inboxThreadSchema,
+  type InboxThreadItem,
+} from "../../src/shared/schemas/inbox.ts";
 
 const now = new Date("2026-08-19T20:00:00.000Z");
 
-function entry(overrides: Record<string, unknown> = {}) {
-  return inboxEntrySchema.parse({
-    id: "act-1",
+function item(overrides: Record<string, unknown> = {}): InboxThreadItem {
+  return inboxThreadItemSchema.parse({
+    id: "item-1",
+    title: "W-2 forms",
+    status: "open",
+    lastUpdateAt: "2026-08-19T18:00:00.000Z",
+    ...overrides,
+  });
+}
+
+function thread(overrides: Record<string, unknown> = {}) {
+  return inboxThreadSchema.parse({
     engagementId: "eng-1",
-    actor: "cpa",
-    action: "request-sent",
-    detail: "3 items requested",
-    direction: "outbound",
-    createdAt: "2026-08-19T18:00:00.000Z",
     clientName: "Northwind Partners LLC",
+    engagementLabel: "1120-S · 2026",
     portalToken: "portal-token-abc",
+    requestSentAt: "2026-08-19T18:00:00.000Z",
     unread: false,
+    unreadCount: 0,
+    items: [],
     ...overrides,
   });
 }
 
 function data(overrides: Partial<InboxData> = {}): InboxData {
-  return { entries: [], now, ...overrides };
+  return { threads: [], now, ...overrides };
 }
 
-/** The inbound anchors are leaf rows — no nested anchors — so a lazy match isolates one row. */
-function rowFor(html: string, entryId: string): string {
-  const match = html.match(
-    new RegExp(`<a class="list-row inbox-row[^"]*"[^>]*data-entry-id="${entryId}"[^>]*>[\\s\\S]*?</a>`),
-  );
-  return match?.[0] ?? "";
-}
+afterEach(() => {
+  openThreadIds.clear();
+});
 
-describe("inbox page", () => {
-  test("entries group under one client header row instead of repeating the name per row", () => {
+describe("inbox thread page", () => {
+  test("thread header carries client, engagement label, request summary, and portal control", () => {
     const html = renderInbox(
       data({
-        entries: [
-          entry({
-            id: "act-1",
-            action: "document-uploaded",
-            direction: "inbound",
-            actor: "client",
-            detail: "w2.pdf uploaded",
-          }),
-          entry({
-            id: "act-2",
-            action: "document-extracted",
-            direction: "inbound",
-            actor: "agent",
-            documentId: "doc-1",
-            detail: "w2.pdf — 12 fields extracted",
-          }),
-        ],
-      }),
-    );
-
-    expect(html.match(/Northwind Partners LLC/g)?.length).toBe(1);
-    expect(html).toMatch(
-      /<a class="inbox-group-head" href="\/engagements\/eng-1" data-nav-link>Northwind Partners LLC<\/a>/,
-    );
-  });
-
-  test("separate engagements get separate group headers", () => {
-    const html = renderInbox(
-      data({
-        entries: [
-          entry({ id: "act-1", action: "document-uploaded", direction: "inbound" }),
-          entry({
-            id: "act-2",
-            engagementId: "eng-2",
-            clientName: "Acme Manufacturing",
-            action: "document-uploaded",
-            direction: "inbound",
-          }),
-        ],
-      }),
-    );
-
-    expect(html.match(/class="inbox-group-head"/g)?.length).toBe(2);
-    expect(html).toContain('href="/engagements/eng-1"');
-    expect(html).toContain('href="/engagements/eng-2"');
-    expect(html).toContain("Acme Manufacturing");
-  });
-
-  test("rows are dense single-line anchors with the unread marker inside the row", () => {
-    const html = renderInbox(
-      data({
-        entries: [
-          entry({
-            id: "act-unread",
-            action: "document-uploaded",
-            direction: "inbound",
-            actor: "client",
-            detail: "w2.pdf uploaded",
+        threads: [
+          thread({
             unread: true,
-          }),
-          entry({
-            id: "act-read",
-            action: "document-uploaded",
-            direction: "inbound",
-            actor: "client",
-            detail: "k1.pdf uploaded",
-            unread: false,
-            readAt: "2026-08-19T19:00:00.000Z",
+            unreadCount: 2,
+            items: [
+              item({ id: "item-1", status: "received", documentFilename: "w2-final.pdf", documentId: "doc-1" }),
+              item({ id: "item-2", title: "Balance sheet", status: "open" }),
+              item({ id: "item-3", title: "Bank statements", status: "open" }),
+            ],
           }),
         ],
       }),
     );
 
-    expect(html).not.toContain("inbox-entry-inbound");
-    expect(html).not.toContain('<div class="inbox-entry');
+    expect(html).toContain('data-thread data-engagement-id="eng-1"');
+    expect(html).toContain("Northwind Partners LLC");
+    expect(html).toContain("1120-S · 2026");
+    expect(html).toContain("Request sent 2h ago · 1 of 3 items received");
+    expect(html).toContain('<span class="unread-dot" aria-hidden="true"></span>');
+    expect(html).toContain('data-unread="true"');
+    expect(html).toMatch(/class="inbox-thread-head[^"]*is-unread/);
+    expect(html).toContain('data-icon="chevron-down"');
 
-    const unreadRow = rowFor(html, "act-unread");
-    expect(unreadRow).toContain('class="list-row inbox-row is-unread"');
-    expect(unreadRow).toContain('data-unread="true"');
-    expect(unreadRow).toContain('<span class="unread-dot" aria-hidden="true"></span>');
-    expect(unreadRow).toContain('data-icon="arrow-down-left"');
-    expect(unreadRow).toContain('<span class="list-row-title">Client</span>');
-    expect(unreadRow).toContain("w2.pdf uploaded");
-    expect(unreadRow).toMatch(/<time class="muted inbox-time"[^>]*>2h ago<\/time>/);
-
-    const readRow = rowFor(html, "act-read");
-    expect(readRow).toContain('class="list-row inbox-row"');
-    expect(readRow).not.toContain("is-unread");
-    expect(readRow).not.toContain('data-unread="true"');
-    expect(readRow).toContain('<span class="unread-dot" aria-hidden="true"></span>');
-  });
-
-  test("request-sent rows carry one compact portal control instead of a field and two buttons", () => {
-    const html = renderInbox(
-      data({
-        entries: [entry({ id: "act-sent", action: "request-sent", direction: "outbound" })],
-      }),
-    );
-
-    expect(html).toContain('<div class="list-row inbox-row inbox-row-outbound">');
-    expect(html).not.toMatch(/<a[^>]*class="list-row inbox-row inbox-row-outbound"/);
-    expect(html).toContain('data-icon="arrow-up-right"');
-    expect(html).toContain("Request sent · 3 items");
-
+    // The one shared portal control recipe, not a forked field + buttons.
     expect(html).toContain("data-portal-link-control");
     expect(html).toContain('data-copy-portal-link="/portal/portal-token-abc"');
-    expect(html).toContain("Copy portal link");
     expect(html).toMatch(
       /<a class="portal-link-open" href="\/portal\/portal-token-abc" data-nav-link>Open<\/a>/,
     );
-
-    expect(html).not.toContain("readonly");
-    expect(html).not.toContain("search-field");
-    expect(html).not.toContain("portal-link-row");
-    expect(html).not.toContain("data-portal-open");
-    expect(html).not.toContain("Open portal");
-    expect(html).not.toContain("btn-secondary");
   });
 
-  test("document-extracted entries deep-link via stored documentId, not activity id shape", () => {
+  test("collapsed by default; openThreadIds drives expanded markup across repaints", () => {
+    const collapsed = renderInbox(data({ threads: [thread()] }));
+    expect(collapsed).toContain('aria-expanded="false"');
+    expect(collapsed).toMatch(/<div class="inbox-thread-body" data-thread-body hidden>/);
+    expect(collapsed).not.toContain("is-open");
+
+    openThreadIds.add("eng-1");
+    const expanded = renderInbox(data({ threads: [thread()] }));
+    expect(expanded).toContain('aria-expanded="true"');
+    expect(expanded).toMatch(/<div class="inbox-thread-body" data-thread-body>/);
+    expect(expanded).toMatch(/class="inbox-thread[^"]*is-open/);
+  });
+
+  test("one line per request item — multiple uploads on one item never add rows", () => {
     const html = renderInbox(
       data({
-        entries: [
-          entry({
-            id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-            action: "document-extracted",
-            direction: "inbound",
-            documentId: "doc-1",
-            detail: "northwind-w2.pdf — 12 fields extracted, 0 not found",
-            unread: false,
+        threads: [
+          thread({
+            items: [
+              // Two files were uploaded against this item; the thread still shows one line.
+              item({ id: "item-1", status: "received", documentId: "doc-2", documentFilename: "w2-final.pdf" }),
+              item({ id: "item-2", title: "Balance sheet", status: "open" }),
+            ],
           }),
         ],
       }),
     );
 
-    expect(html).toContain('href="/engagements/eng-1/review/doc-1"');
-    expect(html).not.toContain("/review/f47ac10b");
-    expect(html).toContain("Northwind Partners LLC");
-    expect(html).toContain("2h ago");
+    expect(html.match(/inbox-item-row/g)?.length).toBe(2);
+    expect(html.match(/w2-final\.pdf/g)?.length).toBe(1);
+    expect(html).not.toContain("document-uploaded");
+    expect(html).toContain("Received · w2-final.pdf");
   });
 
-  test("document entries without documentId fall back to the engagement workspace", () => {
+  test("item lines render status chips, waive notes, and phrases from the shared chip recipe", () => {
     const html = renderInbox(
       data({
-        entries: [
-          entry({
-            id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-            action: "document-extracted",
-            direction: "inbound",
-            detail: "orphan activity",
-            unread: false,
+        threads: [
+          thread({
+            items: [
+              item({ id: "item-open", title: "Bank statements", status: "open" }),
+              item({
+                id: "item-waived",
+                title: "Vehicle log",
+                status: "waived",
+                waiveNote: "Sold the truck in March",
+              }),
+              item({
+                id: "item-attn",
+                title: "Balance sheet",
+                status: "needs-attention",
+                documentId: "doc-bs",
+                documentFilename: "balance-sheet.pdf",
+              }),
+            ],
           }),
         ],
       }),
     );
 
-    expect(html).toContain('href="/engagements/eng-1"');
+    expect(html).toContain('<span class="chip chip-processing">Open</span>');
+    expect(html).toContain('<span class="chip chip-processing">Waived</span>');
+    expect(html).toContain('<span class="chip chip-warning">Needs attention</span>');
+    expect(html).toContain("Waived by client — Sold the truck in March");
+    expect(html).toContain("Needs attention · balance-sheet.pdf");
+    expect(html).toContain("Waiting on client");
+  });
+
+  test("items order needs-attention, received, open, waived regardless of payload order", () => {
+    const html = renderInbox(
+      data({
+        threads: [
+          thread({
+            items: [
+              item({ id: "i-waived", title: "Waived item", status: "waived" }),
+              item({ id: "i-open", title: "Open item", status: "open" }),
+              item({ id: "i-received", title: "Received item", status: "received" }),
+              item({ id: "i-attn", title: "Attention item", status: "needs-attention" }),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    const order = ["Attention item", "Received item", "Open item", "Waived item"].map((title) =>
+      html.indexOf(title),
+    );
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  test("items with a document deep-link to /documents/:id; items without stay plain rows", () => {
+    const html = renderInbox(
+      data({
+        threads: [
+          thread({
+            items: [
+              item({ id: "item-1", status: "received", documentId: "doc-1", documentFilename: "w2.pdf" }),
+              item({ id: "item-2", title: "Balance sheet", status: "open" }),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(html).toMatch(/<a class="inbox-item-row" href="\/documents\/doc-1" data-nav-link>/);
     expect(html).not.toContain("/review/");
+    expect(html).toMatch(/<div class="inbox-item-row">/);
   });
 
-  test("header shows Inbox title and unread count", () => {
+  test("thread footer reports the engine send when one happened", () => {
+    const withEngine = renderInbox(
+      data({
+        threads: [thread({ sentToEngineAt: "2026-08-19T18:00:00.000Z" })],
+      }),
+    );
+    expect(withEngine).toContain("Sent to tax engine 2h ago");
+
+    const withoutEngine = renderInbox(data({ threads: [thread()] }));
+    expect(withoutEngine).not.toContain("Sent to tax engine");
+  });
+
+  test("page header counts unread threads and the empty state is honest", () => {
     const html = renderInbox(
       data({
-        entries: [
-          entry({
-            id: "act-a",
-            action: "document-uploaded",
-            direction: "inbound",
-            unread: true,
-          }),
-          entry({
-            id: "act-b",
-            action: "document-extracted",
-            direction: "inbound",
-            unread: true,
-          }),
+        threads: [
+          thread({ unread: true, unreadCount: 3 }),
+          thread({ engagementId: "eng-2", clientName: "Acme Manufacturing", portalToken: "portal-2" }),
         ],
       }),
     );
-
     expect(html).toContain("Inbox");
-    expect(html).toContain('<span class="count">2</span>');
+    expect(html).toContain('<span class="count">1</span>');
+
+    const empty = renderInbox(data());
+    expect(empty).toContain("No document requests yet");
   });
 
   test("polls on the shared interval", () => {

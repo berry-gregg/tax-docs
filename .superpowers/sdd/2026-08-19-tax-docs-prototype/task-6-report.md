@@ -44,3 +44,31 @@ Implemented and verified.
 ## Concerns
 
 - None.
+
+## Fix round 1/5
+
+### Finding
+
+Add tests for the produced request-item POST/DELETE routes and the client-detail engagement join. Unknown `clientId` on `POST /api/engagements` and cross-engagement item 404 were also untested.
+
+### What changed
+
+- `tests/server/clients-routes.test.ts`: POST client → POST engagement from the seeded 1120-S template → `GET /api/clients/:id` asserts the engagement is joined. Empty-join coverage in the original CRUD test is unchanged.
+- `tests/server/engagements-routes.test.ts`: POST `/request-items` → 201, DELETE same item under a foreign engagement id → 404 `{ error: "Not found" }`, DELETE under the home engagement → 204 with empty body, repeat DELETE → 404. Unknown `clientId` on `POST /api/engagements` now asserts 404.
+- No route code changes. Deferred Minors (`zodIssueSummary` helper, missing-template fail-open) left untouched.
+
+### Covering tests
+
+`bun test tests/server/clients-routes.test.ts tests/server/engagements-routes.test.ts`
+
+9 pass, 0 fail, 59 expect() calls.
+
+### Command
+
+`bun run typecheck && bun test && bun run build`
+
+### Output
+
+- `tsc --noEmit` passed.
+- `bun test` passed: 82 tests, 405 assertions.
+- `vite build` passed.

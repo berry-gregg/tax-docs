@@ -4,7 +4,7 @@ export type Route =
   | { page: "documents" }
   | { page: "engagements" }
   | { page: "engagement"; id: string }
-  | { page: "review"; engagementId: string; documentId: string }
+  | { page: "review"; documentId: string }
   | { page: "export"; engagementId: string }
   | { page: "clients" }
   | { page: "client"; id: string }
@@ -48,7 +48,7 @@ export function parseRoute(pathname: string): Route {
     return flatRoutes[parts[0] as string] ?? notFound;
   }
 
-  const [head, second, third, fourth] = parts as [string, string, string?, string?];
+  const [head, second, third] = parts as [string, string, string?];
 
   if (head === "portal" && parts.length === 2) {
     return { page: "portal", token: second };
@@ -58,15 +58,18 @@ export function parseRoute(pathname: string): Route {
     return { page: "client", id: second };
   }
 
+  // Document review lives under Documents. The old /engagements/:id/review/:documentId
+  // shape was retired and deliberately falls through to not-found.
+  if (head === "documents" && parts.length === 2) {
+    return { page: "review", documentId: second };
+  }
+
   if (head === "engagements") {
     if (parts.length === 2) {
       return { page: "engagement", id: second };
     }
     if (parts.length === 3 && third === "export") {
       return { page: "export", engagementId: second };
-    }
-    if (parts.length === 4 && third === "review" && fourth) {
-      return { page: "review", engagementId: second, documentId: fourth };
     }
   }
 

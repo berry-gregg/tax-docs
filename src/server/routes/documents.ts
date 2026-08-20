@@ -38,13 +38,28 @@ import { runDraftTypeStage } from "../pipeline/stages.ts";
 
 const groupQuerySchema = z.enum(["needs-review", "approved", "all"]);
 
-const fieldActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("accept") }),
-  z.object({
-    action: z.literal("edit"),
-    value: z.union([z.string(), z.number(), z.boolean()]),
-  }),
-]);
+/**
+ * List-view query contract. Documents store only `engagementId`, so `clientId` and `taxYear`
+ * resolve through the engagements collection before the documents query runs.
+ */
+const documentListQuerySchema = z.object({
+  group: groupQuerySchema.default("all"),
+  clientId: z.string().min(1).optional(),
+  engagementId: z.string().min(1).optional(),
+  taxYear: z.coerce.number().int().min(2000).max(2100).optional(),
+  documentTypeId: z.string().min(1).optional(),
+  sort: z.enum(["newest", "oldest"]).default("newest"),
+});
+type DocumentListQuery = z.infer<typeof documentListQuerySchema>;
+
+/**
+ * Editing is the only per-field mutation. Per-field accept was retired: trusting the document is
+ * the human review of every untouched field, so `POST /:id/trust` finalizes them as accepted.
+ */
+const fieldActionSchema = z.object({
+  action: z.literal("edit"),
+  value: z.union([z.string(), z.number(), z.boolean()]),
+});
 
 type PipelineStatus = TaxDocument["pipelineStatus"];
 
@@ -162,6 +177,43 @@ function groupFilter(group: z.infer<typeof groupQuerySchema>): { pipelineStatus?
   return {};
 }
 
+/**
+ * Composes the validated list query into one Mongo filter. Client and tax year live on the
+ * engagement, so those params resolve to a set of engagement ids first; an explicit
+ * `engagementId` intersects with that set rather than silently overriding it.
+ */
+async function documentListFilter(query: DocumentListQuery): Promise<Record<string, unknown>> {
+  const filter: Record<string, unknown> = { ...groupFilter(query.group) };
+
+  if (query.documentTypeId) {
+    filter["classification.documentTypeId"] = query.documentTypeId;
+  }
+
+  if (query.clientId || query.taxYear !== undefined) {
+    const db = await connectDb();
+    const engagementFilter: { clientId?: string; taxYear?: number } = {};
+    if (query.clientId) {
+      engagementFilter.clientId = query.clientId;
+    }
+    if (query.taxYear !== undefined) {
+      engagementFilter.taxYear = query.taxYear;
+    }
+    const matches = await engagementsCollection(db)
+      .find(engagementFilter)
+      .project<{ _id: string }>({ _id: 1 })
+      .toArray();
+    let engagementIds = matches.map((doc) => doc._id);
+    if (query.engagementId !== undefined) {
+      engagementIds = engagementIds.filter((id) => id === query.engagementId);
+    }
+    filter.engagementId = { $in: engagementIds };
+  } else if (query.engagementId) {
+    filter.engagementId = query.engagementId;
+  }
+
+  return filter;
+}
+
 async function toListRows(documents: TaxDocument[]) {
   const db = await connectDb();
   const engagementIds = [...new Set(documents.map((document) => document.engagementId))];
@@ -219,15 +271,16 @@ export function createDocumentRoutes(runner: PipelineRunner, ai: OpenRouterClien
   const documentRoutes = new Hono();
 
   documentRoutes.get("/", async (c) => {
-    const parsedGroup = groupQuerySchema.safeParse(c.req.query("group") ?? "all");
-    if (!parsedGroup.success) {
-      return c.json({ error: zodIssueSummary(parsedGroup.error) }, 400);
+    const parsed = documentListQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: zodIssueSummary(parsed.error) }, 400);
     }
 
+    const filter = await documentListFilter(parsed.data);
     const db = await connectDb();
     const docs = await taxDocumentsCollection(db)
-      .find(groupFilter(parsedGroup.data))
-      .sort({ createdAt: -1 })
+      .find(filter)
+      .sort({ createdAt: parsed.data.sort === "oldest" ? 1 : -1 })
       .toArray();
     const documents = await toListRows(docs.map((doc) => fromStored(taxDocumentSchema, doc)));
     return c.json(documentListResponseSchema.parse({ documents }));
@@ -317,10 +370,11 @@ export function createDocumentRoutes(runner: PipelineRunner, ai: OpenRouterClien
     }
 
     const current = fields[index];
-    const updatedField: ExtractionField =
-      parsed.data.action === "accept"
-        ? { ...current, reviewStatus: "accepted" }
-        : { ...current, reviewStatus: "edited", editedValue: parsed.data.value };
+    const updatedField: ExtractionField = {
+      ...current,
+      reviewStatus: "edited",
+      editedValue: parsed.data.value,
+    };
     const nextFields = fields.slice();
     nextFields[index] = updatedField;
     const updated = taxDocumentSchema.parse({
@@ -345,13 +399,17 @@ export function createDocumentRoutes(runner: PipelineRunner, ai: OpenRouterClien
     if (fields.length === 0) {
       return c.json({ error: "extraction returned no fields" }, 409);
     }
-    if (fields.some((field) => field.reviewStatus === "unreviewed")) {
-      return c.json({ error: "unreviewed fields remain" }, 409);
-    }
+
+    // Trusting is the review of the document as a whole: untouched fields become accepted here,
+    // while human edits keep their attribution.
+    const finalizedFields: ExtractionField[] = fields.map((field) =>
+      field.reviewStatus === "unreviewed" ? { ...field, reviewStatus: "accepted" } : field,
+    );
 
     const now = new Date().toISOString();
     const updated = taxDocumentSchema.parse({
       ...document,
+      extraction: { fields: finalizedFields },
       pipelineStatus: "trusted",
       updatedAt: now,
     });

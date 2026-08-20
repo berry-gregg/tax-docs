@@ -1,6 +1,7 @@
 import { MongoClient, type Db } from "mongodb";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { config } from "../config.ts";
+import { ensureIndexes } from "./collections.ts";
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
@@ -24,6 +25,7 @@ export async function connectDb(): Promise<Db> {
   client = new MongoClient(uri);
   await client.connect();
   db = client.db(config.mongodbDbName);
+  await ensureIndexes(db);
   return db;
 }
 

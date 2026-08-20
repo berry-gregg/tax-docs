@@ -102,6 +102,78 @@ async function insertDocument(partial: Omit<TaxDocument, "createdAt" | "updatedA
   return document;
 }
 
+const secondClient: Client = {
+  id: "client-docs-routes-2",
+  legalName: "Sierra Outfitters Inc",
+  entityType: "partnership",
+  ein: "98-7654321",
+  contactName: "Ola Berg",
+  contactEmail: "ola@sierra.example",
+  city: "Boise",
+  state: "ID",
+  createdAt: "2026-01-01T00:00:00.000Z",
+};
+
+/**
+ * Two clients, two engagements (2026 1065 vs 2025 1120-S), two documents:
+ * doc-newer (client one, classified P&L, needs-review, created later) and
+ * doc-older (client two, unclassified, trusted, created earlier).
+ */
+async function seedFilterFixtures(app: ReturnType<typeof createApp>) {
+  const db = await connectDb();
+  await clientsCollection(db).insertOne(toStored(secondClient));
+
+  const engagementOne = await createEngagement(app);
+  const secondResponse = await app.request("/api/engagements", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clientId: secondClient.id,
+      taxYear: 2025,
+      filingType: "1120-S",
+      items: [],
+    }),
+  });
+  expect(secondResponse.status).toBe(201);
+  const engagementTwo = (await secondResponse.json() as { engagement: Engagement }).engagement;
+
+  await insertDocument({
+    id: "doc-newer",
+    engagementId: engagementOne.id,
+    filename: "pl.pdf",
+    mimeType: "application/pdf",
+    size: 12,
+    storagePath: "data/uploads/doc-newer.pdf",
+    uploadedBy: "cpa",
+    pipelineStatus: "needs-review",
+    classification: { documentTypeId: "dt-profit-loss", confidence: 0.9, reasoning: "Looks like a P&L" },
+    createdAt: "2026-04-02T00:00:00.000Z",
+    updatedAt: "2026-04-02T00:00:00.000Z",
+  });
+  await insertDocument({
+    id: "doc-older",
+    engagementId: engagementTwo.id,
+    filename: "k1.pdf",
+    mimeType: "application/pdf",
+    size: 12,
+    storagePath: "data/uploads/doc-older.pdf",
+    uploadedBy: "client",
+    pipelineStatus: "trusted",
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
+  });
+
+  return { engagementOne, engagementTwo };
+}
+
+async function listIds(app: ReturnType<typeof createApp>, url: string): Promise<string[]> {
+  const response = await app.request(url);
+  expect(response.status).toBe(200);
+  const body = await response.json() as { documents: Array<{ id: string }> };
+  expect(() => documentListResponseSchema.parse(body)).not.toThrow();
+  return body.documents.map((row) => row.id);
+}
+
 const wagesField = {
   key: "wages",
   label: "Wages",
@@ -328,7 +400,7 @@ describe("document routes", () => {
     expect(new Uint8Array(await fileResponse.arrayBuffer())).toEqual(pdfBytes);
   });
 
-  test("trusts a document only after every field is reviewed while needs-review", async () => {
+  test("trust auto-accepts unreviewed fields while keeping human edits attributed", async () => {
     const { started, runner } = recordingRunner();
     const app = createApp({ runner });
     const engagement = await createEngagement(app);
@@ -344,18 +416,6 @@ describe("document routes", () => {
       extraction: { fields: [wagesField, einField] },
     });
 
-    const blockedTrust = await app.request(`/api/documents/${document.id}/trust`, { method: "POST" });
-    const blockedBody = await blockedTrust.json() as { error: string };
-    expect(blockedTrust.status).toBe(409);
-    expect(blockedBody.error).toContain("unreviewed fields remain");
-
-    const acceptWages = await app.request(`/api/documents/${document.id}/fields/wages`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "accept" }),
-    });
-    expect(acceptWages.status).toBe(200);
-
     const editEin = await app.request(`/api/documents/${document.id}/fields/ein`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -366,14 +426,24 @@ describe("document routes", () => {
     const unknownField = await app.request(`/api/documents/${document.id}/fields/missing`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "accept" }),
+      body: JSON.stringify({ action: "edit", value: "x" }),
     });
     expect(unknownField.status).toBe(404);
 
+    // Wages is still unreviewed: trusting the document is the review, so it succeeds and
+    // finalizes the untouched field as accepted.
     const trusted = await app.request(`/api/documents/${document.id}/trust`, { method: "POST" });
     const trustedBody = await trusted.json() as { document: TaxDocument };
     expect(trusted.status).toBe(200);
     expect(trustedBody.document.pipelineStatus).toBe("trusted");
+    const trustedFields = trustedBody.document.extraction?.fields ?? [];
+    expect(trustedFields.find((field) => field.key === "wages")).toMatchObject({
+      reviewStatus: "accepted",
+    });
+    expect(trustedFields.find((field) => field.key === "ein")).toMatchObject({
+      reviewStatus: "edited",
+      editedValue: "98-7654321",
+    });
 
     const db = await connectDb();
     const activity = await activitiesCollection(db).findOne({
@@ -385,10 +455,41 @@ describe("document routes", () => {
     const afterTrustEdit = await app.request(`/api/documents/${document.id}/fields/wages`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "accept" }),
+      body: JSON.stringify({ action: "edit", value: 1 }),
     });
     expect(afterTrustEdit.status).toBe(409);
     expect(started).toEqual([]);
+  });
+
+  test("the accept field action no longer exists: editing is the only per-field mutation", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+    const document = await insertDocument({
+      id: "doc-no-accept",
+      engagementId: engagement.id,
+      filename: "pl.pdf",
+      mimeType: "application/pdf",
+      size: 12,
+      storagePath: "data/uploads/doc-no-accept.pdf",
+      uploadedBy: "cpa",
+      pipelineStatus: "needs-review",
+      extraction: { fields: [wagesField] },
+    });
+
+    const accept = await app.request(`/api/documents/${document.id}/fields/wages`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "accept" }),
+    });
+    const acceptBody = await accept.json() as { error: string };
+    expect(accept.status).toBe(400);
+    // The Zod summary names the only action the route still accepts.
+    expect(acceptBody.error).toContain('"edit"');
+
+    const db = await connectDb();
+    const stored = await taxDocumentsCollection(db).findOne({ _id: document.id });
+    const fields = (stored?.extraction as { fields: Array<{ reviewStatus: string }> }).fields;
+    expect(fields[0]?.reviewStatus).toBe("unreviewed");
   });
 
   test("refuses to trust a document whose extraction returned no fields", async () => {
@@ -444,6 +545,65 @@ describe("document routes", () => {
     expect(body.document.failure).toBeUndefined();
     expect(body.document.rejection).toBeUndefined();
     expect(started).toEqual([document.id]);
+  });
+
+  test("list filters narrow by client, tax year, document type, and engagement", async () => {
+    const app = createApp();
+    const { engagementOne, engagementTwo } = await seedFilterFixtures(app);
+
+    const byClient = await listIds(app, `/api/documents?clientId=${client.id}`);
+    expect(byClient).toEqual(["doc-newer"]);
+
+    const byOtherClient = await listIds(app, `/api/documents?clientId=${secondClient.id}`);
+    expect(byOtherClient).toEqual(["doc-older"]);
+
+    const byYear = await listIds(app, "/api/documents?taxYear=2025");
+    expect(byYear).toEqual(["doc-older"]);
+
+    const byType = await listIds(app, "/api/documents?documentTypeId=dt-profit-loss");
+    expect(byType).toEqual(["doc-newer"]);
+
+    const byEngagement = await listIds(app, `/api/documents?engagementId=${engagementTwo.id}`);
+    expect(byEngagement).toEqual(["doc-older"]);
+
+    // clientId and taxYear that point at different engagements intersect to nothing.
+    const mismatch = await listIds(app, `/api/documents?clientId=${client.id}&taxYear=2025`);
+    expect(mismatch).toEqual([]);
+
+    // group still composes with the new filters.
+    const approvedForClient = await listIds(app, `/api/documents?group=approved&clientId=${client.id}`);
+    expect(approvedForClient).toEqual([]);
+    const approvedForOther = await listIds(app, `/api/documents?group=approved&clientId=${secondClient.id}`);
+    expect(approvedForOther).toEqual(["doc-older"]);
+    expect(engagementOne.id).not.toBe(engagementTwo.id);
+  });
+
+  test("list sorts newest first by default and oldest first on request", async () => {
+    const app = createApp();
+    await seedFilterFixtures(app);
+
+    const defaultOrder = await listIds(app, "/api/documents");
+    expect(defaultOrder).toEqual(["doc-newer", "doc-older"]);
+
+    const oldest = await listIds(app, "/api/documents?sort=oldest");
+    expect(oldest).toEqual(["doc-older", "doc-newer"]);
+
+    const newest = await listIds(app, "/api/documents?sort=newest");
+    expect(newest).toEqual(["doc-newer", "doc-older"]);
+  });
+
+  test("rejects invalid list query params with a real message", async () => {
+    const app = createApp();
+
+    const badYear = await app.request("/api/documents?taxYear=abc");
+    const badYearBody = await badYear.json() as { error: string };
+    expect(badYear.status).toBe(400);
+    expect(badYearBody.error.toLowerCase()).toContain("number");
+
+    const badSort = await app.request("/api/documents?sort=upside-down");
+    const badSortBody = await badSort.json() as { error: string };
+    expect(badSort.status).toBe(400);
+    expect(badSortBody.error).toContain("Invalid enum value");
   });
 
   test("rerun is refused unless the document failed, is unclassified, or was rejected", async () => {

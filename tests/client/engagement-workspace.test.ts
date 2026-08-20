@@ -232,7 +232,7 @@ describe("engagement workspace checklist", () => {
     expect(checklist).toContain('data-waive-request-item="item-open"');
     expect(checklist).toMatch(/<button class="btn-ghost" type="button" data-waive-request-item="item-open">Waive<\/button>/);
     expect(checklist).not.toContain('href="#"');
-    expect(checklist).not.toContain("<a ");
+    expect(checklist).not.toContain('<a class="list-row"');
   });
 });
 

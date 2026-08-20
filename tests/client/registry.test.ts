@@ -10,7 +10,7 @@ const routes: Route[] = [
   { page: "documents" },
   { page: "engagements" },
   { page: "engagement", id: "eng-1" },
-  { page: "review", engagementId: "eng-1", documentId: "doc-1" },
+  { page: "review", documentId: "doc-1" },
   { page: "export", engagementId: "eng-1" },
   { page: "clients" },
   { page: "client", id: "client-1" },
@@ -30,7 +30,7 @@ describe("page registry", () => {
   });
 
   test("the review route resolves to the field-level review workspace", () => {
-    const route: Route = { page: "review", engagementId: "eng-1", documentId: "doc-1" };
+    const route: Route = { page: "review", documentId: "doc-1" };
 
     expect(moduleFor(route)).toBe(reviewPage);
     expect(reviewPage.pollMs).toBe(POLL_INTERVAL_MS);

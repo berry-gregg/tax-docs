@@ -6,8 +6,13 @@ export type NavChild = {
   href: string;
 };
 
-/** The only live badge source in the sidebar. Value comes from `/api/inbox/unread-count`. */
-export type NavBadge = "inbox-unread";
+/**
+ * The two live badge sources in the sidebar: Inbox unread threads
+ * (`/api/inbox/unread-count`) and the Documents review queue
+ * (`needsReviewCount` from `/api/metrics`, the same count the
+ * Needs review tab shows). No other tab carries a badge.
+ */
+export type NavBadge = "inbox-unread" | "documents-needs-review";
 
 export type NavItem = {
   id: string;
@@ -41,6 +46,7 @@ export const navItems: NavItem[] = [
     href: "/documents?tab=needs-review",
     icon: "documents",
     section: "main",
+    badge: "documents-needs-review",
     children: [
       { id: "documents-all", label: "All", href: "/documents?tab=all" },
       { id: "documents-needs-review", label: "Needs review", href: "/documents?tab=needs-review" },
@@ -70,8 +76,9 @@ export const navItems: NavItem[] = [
 ];
 
 /**
- * Which sidebar group owns a route. Engagement detail, review, and export are all reached from
- * Engagements, so they keep that group current instead of dropping the highlight.
+ * Which sidebar group owns a route. Engagement detail and export are reached from Engagements,
+ * so they keep that group current. Document review lives under /documents/:documentId and keeps
+ * the Documents group current.
  */
 export function navIdForRoute(route: Route): string | null {
   switch (route.page) {
@@ -81,9 +88,10 @@ export function navIdForRoute(route: Route): string | null {
     case "clients":
     case "settings":
       return route.page;
+    case "review":
+      return "documents";
     case "engagements":
     case "engagement":
-    case "review":
     case "export":
       return "engagements";
     case "client":

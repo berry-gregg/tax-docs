@@ -59,7 +59,10 @@ async function patchDocument(
 
 async function writeActivity(
   db: Db,
-  entry: Pick<Activity, "engagementId" | "action" | "detail" | "direction" | "documentId">,
+  entry: Pick<
+    Activity,
+    "engagementId" | "action" | "detail" | "direction" | "documentId" | "requestItemId"
+  >,
 ): Promise<void> {
   const activity = activitySchema.parse({
     id: randomUUID(),
@@ -195,11 +198,14 @@ async function linkChecklistItem(
   const linked = document.requestItemId
     ? document
     : await patchDocument(db, document, { requestItemId: candidate.id });
+  // Inbound and item-scoped: this is the client's request being fulfilled, so the inbox
+  // thread rolls it up under the checklist line instead of hiding it as bookkeeping.
   await writeActivity(db, {
     engagementId: linked.engagementId,
     action: "checklist-item-matched",
     detail: `${item.title} — ${linked.filename}`,
-    direction: "internal",
+    direction: "inbound",
+    requestItemId: item.id,
   });
   return linked;
 }

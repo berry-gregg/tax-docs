@@ -10,7 +10,7 @@ const index: PaletteIndex = {
     {
       id: "doc-1",
       label: "W-2 · Northwind Partners LLC",
-      href: "/engagements/eng-1/review/doc-1",
+      href: "/documents/doc-1",
     },
   ],
   clients: [{ id: "client-1", label: "Northwind Partners LLC", href: "/clients/client-1" }],
@@ -40,7 +40,7 @@ describe("command palette search", () => {
     expect(groups.map((group) => group.id)).toContain("Documents");
     expect(groups.map((group) => group.id)).toContain("Clients");
     expect(groups.flatMap((group) => group.items).map((item) => item.href)).toContain(
-      "/engagements/eng-1/review/doc-1",
+      "/documents/doc-1",
     );
   });
 

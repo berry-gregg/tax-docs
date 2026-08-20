@@ -72,7 +72,8 @@ export async function buildExportLines(engagementId: string): Promise<ExportLine
   const trustedDocs = (
     await taxDocumentsCollection(db)
       .find({ engagementId, pipelineStatus: "trusted" })
-      .sort({ createdAt: 1 })
+      // _id tiebreak keeps sourceRefs deterministic when uploads share a createdAt timestamp.
+      .sort({ createdAt: 1, _id: 1 })
       .toArray()
   ).map((doc) => fromStored(taxDocumentSchema, doc));
 

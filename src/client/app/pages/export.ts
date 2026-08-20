@@ -46,7 +46,7 @@ function renderSourceRefs(engagementId: string, refs: ExportLine["sourceRefs"]):
   return refs
     .map(
       (ref) =>
-        `<a class="text-link" href="/engagements/${escapeHtml(engagementId)}/review/${escapeHtml(ref.documentId)}" data-nav-link>${escapeHtml(ref.fieldKey)}</a>`,
+        `<a class="text-link" href="/documents/${escapeHtml(ref.documentId)}" data-nav-link>${escapeHtml(ref.fieldKey)}</a>`,
     )
     .join(", ");
 }

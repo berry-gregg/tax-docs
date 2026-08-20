@@ -11,7 +11,8 @@ import {
   toStored,
 } from "../../src/server/db/collections.ts";
 import { activitySchema } from "../../src/shared/schemas/activity.ts";
-import { inboxEntrySchema, metricsSchema } from "../../src/shared/schemas/api.ts";
+import { metricsSchema } from "../../src/shared/schemas/api.ts";
+import { inboxThreadsResponseSchema, type InboxThread } from "../../src/shared/schemas/inbox.ts";
 import type { Client } from "../../src/shared/schemas/client.ts";
 import {
   extractionFieldSchema,
@@ -79,19 +80,24 @@ function activity(input: {
   action: string;
   direction: "inbound" | "outbound" | "internal";
   createdAt: string;
+  engagementId?: string;
   readAt?: string;
   actor?: "agent" | "cpa" | "client";
   detail?: string;
+  requestItemId?: string;
+  documentId?: string;
 }) {
   return activitySchema.parse({
     id: input.id,
-    engagementId: engagement.id,
+    engagementId: input.engagementId ?? engagement.id,
     actor: input.actor ?? (input.direction === "inbound" ? "client" : "cpa"),
     action: input.action,
     detail: input.detail ?? input.action,
     direction: input.direction,
     createdAt: input.createdAt,
     ...(input.readAt ? { readAt: input.readAt } : {}),
+    ...(input.requestItemId ? { requestItemId: input.requestItemId } : {}),
+    ...(input.documentId ? { documentId: input.documentId } : {}),
   });
 }
 
@@ -114,19 +120,23 @@ function document(input: {
   id: string;
   pipelineStatus: TaxDocument["pipelineStatus"];
   fields?: TaxDocument["extraction"];
+  filename?: string;
+  requestItemId?: string;
+  createdAt?: string;
 }): TaxDocument {
   return taxDocumentSchema.parse({
     id: input.id,
     engagementId: engagement.id,
-    filename: `${input.id}.pdf`,
+    filename: input.filename ?? `${input.id}.pdf`,
     mimeType: "application/pdf",
     size: 1200,
     storagePath: `data/uploads/${input.id}.pdf`,
     uploadedBy: "client",
     pipelineStatus: input.pipelineStatus,
-    createdAt: iso,
-    updatedAt: iso,
+    createdAt: input.createdAt ?? iso,
+    updatedAt: input.createdAt ?? iso,
     ...(input.fields ? { extraction: input.fields } : {}),
+    ...(input.requestItemId ? { requestItemId: input.requestItemId } : {}),
   });
 }
 
@@ -134,17 +144,22 @@ function requestItem(input: {
   id: string;
   required: boolean;
   status: RequestItem["status"];
+  title?: string;
+  matchedDocumentIds?: string[];
+  waiveNote?: string;
+  createdAt?: string;
 }): RequestItem {
   return requestItemSchema.parse({
     id: input.id,
     engagementId: engagement.id,
     documentTypeId: "dt-w2",
-    title: input.id,
+    title: input.title ?? input.id,
     description: "Request item",
     required: input.required,
     status: input.status,
-    matchedDocumentIds: [],
-    createdAt: "2026-02-01T00:00:00.000Z",
+    matchedDocumentIds: input.matchedDocumentIds ?? [],
+    createdAt: input.createdAt ?? "2026-02-01T00:00:00.000Z",
+    ...(input.waiveNote ? { waiveNote: input.waiveNote } : {}),
   });
 }
 
@@ -158,164 +173,303 @@ afterEach(async () => {
 });
 
 describe("inbox routes", () => {
-  async function seedInbox() {
+  const internalOnlyEngagement: Engagement = {
+    ...engagement,
+    id: "eng-internal-only",
+    portalToken: "portal-internal-token",
+  };
+
+  /**
+   * Engagement A: four checklist items in every status, two uploads rolled into one received
+   * item, one unread inbound update. Engagement B: a fully-read request. Engagement C: internal
+   * activity only, so it must not surface as a thread.
+   */
+  async function seedThreads() {
     const db = await connectDb();
-    await clientsCollection(db).insertOne(toStored(client));
-    await engagementsCollection(db).insertOne(toStored(engagement));
+    await clientsCollection(db).insertMany([toStored(client), toStored(exportedClient)]);
+    await engagementsCollection(db).insertMany([
+      toStored(engagement),
+      toStored(exportedEngagement),
+      toStored(internalOnlyEngagement),
+    ]);
+    await requestItemsCollection(db).insertMany(
+      [
+        requestItem({
+          id: "item-w2",
+          required: true,
+          status: "received",
+          title: "W-2 forms",
+          matchedDocumentIds: ["doc-w2-old", "doc-w2-new"],
+        }),
+        requestItem({
+          id: "item-bs",
+          required: true,
+          status: "needs-attention",
+          title: "Balance sheet",
+        }),
+        requestItem({ id: "item-open", required: true, status: "open", title: "Bank statements" }),
+        requestItem({
+          id: "item-waived",
+          required: false,
+          status: "waived",
+          title: "Vehicle log",
+          waiveNote: "Sold the truck in March",
+        }),
+      ].map((item) => toStored(item)),
+    );
+    await taxDocumentsCollection(db).insertMany(
+      [
+        document({
+          id: "doc-w2-old",
+          pipelineStatus: "trusted",
+          filename: "w2-draft.pdf",
+          requestItemId: "item-w2",
+          createdAt: "2026-03-01T02:00:00.000Z",
+        }),
+        document({
+          id: "doc-w2-new",
+          pipelineStatus: "needs-review",
+          filename: "w2-final.pdf",
+          requestItemId: "item-w2",
+          createdAt: "2026-03-03T01:00:00.000Z",
+        }),
+        document({
+          id: "doc-bs",
+          pipelineStatus: "rejected",
+          filename: "balance-sheet.pdf",
+          requestItemId: "item-bs",
+          createdAt: "2026-03-02T00:00:00.000Z",
+        }),
+      ].map((doc) => toStored(doc)),
+    );
     await activitiesCollection(db).insertMany(
       [
-        activity({
-          id: "act-internal",
-          action: "classified",
-          direction: "internal",
-          createdAt: "2026-03-04T00:00:00.000Z",
-        }),
-        activity({
-          id: "act-inbound-unread-new",
-          action: "document-uploaded",
-          direction: "inbound",
-          createdAt: "2026-03-03T00:00:00.000Z",
-          detail: "w2.pdf",
-        }),
-        activity({
-          id: "act-inbound-read",
-          action: "document-uploaded",
-          direction: "inbound",
-          createdAt: "2026-03-02T00:00:00.000Z",
-          readAt: "2026-03-02T12:00:00.000Z",
-          detail: "k1.pdf",
-        }),
         activity({
           id: "act-request-sent",
           action: "request-sent",
           direction: "outbound",
           createdAt: "2026-03-01T00:00:00.000Z",
-          detail: "3 items requested",
+          readAt: "2026-03-01T00:05:00.000Z",
+          detail: "4 items requested",
         }),
         activity({
-          id: "act-inbound-unread-old",
-          action: "needs-review",
+          id: "act-upload-read",
+          action: "document-uploaded",
           direction: "inbound",
-          createdAt: "2026-02-28T00:00:00.000Z",
+          createdAt: "2026-03-01T02:00:00.000Z",
+          readAt: "2026-03-01T03:00:00.000Z",
+          documentId: "doc-w2-old",
+          detail: "w2-draft.pdf",
+        }),
+        activity({
+          id: "act-upload-unread",
+          action: "document-uploaded",
+          direction: "inbound",
+          createdAt: "2026-03-03T01:00:00.000Z",
+          documentId: "doc-w2-new",
+          detail: "w2-final.pdf",
+        }),
+        activity({
+          id: "act-match-unread",
+          action: "checklist-item-matched",
+          direction: "inbound",
+          actor: "agent",
+          createdAt: "2026-03-03T02:00:00.000Z",
+          requestItemId: "item-w2",
+          detail: "W-2 forms — w2-final.pdf",
+        }),
+        activity({
+          id: "act-internal",
+          action: "document-failed",
+          direction: "internal",
+          createdAt: "2026-03-04T00:00:00.000Z",
+        }),
+        activity({
+          id: "act-engine",
+          action: "sent-to-engine",
+          direction: "outbound",
+          createdAt: "2026-03-05T00:00:00.000Z",
+          readAt: "2026-03-05T00:01:00.000Z",
+        }),
+        activity({
+          id: "act-quiet-request",
+          engagementId: exportedEngagement.id,
+          action: "request-sent",
+          direction: "outbound",
+          createdAt: "2026-03-02T00:00:00.000Z",
+          readAt: "2026-03-02T00:05:00.000Z",
+          detail: "2 items requested",
+        }),
+        activity({
+          id: "act-internal-only",
+          engagementId: internalOnlyEngagement.id,
+          action: "document-trusted",
+          direction: "internal",
+          createdAt: "2026-03-06T00:00:00.000Z",
         }),
       ].map((entry) => toStored(entry)),
     );
   }
 
-  test("lists non-internal activities newest first with joined clientName, portalToken, and unread", async () => {
-    await seedInbox();
+  test("returns one thread per outbound request with request-item lines, not per-file rows", async () => {
+    await seedThreads();
     const app = createApp();
 
     const response = await app.request("/api/inbox");
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.entries.map((entry: { id: string }) => inboxEntrySchema.parse(entry).id)).toEqual([
-      "act-inbound-unread-new",
-      "act-inbound-read",
-      "act-request-sent",
-      "act-inbound-unread-old",
+    const { threads } = inboxThreadsResponseSchema.parse(body);
+
+    // Newest visible activity first; internal-only engagements never become threads.
+    expect(threads.map((thread) => thread.engagementId)).toEqual([
+      engagement.id,
+      exportedEngagement.id,
     ]);
-    expect(body.entries.find((entry: { id: string }) => entry.id === "act-internal")).toBeUndefined();
 
-    const unreadNew = body.entries[0];
-    expect(unreadNew).toMatchObject({
-      id: "act-inbound-unread-new",
+    const main = threads[0] as InboxThread;
+    expect(main).toMatchObject({
       engagementId: engagement.id,
       clientName: client.legalName,
-      direction: "inbound",
-      unread: true,
-    });
-
-    const readInbound = body.entries[1];
-    expect(readInbound.unread).toBe(false);
-
-    const requestSent = body.entries[2];
-    expect(requestSent).toMatchObject({
-      id: "act-request-sent",
-      action: "request-sent",
-      direction: "outbound",
-      unread: false,
+      engagementLabel: "1120-S · 2026",
       portalToken: engagement.portalToken,
-      clientName: client.legalName,
-      engagementId: engagement.id,
+      requestSentAt: "2026-03-01T00:00:00.000Z",
+      unread: true,
+      unreadCount: 2,
+      sentToEngineAt: "2026-03-05T00:00:00.000Z",
     });
+
+    // One line per request item — two uploads on item-w2 still make exactly one line.
+    expect(main.items).toHaveLength(4);
+    const byId = new Map(main.items.map((item) => [item.id, item]));
+    expect(byId.get("item-w2")).toMatchObject({
+      title: "W-2 forms",
+      status: "received",
+      documentId: "doc-w2-new",
+      documentFilename: "w2-final.pdf",
+      lastUpdateAt: "2026-03-03T02:00:00.000Z",
+    });
+    expect(byId.get("item-bs")).toMatchObject({
+      title: "Balance sheet",
+      status: "needs-attention",
+      documentId: "doc-bs",
+      documentFilename: "balance-sheet.pdf",
+    });
+    expect(byId.get("item-open")).toMatchObject({ title: "Bank statements", status: "open" });
+    expect(byId.get("item-open")?.documentId).toBeUndefined();
+    expect(byId.get("item-waived")).toMatchObject({
+      title: "Vehicle log",
+      status: "waived",
+      waiveNote: "Sold the truck in March",
+    });
+
+    const quiet = threads[1] as InboxThread;
+    expect(quiet).toMatchObject({
+      engagementId: exportedEngagement.id,
+      clientName: exportedClient.legalName,
+      engagementLabel: "1065 · 2026",
+      unread: false,
+      unreadCount: 0,
+      items: [],
+    });
+    expect(quiet.sentToEngineAt).toBeUndefined();
   });
 
-  test("unread count includes only inbound unread entries and mark-read flips it", async () => {
-    await seedInbox();
+  test("unread count is the number of unread threads, not unread activities", async () => {
+    await seedThreads();
     const app = createApp();
 
-    const unreadResponse = await app.request("/api/inbox/unread-count");
-    const unreadBody = await unreadResponse.json();
+    const response = await app.request("/api/inbox/unread-count");
 
-    expect(unreadResponse.status).toBe(200);
-    expect(unreadBody).toEqual({ count: 2 });
+    expect(response.status).toBe(200);
+    // Engagement A has two unread activities but counts once; B is read; C is internal-only.
+    expect(await response.json()).toEqual({ count: 1 });
+  });
 
-    const markResponse = await app.request("/api/inbox/act-inbound-unread-new/read", {
+  test("stored null readAt still reads as unread", async () => {
+    await seedThreads();
+    const db = await connectDb();
+    await db
+      .collection<{ _id: string; readAt?: string | null }>(collectionNames.activities)
+      .updateOne({ _id: "act-quiet-request" }, { $set: { readAt: null } });
+    const app = createApp();
+
+    const countResponse = await app.request("/api/inbox/unread-count");
+    expect(await countResponse.json()).toEqual({ count: 2 });
+
+    const listResponse = await app.request("/api/inbox");
+    const { threads } = inboxThreadsResponseSchema.parse(await listResponse.json());
+    const quiet = threads.find((thread) => thread.engagementId === exportedEngagement.id);
+    expect(quiet?.unread).toBe(true);
+  });
+
+  test("thread read endpoint marks every visible activity read and leaves internal alone", async () => {
+    await seedThreads();
+    const app = createApp();
+
+    const markResponse = await app.request(`/api/inbox/threads/${engagement.id}/read`, {
       method: "POST",
     });
 
     expect(markResponse.status).toBe(204);
     expect(await markResponse.text()).toBe("");
 
-    const afterCountResponse = await app.request("/api/inbox/unread-count");
-    const afterCountBody = await afterCountResponse.json();
-    expect(afterCountBody).toEqual({ count: 1 });
+    const countResponse = await app.request("/api/inbox/unread-count");
+    expect(await countResponse.json()).toEqual({ count: 0 });
 
     const listResponse = await app.request("/api/inbox");
-    const listBody = await listResponse.json();
-    const marked = listBody.entries.find(
-      (entry: { id: string }) => entry.id === "act-inbound-unread-new",
-    );
-    expect(marked.unread).toBe(false);
-    expect(marked.readAt).toBeString();
+    const { threads } = inboxThreadsResponseSchema.parse(await listResponse.json());
+    const main = threads.find((thread) => thread.engagementId === engagement.id);
+    expect(main?.unread).toBe(false);
+    expect(main?.unreadCount).toBe(0);
+
+    // The internal activity is invisible bookkeeping and must not be stamped.
+    const db = await connectDb();
+    const internal = await activitiesCollection(db).findOne({ _id: "act-internal" });
+    expect(internal?.readAt).toBeUndefined();
+  });
+
+  test("thread read endpoint returns 404 for an unknown engagement", async () => {
+    await seedThreads();
+    const app = createApp();
+
+    const response = await app.request("/api/inbox/threads/eng-missing/read", { method: "POST" });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Not found" });
+  });
+
+  test("single-activity mark-read keeps working and unknown ids 404", async () => {
+    await seedThreads();
+    const app = createApp();
+
+    const markResponse = await app.request("/api/inbox/act-upload-unread/read", {
+      method: "POST",
+    });
+    expect(markResponse.status).toBe(204);
+
+    const listResponse = await app.request("/api/inbox");
+    const { threads } = inboxThreadsResponseSchema.parse(await listResponse.json());
+    const main = threads.find((thread) => thread.engagementId === engagement.id);
+    // act-match-unread is still unread, so the thread stays unread with one fewer unread update.
+    expect(main?.unread).toBe(true);
+    expect(main?.unreadCount).toBe(1);
+
+    const missingResponse = await app.request("/api/inbox/missing-activity/read", {
+      method: "POST",
+    });
+    expect(missingResponse.status).toBe(404);
+    expect(await missingResponse.json()).toEqual({ error: "Not found" });
   });
 
   test("GET /unread-count is not captured as an inbox id", async () => {
-    await seedInbox();
+    await seedThreads();
     const app = createApp();
 
     const response = await app.request("/api/inbox/unread-count");
-    const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({ count: 2 });
-  });
-
-  test("unread count and list treat stored null readAt as unread", async () => {
-    await seedInbox();
-    const db = await connectDb();
-    await db.collection<{ _id: string; readAt?: string | null }>(collectionNames.activities).updateOne(
-      { _id: "act-inbound-unread-new" },
-      { $set: { readAt: null } },
-    );
-    const app = createApp();
-
-    const countResponse = await app.request("/api/inbox/unread-count");
-    const listResponse = await app.request("/api/inbox");
-    const listBody = await listResponse.json();
-    const entry = listBody.entries.find(
-      (item: { id: string }) => item.id === "act-inbound-unread-new",
-    );
-
-    expect(countResponse.status).toBe(200);
-    expect(await countResponse.json()).toEqual({ count: 2 });
-    expect(entry.unread).toBe(true);
-    expect(entry.readAt).toBeUndefined();
-  });
-
-  test("mark-read returns 404 for an unknown activity id", async () => {
-    await seedInbox();
-    const app = createApp();
-
-    const response = await app.request("/api/inbox/missing-activity/read", {
-      method: "POST",
-    });
-    const body = await response.json();
-
-    expect(response.status).toBe(404);
-    expect(body).toEqual({ error: "Not found" });
+    expect(await response.json()).toEqual({ count: 1 });
   });
 });
 

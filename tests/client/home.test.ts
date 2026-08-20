@@ -72,10 +72,10 @@ describe("home page", () => {
     expect(html).not.toContain("0 extracted fields");
   });
 
-  test("recent document rows deep-link into the engagement review page", () => {
+  test("recent document rows deep-link into the document review page", () => {
     const html = renderHome(data());
 
-    expect(html).toContain('href="/engagements/eng-1/review/doc-1"');
+    expect(html).toContain('href="/documents/doc-1"');
     expect(html).toContain("W-2");
     expect(html).toContain("Northwind Partners LLC");
     expect(html).toContain("Recent documents");
@@ -101,8 +101,8 @@ describe("home page", () => {
 
     const html = renderHome(data({ recent }));
 
-    expect(html).toContain('href="/engagements/eng-1/review/doc-4"');
-    expect(html).not.toContain('href="/engagements/eng-1/review/doc-5"');
+    expect(html).toContain('href="/documents/doc-4"');
+    expect(html).not.toContain('href="/documents/doc-5"');
   });
 
   test("pipeline chips use semantic tones, never the highlighter", () => {
@@ -125,16 +125,12 @@ describe("home page", () => {
     expect(html).not.toContain("#e4f222");
   });
 
-  test("ticker strip reports the three pipeline metrics", () => {
+  test("home no longer renders the metrics ticker strip", () => {
     const html = renderHome(data());
 
-    expect(html).toContain('class="ticker"');
-    expect(html).toContain("Documents auto-processed");
-    expect(html).toContain("Fields awaiting review");
-    expect(html).toContain("Straight-through rate");
-    expect(html).toContain(">12<");
-    expect(html).toContain(">7<");
-    expect(html).toContain(">86%<");
+    expect(html).not.toContain('class="ticker"');
+    expect(html).not.toContain("Documents auto-processed");
+    expect(html).not.toContain("Straight-through rate");
   });
 
   test("rail leads with New engagement and the review-queue deep link", () => {

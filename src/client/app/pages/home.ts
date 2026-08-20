@@ -48,7 +48,6 @@ export function renderHome(data: HomeData): string {
         }
         <a class="text-link" href="${ALL_DOCUMENTS_HREF}" data-nav-link>View all documents${icons.arrow}</a>
       </section>
-      ${renderTicker(metrics)}
     </div>
     <aside class="rail">
       <a class="btn-primary btn-block" href="${NEW_ENGAGEMENT_HREF}" data-nav-link>New engagement</a>
@@ -89,31 +88,12 @@ function fieldsWashTitle(count: number): string {
 function renderRecentRow(now: Date): (row: DocumentListRow) => string {
   return (row) =>
     listRow({
-      href: `/engagements/${row.engagementId}/review/${row.id}`,
+      href: `/documents/${row.id}`,
       initials: initialsFor(row.clientName),
       title: `${row.documentTypeName ?? "Unclassified"} · ${row.clientName}`,
       meta: `${formatRelativeTime(row.createdAt, now)} · ${row.filename}`,
       trailing: pipelineChip(row.pipelineStatus),
     });
-}
-
-function renderTicker(metrics: Metrics): string {
-  const items: [string, string][] = [
-    ["Documents auto-processed", String(metrics.documentsAutoProcessed)],
-    ["Fields awaiting review", String(metrics.fieldsAwaitingReview)],
-    ["Straight-through rate", `${metrics.straightThroughRate}%`],
-  ];
-
-  return `<section class="ticker" aria-label="Pipeline throughput">
-    ${items
-      .map(
-        ([label, value]) => `<div class="ticker-item">
-          <span class="ticker-label">${escapeHtml(label)}</span>
-          <span class="ticker-value">${escapeHtml(value)}</span>
-        </div>`,
-      )
-      .join("")}
-  </section>`;
 }
 
 export const homePage: PageModule<HomeData> = {

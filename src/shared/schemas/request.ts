@@ -26,6 +26,8 @@ export const requestItemSchema = z.object({
   required: z.boolean(),
   status: requestItemStatusSchema,
   matchedDocumentIds: z.array(z.string()),
+  /** Why the item was waived ("not needed") — set by the client from the portal or by the CPA. */
+  waiveNote: z.string().max(500).optional(),
   /** Server-stamped. Orders the checklist so an incoming document matches the oldest open item. */
   createdAt: z.string().datetime(),
 });

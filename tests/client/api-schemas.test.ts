@@ -4,7 +4,6 @@ import {
   documentListRowSchema,
   engagementDetailSchema,
   engagementListRowSchema,
-  inboxEntrySchema,
   metricsSchema,
   portalStateSchema,
 } from "../../src/shared/schemas/api.ts";
@@ -117,35 +116,6 @@ describe("documentListRowSchema", () => {
   });
 });
 
-describe("inboxEntrySchema", () => {
-  test("parses an activity joined with client name, portal token, and unread", () => {
-    const entry = inboxEntrySchema.parse({
-      ...activity,
-      clientName: client.legalName,
-      portalToken: engagement.portalToken,
-      unread: true,
-    });
-
-    expect(entry.unread).toBe(true);
-    expect(entry.portalToken).toBe("portal-token-1");
-  });
-
-  test("rejects an entry without the unread flag", () => {
-    expect(() => inboxEntrySchema.parse({ ...activity, clientName: client.legalName })).toThrow();
-  });
-
-  test("passes through an optional documentId from the activity record", () => {
-    const entry = inboxEntrySchema.parse({
-      ...activity,
-      documentId: "doc-1",
-      clientName: client.legalName,
-      unread: false,
-    });
-
-    expect(entry.documentId).toBe("doc-1");
-  });
-});
-
 describe("metricsSchema", () => {
   test("parses the six live counters", () => {
     expect(
@@ -184,7 +154,7 @@ describe("metricsSchema", () => {
 });
 
 describe("portalStateSchema", () => {
-  test("parses the coarse client-facing checklist", () => {
+  test("parses the client-facing checklist with nested documents and unmatched uploads", () => {
     const state = portalStateSchema.parse({
       firmName: FIRM_NAME,
       clientName: client.legalName,
@@ -196,23 +166,48 @@ describe("portalStateSchema", () => {
           title: "2025 W-2s",
           description: "Every W-2 issued by the entity.",
           required: true,
-          portalStatus: "waiting",
+          portalStatus: "received",
+          status: "received",
+          documents: [
+            {
+              id: "doc-1",
+              filename: "w2.pdf",
+              pipelineStatus: "needs-review",
+              documentTypeName: "W-2",
+              uploadedAt: iso,
+            },
+          ],
         },
         {
           id: "item-2",
           title: "Bank statements",
           description: "December closing statements.",
           required: false,
-          portalStatus: "needs-attention",
+          portalStatus: "waiting",
+          status: "waived",
+          waiveNote: "Account was closed in 2024",
+          documents: [],
+        },
+      ],
+      unmatched: [
+        {
+          id: "doc-2",
+          filename: "mystery.pdf",
+          pipelineStatus: "classifying",
+          documentTypeName: null,
+          uploadedAt: iso,
         },
       ],
     });
 
     expect(state.firmName).toBe(FIRM_NAME);
-    expect(state.items.map((item) => item.portalStatus)).toEqual(["waiting", "needs-attention"]);
+    expect(state.items.map((item) => item.status)).toEqual(["received", "waived"]);
+    expect(state.items[1]?.waiveNote).toBe("Account was closed in 2024");
+    expect(state.items[0]?.documents[0]?.documentTypeName).toBe("W-2");
+    expect(state.unmatched).toHaveLength(1);
   });
 
-  test("rejects a pipeline status leaking into the portal payload", () => {
+  test("rejects a pipeline status leaking into the coarse portal item status", () => {
     expect(() =>
       portalStateSchema.parse({
         firmName: FIRM_NAME,
@@ -226,8 +221,11 @@ describe("portalStateSchema", () => {
             description: "Every W-2 issued by the entity.",
             required: true,
             portalStatus: "extracting",
+            status: "open",
+            documents: [],
           },
         ],
+        unmatched: [],
       }),
     ).toThrow();
   });

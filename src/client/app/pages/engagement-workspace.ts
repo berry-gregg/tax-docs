@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { POLL_INTERVAL_MS } from "../../../shared/constants.ts";
 import {
+  documentTypesResponseSchema,
   engagementDetailSchema,
   type EngagementDetail,
 } from "../../../shared/schemas/api.ts";
 import { taxDocumentSchema, type TaxDocument } from "../../../shared/schemas/document.ts";
-import { documentTypeSchema, type DocumentType } from "../../../shared/schemas/document-type.ts";
+import { type DocumentType } from "../../../shared/schemas/document-type.ts";
 import type { RequestItem } from "../../../shared/schemas/request.ts";
 import {
   validationCheckSchema,
@@ -16,6 +17,7 @@ import { formatRelativeTime } from "../format.ts";
 import {
   bindPortalLinkControls,
   bindRowLinks,
+  breadcrumbs,
   confidenceChip,
   dataTable,
   emptyState,
@@ -34,10 +36,6 @@ export type EngagementWorkspaceData = {
   validations: ValidationCheck[];
   now: Date;
 };
-
-const documentTypesResponseSchema = z.object({
-  documentTypes: z.array(documentTypeSchema),
-});
 
 const validationsResponseSchema = z.object({
   checks: z.array(validationCheckSchema),
@@ -76,17 +74,22 @@ export function renderEngagementWorkspace(data: EngagementWorkspaceData): string
 
   return `<div class="page-home">
     <main>
-      ${pageHeader(detail.client.legalName, `${detail.engagement.filingType} · ${detail.engagement.taxYear}`, actions)}
-      <div class="page-actions">
-        ${portalLinkControl(`/portal/${encodeURIComponent(detail.engagement.portalToken)}`)}
-        ${stageChip(detail.engagement.status)}
-      </div>
-      ${renderValidationSummary(data.validations)}
+      ${breadcrumbs([
+        { label: "Engagements", href: "/engagements" },
+        { label: detail.client.legalName },
+      ])}
+      ${pageHeader(detail.client.legalName, undefined, actions)}
+      <p class="page-subtitle">${escapeHtml(`${detail.engagement.filingType} · ${detail.engagement.taxYear}`)}</p>
+      ${renderStatusStrip(detail)}
       <section class="stack">
-        <h2 class="section-title">Request checklist</h2>
-        ${renderRequestChecklist(detail.requestItems)}
+        <h2 class="section-title">Validation checks</h2>
+        ${renderValidationSummary(data.validations)}
       </section>
       <section class="stack">
+        <h2 class="section-title">Request checklist</h2>
+        ${renderRequestChecklist(detail.engagement.id, detail.requestItems)}
+      </section>
+      <section class="stack" id="engagement-documents">
         <h2 class="section-title">Documents</h2>
         ${renderDropzone(detail.engagement.id)}
         <p class="load-error-message" data-workspace-error hidden></p>
@@ -106,6 +109,33 @@ export function renderEngagementWorkspace(data: EngagementWorkspaceData): string
   </div>`;
 }
 
+/**
+ * One-line working status for the engagement: stage, checklist progress, review pressure,
+ * trusted count, and the portal link. Live values from the loaded detail — never a metrics ticker.
+ */
+function renderStatusStrip(detail: EngagementDetail): string {
+  const received = detail.requestItems.filter((item) => item.status === "received").length;
+  const needsReview = detail.documents.filter(
+    (document) => document.pipelineStatus === "needs-review",
+  ).length;
+  const trusted = detail.documents.filter(
+    (document) => document.pipelineStatus === "trusted",
+  ).length;
+  const needsReviewLabel = `${needsReview === 1 ? "needs" : "need"} review`;
+  const needsReviewItem =
+    needsReview > 0
+      ? `<a class="engagement-status-item engagement-status-link" href="#engagement-documents"><span class="engagement-status-value">${needsReview}</span> ${needsReviewLabel}</a>`
+      : `<span class="engagement-status-item"><span class="engagement-status-value">0</span> need review</span>`;
+
+  return `<div class="engagement-status" data-engagement-status>
+    ${stageChip(detail.engagement.status)}
+    <span class="engagement-status-item"><span class="engagement-status-value">${received} of ${detail.requestItems.length}</span> checklist items received</span>
+    ${needsReviewItem}
+    <span class="engagement-status-item"><span class="engagement-status-value">${trusted}</span> trusted</span>
+    ${portalLinkControl(`/portal/${encodeURIComponent(detail.engagement.portalToken)}`)}
+  </div>`;
+}
+
 function renderValidationSummary(checks: ValidationCheck[]): string {
   const passed = checks.filter((check) => check.status === "pass").length;
   const warnings = checks.filter((check) => check.status === "warn");
@@ -113,7 +143,7 @@ function renderValidationSummary(checks: ValidationCheck[]): string {
     return emptyState("Validation checks appear after documents enter review.");
   }
 
-  return `<div class="row-list" aria-label="Validation summary">
+  return `<div class="row-list validation-list" aria-label="Validation checks">
     ${warnings
       .map(
         (check) =>
@@ -127,16 +157,12 @@ function renderValidationSummary(checks: ValidationCheck[]): string {
       )
       .join("")}
     <div class="list-row">
-      <span class="list-row-body">
-        <span class="list-row-title">${passed} passed</span>
-        <span class="muted">Validation checks are advisory and never block review.</span>
-      </span>
-      <span class="chip chip-success">Pass</span>
+      <span class="muted">${passed} passed · Validation checks are advisory and never block review.</span>
     </div>
   </div>`;
 }
 
-function renderRequestChecklist(items: RequestItem[]): string {
+function renderRequestChecklist(engagementId: string, items: RequestItem[]): string {
   if (items.length === 0) {
     return emptyState("No request items yet.");
   }
@@ -146,16 +172,36 @@ function renderRequestChecklist(items: RequestItem[]): string {
       .map(
         (item) =>
           `<div class="list-row">
-            <span class="list-row-title" title="${escapeHtml(item.description)}">${escapeHtml(item.title)}</span>
-            <span class="checklist-actions" data-request-item-id="${escapeHtml(item.id)}">${requestItemChip(item)}${
-              item.status === "open" && !item.required
-                ? ` <button class="btn-ghost" type="button" data-waive-request-item="${escapeHtml(item.id)}">Waive</button>`
-                : ""
-            }</span>
+            <span class="list-row-body">
+              <span class="list-row-title">${escapeHtml(item.title)}</span>
+              <span class="muted">${escapeHtml(item.description)}</span>
+              ${
+                item.status === "waived" && item.waiveNote
+                  ? `<span class="muted checklist-waive-note">Waived — ${escapeHtml(item.waiveNote)}</span>`
+                  : ""
+              }
+            </span>
+            <span class="checklist-actions" data-request-item-id="${escapeHtml(item.id)}">${requestItemChip(item)}${checklistTrailing(engagementId, item)}</span>
           </div>`,
       )
       .join("")}
   </div>`;
+}
+
+/** Per-status trailing action: Waive for open optional items, View/Review for matched documents. */
+function checklistTrailing(engagementId: string, item: RequestItem): string {
+  if (item.status === "open" && !item.required) {
+    return ` <button class="btn-ghost" type="button" data-waive-request-item="${escapeHtml(item.id)}">Waive</button>`;
+  }
+
+  const matchedId = item.matchedDocumentIds[0];
+  if ((item.status === "received" || item.status === "needs-attention") && matchedId) {
+    const href = `/documents/${encodeURIComponent(matchedId)}`;
+    const label = item.status === "received" ? "View" : "Review";
+    return ` <a class="checklist-doc-link" href="${escapeHtml(href)}" data-nav-link>${label}</a>`;
+  }
+
+  return "";
 }
 
 function requestItemChip(item: RequestItem): string {
@@ -167,8 +213,8 @@ function requestItemChip(item: RequestItem): string {
 function renderDropzone(engagementId: string): string {
   return `<label class="dropzone" data-dropzone data-engagement-id="${escapeHtml(engagementId)}">
     <span>Drop a PDF here</span>
-    <span class="muted">or choose a file to upload into this engagement</span>
-    <input type="file" accept="application/pdf,.pdf" data-document-upload />
+    <span class="muted">or browse</span>
+    <input class="visually-hidden-input" type="file" accept="application/pdf,.pdf" data-document-upload />
   </label>`;
 }
 
@@ -181,9 +227,7 @@ function renderDocumentsTable(detail: EngagementDetail, documentTypes: DocumentT
   const rows = detail.documents.map((document) => {
     const documentTypeName = nameForDocument(document, typeById);
     const confidence = confidenceForDocument(document);
-    const reviewHref = `/engagements/${encodeURIComponent(detail.engagement.id)}/review/${encodeURIComponent(
-      document.id,
-    )}`;
+    const reviewHref = `/documents/${encodeURIComponent(document.id)}`;
     return `<tr data-href="${escapeHtml(reviewHref)}" tabindex="0">
       <td><a href="${escapeHtml(reviewHref)}" data-nav-link>${escapeHtml(document.filename)}</a>${renderFailure(document)}</td>
       <td>${escapeHtml(documentTypeName)}</td>

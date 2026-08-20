@@ -10,9 +10,7 @@ import {
   validationCheckSchema,
   type ValidationCheck,
 } from "../../src/shared/schemas/validation.ts";
-import { ApiError } from "../../src/client/app/api.ts";
 import {
-  bulkAcceptKeys,
   canTrust,
   renderReview,
   reviewPage,
@@ -56,7 +54,7 @@ function fields(overrides: Partial<ExtractionField>[] = []): ExtractionField[] {
       sourceSnippet: "",
       notFound: true,
       regexPass: null,
-      reviewStatus: "accepted",
+      reviewStatus: "unreviewed",
     },
   ];
 
@@ -106,6 +104,7 @@ function documentType(): DocumentType {
   });
 }
 
+/** doc-1 checks (one warn, one pass), plus cross-doc and checklist noise that must not render. */
 function validations(): ValidationCheck[] {
   return [
     validationCheckSchema.parse({
@@ -113,14 +112,28 @@ function validations(): ValidationCheck[] {
       label: "Payroll ties to P&L",
       status: "warn",
       explanation: "Form 941 wages are $30,000 but P&L payroll is $28,500.",
+      relatedDocumentIds: ["doc-1", "doc-941"],
+    }),
+    validationCheckSchema.parse({
+      checkId: "balance-sheet-ties",
+      label: "Balance sheet ties",
+      status: "pass",
+      explanation: "Assets equal liabilities plus equity.",
       relatedDocumentIds: ["doc-1"],
     }),
     validationCheckSchema.parse({
-      checkId: "ein-consistency",
-      label: "EIN consistency",
-      status: "pass",
-      explanation: "EIN/TIN values are consistent.",
-      relatedDocumentIds: ["doc-1"],
+      checkId: "trial-balance-ties",
+      label: "Trial balance ties",
+      status: "warn",
+      explanation: "Debits do not equal credits on the trial balance.",
+      relatedDocumentIds: ["doc-other"],
+    }),
+    validationCheckSchema.parse({
+      checkId: "missing-required-items",
+      label: "Missing required items",
+      status: "warn",
+      explanation: "2 required checklist items have no matched document.",
+      relatedDocumentIds: [],
     }),
   ];
 }
@@ -143,18 +156,137 @@ describe("review page", () => {
     expect(html).toContain("profit-loss.pdf");
     expect(html).toContain("Profit and loss");
     expect(html).toContain("Statement title matched the profit and loss definition.");
-    expect(html).toContain('href="/engagements/eng-1"');
   });
 
-  test("a field row carries its confidence tier, metadata caption, and source snippet", () => {
+  test("breadcrumbs lead back to the documents tab with the filename as the current page", () => {
     const html = renderReview(data());
 
+    expect(html).toContain('class="breadcrumbs"');
+    expect(html).toMatch(/class="breadcrumb-link" href="\/documents"[^>]*>Documents</);
+    expect(html).toMatch(/class="breadcrumb-current"[^>]*>profit-loss\.pdf</);
+  });
+
+  test("keeps a quiet secondary link to the engagement workspace", () => {
+    const html = renderReview(data());
+
+    expect(html).toContain('href="/engagements/eng-1"');
+    expect(html).toContain("Engagement workspace");
+  });
+
+  test("each field is one compact row: label, always-editable input, confidence chip", () => {
+    const html = renderReview(data());
+
+    expect(html).toMatch(/data-field-input="gross_receipts"[^>]*value="1250000"/);
+    expect(html).toMatch(/data-field-input="ein"[^>]*value="12-345678"/);
     expect(html).toContain('class="chip confidence-high">96%');
     expect(html).toContain('class="chip confidence-medium">72%');
     expect(html).toContain('class="chip confidence-low">20%');
     expect(html).toContain('class="review-field-type">dollar-amount');
-    expect(html).toContain('class="review-source">Total revenue 1,250,000');
-    expect(html).toContain("1 of 3 fields reviewed");
+  });
+
+  test("per-field accept, edit, and bulk-accept controls are gone", () => {
+    const html = renderReview(data());
+
+    expect(html).not.toContain("data-accept-field");
+    expect(html).not.toContain("data-edit-field");
+    expect(html).not.toContain("data-accept-high-confidence");
+    expect(html).not.toContain("fields reviewed");
+  });
+
+  test("an ungrounded field is an empty input with a Not found placeholder", () => {
+    const html = renderReview(data());
+
+    expect(html).toMatch(/data-field-input="officer_name"[^>]*value=""/);
+    expect(html).toMatch(/data-field-input="officer_name"[^>]*placeholder="Not found"/);
+  });
+
+  test("a value that fails its regex is tagged as a format mismatch", () => {
+    const html = renderReview(data());
+
+    expect(html).toContain("Format mismatch");
+  });
+
+  test("an edited field pre-fills the correction and stays attributed as edited", () => {
+    const html = renderReview(
+      data({
+        document: document({
+          extraction: {
+            fields: fields([{ reviewStatus: "edited", editedValue: 1300000 }]),
+          },
+        }),
+      }),
+    );
+
+    expect(html).toMatch(/data-field-input="gross_receipts"[^>]*value="1300000"/);
+    expect(html).toContain("Edited");
+    expect(html).toContain("Extracted $1,250,000.00");
+  });
+
+  test("source snippets collapse behind a per-row disclosure instead of adding row height", () => {
+    const html = renderReview(data());
+
+    expect(html).toContain('data-source-toggle="gross_receipts"');
+    expect(html).toMatch(/data-source-row="gross_receipts"[^>]*hidden/);
+    expect(html).toContain("Total revenue 1,250,000");
+    // A field with no snippet renders no toggle at all.
+    expect(html).not.toContain('data-source-toggle="officer_name"');
+  });
+
+  test("Trust is live even while fields are unreviewed — editing is optional", () => {
+    const html = renderReview(data());
+
+    expect(html).toContain("data-mark-trusted");
+    expect(html).not.toContain("data-mark-trusted disabled");
+  });
+
+  test("Trust stays disabled when extraction returned no fields", () => {
+    const html = renderReview(
+      data({
+        document: document({ extraction: { fields: [] } }),
+      }),
+    );
+
+    expect(html).toContain("Extraction returned no fields for this document type.");
+    expect(html).toContain("data-mark-trusted disabled");
+    expect(html).toContain("This document cannot be marked trusted.");
+  });
+
+  test("canTrust needs fields but no per-field review", () => {
+    expect(canTrust(fields())).toBe(true);
+    expect(canTrust([])).toBe(false);
+  });
+
+  test("validation shows only this document's checks, passes included", () => {
+    const html = renderReview(data());
+
+    expect(html).toContain("Payroll ties to P&amp;L");
+    expect(html).toContain("Form 941 wages are $30,000 but P&amp;L payroll is $28,500.");
+    expect(html).toContain('<span class="chip chip-warning">Warn</span>');
+    expect(html).toContain("Balance sheet ties");
+    expect(html).toContain('<span class="chip chip-success">Pass</span>');
+    expect(html).toContain("never block");
+    // Other documents' checks and the checklist roll-up stay on the engagement workspace.
+    expect(html).not.toContain("Trial balance ties");
+    expect(html).not.toContain("Missing required items");
+  });
+
+  test("a document with no document-scoped checks says so quietly", () => {
+    const html = renderReview(
+      data({
+        validations: [
+          validationCheckSchema.parse({
+            checkId: "trial-balance-ties",
+            label: "Trial balance ties",
+            status: "warn",
+            explanation: "Debits do not equal credits.",
+            relatedDocumentIds: ["doc-other"],
+          }),
+        ],
+      }),
+    );
+
+    expect(html).toContain("No document-level checks for this document type.");
+    expect(html).not.toContain("Trial balance ties");
   });
 
   test("needs-review renders the same warning chip class the documents list uses", () => {
@@ -168,182 +300,6 @@ describe("review page", () => {
 
     expect(html).not.toContain('class="badge"');
     expect(html).not.toContain("highlighter");
-  });
-
-  test("a dollar field renders through the shared money formatter", () => {
-    const html = renderReview(data());
-
-    expect(html).toContain("$1,250,000.00");
-  });
-
-  test("an ungrounded field says Not found instead of inventing a value", () => {
-    const html = renderReview(data());
-
-    expect(html).toContain("Not found");
-  });
-
-  test("a value that fails its regex is tagged as a format mismatch", () => {
-    const html = renderReview(data());
-
-    expect(html).toContain("Format mismatch");
-  });
-
-  test("each unreviewed field offers accept and edit, with an inline edit input", () => {
-    const html = renderReview(data());
-
-    expect(html).toContain('data-accept-field="gross_receipts"');
-    expect(html).toContain('data-edit-field="ein"');
-    expect(html).toContain('data-field-edit="ein"');
-    expect(html).toContain("data-field-edit-input");
-  });
-
-  test("Accept all >=90% shows only while an unreviewed high-confidence field remains", () => {
-    const html = renderReview(data());
-    expect(html).toContain("data-accept-high-confidence");
-    expect(html).toContain("Accept all ≥90%");
-
-    const reviewed = renderReview(
-      data({
-        document: document({
-          extraction: {
-            fields: fields([{ reviewStatus: "accepted" }, { reviewStatus: "accepted" }]),
-          },
-        }),
-      }),
-    );
-    expect(reviewed).not.toContain("data-accept-high-confidence");
-  });
-
-  test("Accept all >=90% stays hidden when the only high-confidence fields are notFound", () => {
-    const html = renderReview(
-      data({
-        document: document({
-          extraction: {
-            fields: [
-              {
-                key: "officer_name",
-                label: "Officer name",
-                metadataType: "person-name",
-                dataType: "string",
-                value: null,
-                confidence: 0.95,
-                sourceSnippet: "",
-                notFound: true,
-                regexPass: null,
-                reviewStatus: "unreviewed",
-              },
-            ],
-          },
-        }),
-      }),
-    );
-
-    expect(html).toContain("Not found");
-    expect(html).not.toContain("data-accept-high-confidence");
-  });
-
-  test("bulkAcceptKeys skips notFound even when a null value keeps high model confidence", () => {
-    expect(
-      bulkAcceptKeys([
-        {
-          key: "gross_receipts",
-          label: "Gross receipts",
-          metadataType: "dollar-amount",
-          dataType: "double",
-          value: 1250000,
-          confidence: 0.96,
-          sourceSnippet: "Total revenue 1,250,000",
-          notFound: false,
-          regexPass: null,
-          reviewStatus: "unreviewed",
-        },
-        {
-          key: "officer_name",
-          label: "Officer name",
-          metadataType: "person-name",
-          dataType: "string",
-          value: null,
-          confidence: 0.95,
-          sourceSnippet: "",
-          notFound: true,
-          regexPass: null,
-          reviewStatus: "unreviewed",
-        },
-      ]),
-    ).toEqual(["gross_receipts"]);
-  });
-
-  test("an edited field shows the corrected value and keeps the extracted one visible", () => {
-    const html = renderReview(
-      data({
-        document: document({
-          extraction: {
-            fields: fields([{ reviewStatus: "edited", editedValue: 1300000 }]),
-          },
-        }),
-      }),
-    );
-
-    expect(html).toContain("$1,300,000.00");
-    expect(html).toContain("Extracted $1,250,000.00");
-    expect(html).toContain("Edited");
-  });
-
-  test("Mark trusted stays disabled while any field is unreviewed", () => {
-    const html = renderReview(data());
-
-    expect(html).toContain("data-mark-trusted disabled");
-  });
-
-  test("Mark trusted enables once every field is accepted or edited", () => {
-    const html = renderReview(
-      data({
-        document: document({
-          extraction: {
-            fields: fields([{ reviewStatus: "accepted" }, { reviewStatus: "edited", editedValue: "12-3456789" }]),
-          },
-        }),
-      }),
-    );
-
-    expect(html).toContain("data-mark-trusted>");
-    expect(html).not.toContain("data-mark-trusted disabled");
-  });
-
-  test("canTrust is false while any field is unreviewed", () => {
-    expect(canTrust(fields())).toBe(false);
-  });
-
-  test("canTrust is true when at least one field exists and every field is accepted or edited", () => {
-    expect(
-      canTrust(fields([{ reviewStatus: "accepted" }, { reviewStatus: "edited", editedValue: "x" }])),
-    ).toBe(true);
-  });
-
-  test("canTrust is false when extraction returned no fields", () => {
-    expect(canTrust([])).toBe(false);
-  });
-
-  test("Mark trusted stays disabled when extraction returned no fields", () => {
-    const html = renderReview(
-      data({
-        document: document({ extraction: { fields: [] } }),
-      }),
-    );
-
-    expect(html).toContain("Extraction returned no fields for this document type.");
-    expect(html).toContain("data-mark-trusted disabled");
-    expect(html).not.toContain("Every field is resolved");
-    expect(html).toContain("This document cannot be marked trusted.");
-  });
-
-  test("validation warnings render the real explanation and stay advisory", () => {
-    const html = renderReview(data());
-
-    expect(html).toContain("Payroll ties to P&amp;L");
-    expect(html).toContain("Form 941 wages are $30,000 but P&amp;L payroll is $28,500.");
-    expect(html).toContain("never block");
-    expect(html).not.toContain("EIN consistency");
   });
 
   test("an unclassified document offers Define document type with the reasoning", () => {
@@ -410,11 +366,11 @@ describe("review page", () => {
 
     expect(html).toContain("Extracting");
     expect(html).toContain("still moving through the pipeline");
-    expect(html).not.toContain("data-accept-field");
+    expect(html).not.toContain("data-field-input");
     expect(html).not.toContain("data-mark-trusted");
   });
 
-  test("a trusted document is read-only and points at the engine export", () => {
+  test("a trusted document disables its inputs and points at the engine export", () => {
     const html = renderReview(
       data({
         document: document({
@@ -426,7 +382,7 @@ describe("review page", () => {
 
     expect(html).toContain("Trusted");
     expect(html).toContain('href="/engagements/eng-1/export"');
-    expect(html).not.toContain("data-accept-field");
+    expect(html).toMatch(/data-field-input="gross_receipts"[^>]*disabled/);
     expect(html).not.toContain("data-mark-trusted");
   });
 
@@ -437,14 +393,16 @@ describe("review page", () => {
 
 const originalFetch = globalThis.fetch;
 
-function stubFetch(handler: (url: string) => Response): string[] {
-  const urls: string[] = [];
-  globalThis.fetch = ((input: RequestInfo | URL) => {
+type RecordedRequest = { url: string; init?: RequestInit };
+
+function stubFetch(handler: (url: string) => Response): RecordedRequest[] {
+  const requests: RecordedRequest[] = [];
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    urls.push(url);
+    requests.push({ url, init });
     return Promise.resolve(handler(url));
   }) as typeof fetch;
-  return urls;
+  return requests;
 }
 
 function jsonResponse(body: unknown): Response {
@@ -497,6 +455,7 @@ class FakeReviewElement {
   dataset: Record<string, string | undefined> = {};
   innerHTML = "";
   textContent = "";
+  value = "";
   disabled = false;
   private readonly listeners = new Map<string, ReviewListener[]>();
 
@@ -552,6 +511,81 @@ async function clickDefine(root: ReturnType<typeof makeFakeReviewRoot>): Promise
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+describe("review save-on-change", () => {
+  function makeEditableRoot() {
+    const input = new FakeReviewElement('[data-field-input="ein"]');
+    input.dataset.fieldInput = "ein";
+    input.value = "12-345678";
+    const state = new FakeReviewElement('[data-field-state="ein"]');
+
+    return {
+      input,
+      state,
+      querySelector(selector: string) {
+        if (selector === '[data-field-state="ein"]') {
+          return state;
+        }
+        return null;
+      },
+      querySelectorAll(selector: string) {
+        if (selector === "[data-field-input]") {
+          return [input];
+        }
+        return [];
+      },
+    };
+  }
+
+  test("blurring a changed value PATCHes an edit and shows a quiet saved hint", async () => {
+    const requests = stubFetch(() => jsonResponse({ document: document() }));
+    const root = makeEditableRoot();
+    const reviewData = data();
+
+    reviewPage.bind?.(root as unknown as HTMLElement, reviewData, () => {});
+    root.input.value = "98-7654321";
+    root.input.dispatch("change");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(requests).toHaveLength(1);
+    const request = requests[0];
+    expect(request?.url).toBe("/api/documents/doc-1/fields/ein");
+    expect(request?.init?.method).toBe("PATCH");
+    expect(JSON.parse(String(request?.init?.body))).toEqual({
+      action: "edit",
+      value: "98-7654321",
+    });
+    expect(root.state.textContent).toBe("Saved");
+  });
+
+  test("an unchanged value never fires a request", async () => {
+    const requests = stubFetch(() => jsonResponse({ document: document() }));
+    const root = makeEditableRoot();
+
+    reviewPage.bind?.(root as unknown as HTMLElement, data(), () => {});
+    root.input.dispatch("change");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(requests).toHaveLength(0);
+  });
+
+  test("a failed save surfaces the server's own error message inline", async () => {
+    stubFetch(() =>
+      new Response(JSON.stringify({ error: "Document is not awaiting review" }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const root = makeEditableRoot();
+
+    reviewPage.bind?.(root as unknown as HTMLElement, data(), () => {});
+    root.input.value = "98-7654321";
+    root.input.dispatch("change");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(root.state.textContent).toBe("Document is not awaiting review");
+  });
+});
+
 describe("review define-type schema builder", () => {
   test("define document type mounts a modal wash and keeps the first draft if define is clicked again", async () => {
     const drafts = [draftType("State apportionment"), draftType("Schedule K-1")];
@@ -598,10 +632,10 @@ describe("review define-type schema builder", () => {
 });
 
 describe("review page load", () => {
-  const route: Route = { page: "review", engagementId: "eng-1", documentId: "doc-1" };
+  const route: Route = { page: "review", documentId: "doc-1" };
 
-  test("pulls the document detail and the engagement validations", async () => {
-    const urls = stubFetch((url) =>
+  test("pulls the document by id and derives the engagement for its validations", async () => {
+    const requests = stubFetch((url) =>
       url.startsWith("/api/documents")
         ? jsonResponse({ document: document(), documentType: documentType() })
         : jsonResponse({ checks: validations() }),
@@ -609,24 +643,11 @@ describe("review page load", () => {
 
     const loaded = await reviewPage.load(route);
 
-    expect(urls).toContain("/api/documents/doc-1");
-    expect(urls).toContain("/api/engagements/eng-1/validations");
+    expect(requests.map((request) => request.url)).toContain("/api/documents/doc-1");
+    expect(requests.map((request) => request.url)).toContain("/api/engagements/eng-1/validations");
     expect(loaded.document.id).toBe("doc-1");
+    expect(loaded.engagementId).toBe("eng-1");
     expect(loaded.documentType?.name).toBe("Profit and loss");
-    expect(loaded.validations).toHaveLength(2);
-  });
-
-  test("a document from another engagement is a miss, not a permission error", async () => {
-    stubFetch((url) =>
-      url.startsWith("/api/documents")
-        ? jsonResponse({ document: document({ engagementId: "eng-other" }) })
-        : jsonResponse({ checks: [] }),
-    );
-
-    const error = await reviewPage.load(route).catch((cause: unknown) => cause);
-
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).status).toBe(404);
-    expect((error as ApiError).message).toBe("Not found");
+    expect(loaded.validations).toHaveLength(4);
   });
 });

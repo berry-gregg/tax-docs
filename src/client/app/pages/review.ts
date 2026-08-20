@@ -16,14 +16,22 @@ import {
   validationCheckSchema,
   type ValidationCheck,
 } from "../../../shared/schemas/validation.ts";
-import { ApiError, getJson, sendJson } from "../api.ts";
+import { getJson, sendJson } from "../api.ts";
 import { bindSchemaBuilder, renderSchemaBuilder } from "../components/schema-builder.ts";
-import { formatConfidence, formatMoney } from "../format.ts";
-import { confidenceChip, emptyState, escapeHtml, pageHeader, pipelineChip } from "../render.ts";
+import { formatMoney } from "../format.ts";
+import {
+  breadcrumbs,
+  confidenceChip,
+  emptyState,
+  escapeHtml,
+  pageHeader,
+  pipelineChip,
+} from "../render.ts";
 import type { Route } from "../router.ts";
 import type { PageModule } from "./registry.ts";
 
 export type ReviewData = {
+  /** Derived from the document itself — the route only carries the document id. */
   engagementId: string;
   document: TaxDocument;
   documentType: DocumentType | null;
@@ -53,35 +61,12 @@ const draftTypeResponseSchema = z.object({
 const validationsResponseSchema = z.object({ checks: z.array(validationCheckSchema) });
 
 /**
- * A resolved field earns a mark; an unresolved one carries the Accept/Edit pair instead. Chipping
- * every untouched row would spend the warning colour on the default state.
- */
-const reviewStatusChips: Record<ExtractionField["reviewStatus"], string> = {
-  unreviewed: "",
-  accepted: '<span class="chip chip-success">Accepted</span>',
-  edited: '<span class="chip chip-success">Edited</span>',
-};
-
-/**
- * The trust gate, mirroring the server's own rule in `POST /api/documents/:id/trust`: a field the
- * reviewer never touched blocks the write, and an empty extraction is not vacuously trusted.
- * Keeping the two in step means the button is never enabled for a request the API would reject,
- * and never disabled for one it would accept.
+ * The trust gate, mirroring the server's rule in `POST /api/documents/:id/trust`: an empty
+ * extraction is not vacuously trusted, but per-field review is no longer required — trusting the
+ * document is the review, and the server finalizes untouched fields as accepted.
  */
 export function canTrust(fields: ExtractionField[]): boolean {
-  return fields.length > 0 && fields.every((field) => field.reviewStatus !== "unreviewed");
-}
-
-/** `formatConfidence` owns the 90% boundary, so the bulk-accept control reuses its tier. */
-function isHighConfidence(field: ExtractionField): boolean {
-  return formatConfidence(field.confidence).tier === "high";
-}
-
-/** Ungrounded gaps stay unreviewed — a high confidence on a null value is not an accept. */
-export function bulkAcceptKeys(fields: ExtractionField[]): string[] {
-  return fields
-    .filter((field) => field.reviewStatus === "unreviewed" && !field.notFound && isHighConfidence(field))
-    .map((field) => field.key);
+  return fields.length > 0;
 }
 
 function effectiveValue(field: ExtractionField): FieldValue {
@@ -105,39 +90,18 @@ function displayValue(field: ExtractionField, value: FieldValue): string {
   return String(value);
 }
 
-function renderFieldValue(field: ExtractionField): string {
-  const value = effectiveValue(field);
-  if (field.notFound && field.reviewStatus !== "edited") {
-    return `<p class="review-field-value muted">Not found</p>`;
-  }
-
-  return `<p class="review-field-value">${escapeHtml(displayValue(field, value))}</p>`;
-}
-
-/** An edit never erases what the model read — the reviewer's correction sits beside the source. */
-function renderEditedNote(field: ExtractionField): string {
-  if (field.reviewStatus !== "edited" || field.editedValue === undefined) {
-    return "";
-  }
-
-  return `<p class="review-field-note">Extracted ${escapeHtml(displayValue(field, field.value))}</p>`;
-}
-
-function renderSourceSnippet(field: ExtractionField): string {
-  if (field.sourceSnippet.length === 0) {
-    return `<p class="review-field-note">No source snippet was returned for this field.</p>`;
-  }
-
-  return `<blockquote class="review-source">${escapeHtml(field.sourceSnippet)}</blockquote>`;
-}
-
-/** Native input types do the parsing, so the client never forks the pipeline's coercion rules. */
-function editControl(field: ExtractionField): string {
+/**
+ * Native input types do the parsing, so the client never forks the pipeline's coercion rules.
+ * The value rests in a real input — editable by default, no edit mode to enter.
+ */
+function fieldInput(field: ExtractionField, interactive: boolean): string {
+  const key = escapeHtml(field.key);
+  const disabled = interactive ? "" : " disabled";
   const current = effectiveValue(field);
 
   if (field.dataType === "boolean") {
     const truthy = current === true;
-    return `<select data-field-edit-input>
+    return `<select class="review-field-input" data-field-input="${key}"${disabled}>
       <option value="true" ${truthy ? "selected" : ""}>Yes</option>
       <option value="false" ${truthy ? "" : "selected"}>No</option>
     </select>`;
@@ -151,59 +115,88 @@ function editControl(field: ExtractionField): string {
         : field.dataType === "double"
           ? 'type="number" step="any"'
           : 'type="text"';
+  const placeholder =
+    field.notFound && field.reviewStatus !== "edited" ? ' placeholder="Not found"' : "";
 
-  return `<input ${type} data-field-edit-input value="${escapeHtml(current === null ? "" : String(current))}" />`;
+  return `<input class="review-field-input" ${type} data-field-input="${key}" value="${escapeHtml(
+    current === null ? "" : String(current),
+  )}"${placeholder}${disabled} />`;
 }
 
+/**
+ * The quiet per-row status slot: shows the edit attribution at rest (with the model's original
+ * value preserved in the tooltip) and the saving/saved/error hint while a change is in flight.
+ */
+function fieldStateSlot(field: ExtractionField): string {
+  const key = escapeHtml(field.key);
+  if (field.reviewStatus === "edited") {
+    const original = escapeHtml(`Extracted ${displayValue(field, field.value)}`);
+    return `<span class="review-field-state" data-field-state="${key}" title="${original}">Edited</span>`;
+  }
+
+  return `<span class="review-field-state" data-field-state="${key}"></span>`;
+}
+
+/** Source snippets are one disclosure away instead of a permanent quote block per row. */
+function sourceDisclosure(field: ExtractionField): string {
+  if (field.sourceSnippet.length === 0) {
+    return "";
+  }
+
+  const key = escapeHtml(field.key);
+  return `<button class="review-source-toggle" type="button" data-source-toggle="${key}" aria-expanded="false">Source</button>`;
+}
+
+function sourceRow(field: ExtractionField): string {
+  if (field.sourceSnippet.length === 0) {
+    return "";
+  }
+
+  const key = escapeHtml(field.key);
+  return `<blockquote class="review-source" data-source-row="${key}" hidden>${escapeHtml(field.sourceSnippet)}</blockquote>`;
+}
+
+/** One compact hairline row: name · always-editable value · confidence. Nothing stacked. */
 function renderFieldRow(field: ExtractionField, interactive: boolean): string {
   const key = escapeHtml(field.key);
 
   return `<article class="review-field" data-field-row="${key}">
-    <div class="review-field-head">
+    <span class="review-field-name">
       <span class="review-field-label">${escapeHtml(field.label)}</span>
       <span class="review-field-type">${escapeHtml(field.metadataType)}</span>
-      ${confidenceChip(field.confidence)}
-      ${reviewStatusChips[field.reviewStatus]}
+    </span>
+    <span class="review-field-control">
+      ${fieldInput(field, interactive)}
       ${field.regexPass === false ? '<span class="chip chip-warning">Format mismatch</span>' : ""}
-    </div>
-    ${renderFieldValue(field)}
-    ${renderEditedNote(field)}
-    ${renderSourceSnippet(field)}
-    ${
-      interactive
-        ? `<div class="review-field-actions">
-            <button class="btn-ghost" type="button" data-accept-field="${key}">Accept</button>
-            <button class="btn-ghost" type="button" data-edit-field="${key}">Edit</button>
-          </div>
-          <form class="review-field-edit" data-field-edit="${key}" hidden>
-            <label class="form-field">
-              <span>Corrected value</span>
-              ${editControl(field)}
-            </label>
-            <div class="review-field-actions">
-              <button class="btn-secondary" type="submit">Save</button>
-              <button class="btn-ghost" type="button" data-field-edit-cancel>Cancel</button>
-            </div>
-          </form>`
-        : ""
-    }
+    </span>
+    <span class="review-field-meta">
+      ${confidenceChip(field.confidence)}
+      ${fieldStateSlot(field)}
+      ${sourceDisclosure(field)}
+    </span>
+    ${sourceRow(field)}
   </article>`;
 }
 
-function renderValidationWarnings(checks: ValidationCheck[]): string {
-  const warnings = checks.filter((check) => check.status === "warn");
+/**
+ * Document-scoped quality checks only: a check renders here when its `relatedDocumentIds`
+ * includes this document. Passes stay visible — a green "Balance sheet ties" is a feature.
+ * Cross-document noise and the checklist roll-up live on the engagement workspace.
+ */
+function renderValidationChecks(checks: ValidationCheck[], documentId: string): string {
+  const relevant = checks.filter((check) => check.relatedDocumentIds.includes(documentId));
 
-  if (warnings.length === 0) {
+  if (relevant.length === 0) {
     return `<section class="stack" aria-label="Validation">
       <h3 class="section-title">Validation</h3>
-      <p class="muted">No warnings on this engagement. Checks are advisory and never block review.</p>
+      <p class="muted">No document-level checks for this document type.</p>
     </section>`;
   }
 
-  return `<section class="stack" aria-label="Validation warnings">
-    <h3 class="section-title">Validation warnings</h3>
+  return `<section class="stack" aria-label="Validation">
+    <h3 class="section-title">Validation</h3>
     <div class="row-list">
-      ${warnings
+      ${relevant
         .map(
           (check) => `<div class="list-row">
             <span class="avatar-spacer" aria-hidden="true"></span>
@@ -211,52 +204,44 @@ function renderValidationWarnings(checks: ValidationCheck[]): string {
               <span class="list-row-title">${escapeHtml(check.label)}</span>
               <span class="muted">${escapeHtml(check.explanation)}</span>
             </span>
-            <span class="chip chip-warning">Warn</span>
+            ${
+              check.status === "pass"
+                ? '<span class="chip chip-success">Pass</span>'
+                : '<span class="chip chip-warning">Warn</span>'
+            }
           </div>`,
         )
         .join("")}
     </div>
-    <p class="muted">Warnings are advisory — they never block review or export.</p>
+    <p class="muted">Checks are advisory — they never block review or export.</p>
   </section>`;
 }
 
 function renderFieldsVariant(data: ReviewData, fields: ExtractionField[]): string {
   const interactive = data.document.pipelineStatus === "needs-review";
-  const reviewed = fields.filter((field) => field.reviewStatus !== "unreviewed").length;
-  const bulkKeys = bulkAcceptKeys(fields);
 
-  return `<div class="review-actions">
-      <span class="muted">${reviewed} of ${fields.length} fields reviewed</span>
-      ${
-        interactive && bulkKeys.length > 0
-          ? `<button class="btn-secondary" type="button" data-accept-high-confidence>Accept all ≥90%</button>`
-          : ""
-      }
-    </div>
-    ${
-      fields.length === 0
-        ? emptyState("Extraction returned no fields for this document type.")
-        : `<div class="review-fields">${fields.map((field) => renderFieldRow(field, interactive)).join("")}</div>`
-    }
-    ${renderValidationWarnings(data.validations)}
+  return `${
+    fields.length === 0
+      ? emptyState("Extraction returned no fields for this document type.")
+      : `<div class="review-fields">${fields.map((field) => renderFieldRow(field, interactive)).join("")}</div>`
+  }
+    ${renderValidationChecks(data.validations, data.document.id)}
     ${interactive ? renderTrustFooter(fields) : renderTrustedFooter(data)}`;
 }
 
-function trustFooterCopy(fields: ExtractionField[], ready: boolean): string {
+function trustFooterCopy(fields: ExtractionField[]): string {
   if (fields.length === 0) {
     return "Extraction returned no fields. This document cannot be marked trusted.";
   }
 
-  return ready
-    ? "Every field is resolved. Marking trusted is the human confirmation step."
-    : "Accept or edit every field before this document can be trusted.";
+  return "Edit anything that is wrong, then mark trusted — the human confirmation step. Unedited values are accepted as extracted.";
 }
 
 function renderTrustFooter(fields: ExtractionField[]): string {
   const ready = canTrust(fields);
 
   return `<footer class="review-foot">
-    <span class="muted">${trustFooterCopy(fields, ready)}</span>
+    <span class="muted">${trustFooterCopy(fields)}</span>
     <button class="btn-primary" type="button" data-mark-trusted${ready ? "" : " disabled"}>Mark trusted</button>
   </footer>`;
 }
@@ -339,10 +324,11 @@ export function renderReview(data: ReviewData): string {
   const fileHref = `/api/documents/${encodeURIComponent(data.document.id)}/file`;
 
   return `<div class="review-page" data-review-document="${escapeHtml(data.document.id)}">
+    ${breadcrumbs([{ label: "Documents", href: "/documents" }, { label: data.document.filename }])}
     ${pageHeader(data.document.filename, typeName, [
       {
         href: `/engagements/${encodeURIComponent(data.engagementId)}`,
-        label: "Back to engagement",
+        label: "Engagement workspace",
         kind: "secondary",
       },
     ])}
@@ -378,8 +364,12 @@ function showError(root: HTMLElement, message: string): void {
   slot.hidden = false;
 }
 
+/**
+ * Number parsing avoids `valueAsNumber`/`instanceof` so the same code runs against fakes in
+ * tests. An empty numeric input stays a string — silently coercing it to 0 would invent a value.
+ */
 function readEditedValue(
-  control: HTMLInputElement | HTMLSelectElement,
+  control: { value: string },
   dataType: DataType,
 ): string | number | boolean {
   if (dataType === "boolean") {
@@ -387,7 +377,10 @@ function readEditedValue(
   }
 
   if (dataType === "int" || dataType === "double") {
-    const parsed = control instanceof HTMLInputElement ? control.valueAsNumber : Number(control.value);
+    if (control.value.trim() === "") {
+      return control.value;
+    }
+    const parsed = Number(control.value);
     return Number.isFinite(parsed) ? parsed : control.value;
   }
 
@@ -398,73 +391,65 @@ function fieldPath(documentId: string, key: string): string {
   return `/api/documents/${encodeURIComponent(documentId)}/fields/${encodeURIComponent(key)}`;
 }
 
-async function acceptField(documentId: string, key: string): Promise<void> {
-  await sendJson("PATCH", fieldPath(documentId, key), { action: "accept" }, documentResponseSchema);
-}
-
-function bindFieldActions(root: HTMLElement, data: ReviewData, repaint: () => void): void {
+/**
+ * Save-on-change: values live in real inputs, so leaving a changed input persists the edit.
+ * `change` only fires after user modification, which is the debounce — no timers needed. The
+ * in-memory field updates on success so a repeat blur with the same value is a no-op.
+ */
+function bindFieldInputs(root: HTMLElement, data: ReviewData): void {
   const documentId = data.document.id;
   const fields = data.document.extraction?.fields ?? [];
 
-  root.querySelectorAll<HTMLButtonElement>("[data-accept-field]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const key = button.dataset.acceptField;
-      if (!key) {
-        return;
-      }
-
-      void acceptField(documentId, key).then(repaint, (error: unknown) => {
-        showError(root, messageFor(error));
-      });
-    });
-  });
-
-  root.querySelectorAll<HTMLButtonElement>("[data-edit-field]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const key = button.dataset.editField;
-      const form = key ? root.querySelector<HTMLElement>(`[data-field-edit="${key}"]`) : null;
-      if (!form) {
-        return;
-      }
-
-      form.hidden = false;
-      form.querySelector<HTMLElement>("[data-field-edit-input]")?.focus();
-    });
-  });
-
-  root.querySelectorAll<HTMLFormElement>("[data-field-edit]").forEach((form) => {
-    form.querySelector<HTMLButtonElement>("[data-field-edit-cancel]")?.addEventListener("click", () => {
-      form.hidden = true;
-    });
-
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const key = form.dataset.fieldEdit;
-      const control = form.querySelector<HTMLInputElement | HTMLSelectElement>("[data-field-edit-input]");
+  root.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-field-input]").forEach((control) => {
+    control.addEventListener("change", () => {
+      const key = control.dataset.fieldInput;
       const field = fields.find((entry) => entry.key === key);
-      if (!key || !control || !field) {
+      if (!key || !field) {
         return;
       }
 
-      void sendJson(
-        "PATCH",
-        fieldPath(documentId, key),
-        { action: "edit", value: readEditedValue(control, field.dataType) },
-        documentResponseSchema,
-      ).then(repaint, (error: unknown) => {
-        showError(root, messageFor(error));
-      });
+      const value = readEditedValue(control, field.dataType);
+      if (value === effectiveValue(field)) {
+        return;
+      }
+
+      const state = root.querySelector<HTMLElement>(`[data-field-state="${key}"]`);
+      if (state) {
+        state.textContent = "Saving…";
+      }
+
+      void sendJson("PATCH", fieldPath(documentId, key), { action: "edit", value }, documentResponseSchema).then(
+        () => {
+          field.reviewStatus = "edited";
+          field.editedValue = value;
+          if (state) {
+            state.textContent = "Saved";
+          }
+        },
+        (error: unknown) => {
+          const message = messageFor(error);
+          if (state) {
+            state.textContent = message;
+          } else {
+            showError(root, message);
+          }
+        },
+      );
     });
   });
+}
 
-  root.querySelector<HTMLButtonElement>("[data-accept-high-confidence]")?.addEventListener("click", () => {
-    void (async () => {
-      for (const key of bulkAcceptKeys(fields)) {
-        await acceptField(documentId, key);
+function bindSourceToggles(root: HTMLElement): void {
+  root.querySelectorAll<HTMLButtonElement>("[data-source-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.sourceToggle;
+      const row = key ? root.querySelector<HTMLElement>(`[data-source-row="${key}"]`) : null;
+      if (!row) {
+        return;
       }
-      repaint();
-    })().catch((error: unknown) => {
-      showError(root, messageFor(error));
+
+      row.hidden = !row.hidden;
+      button.setAttribute("aria-expanded", String(!row.hidden));
     });
   });
 }
@@ -479,7 +464,8 @@ function bindTrust(root: HTMLElement, data: ReviewData, repaint: () => void): vo
       documentResponseSchema,
     ).then(
       () => {
-        window.history.pushState({}, "", `/engagements/${encodeURIComponent(data.engagementId)}`);
+        // Back to the queue the reviewer came from, not the engagement.
+        window.history.pushState({}, "", "/documents");
         repaint();
       },
       (error: unknown) => {
@@ -587,21 +573,18 @@ export const reviewPage: PageModule<ReviewData> = {
   async load(route) {
     assertReviewRoute(route);
 
-    const [detail, validations] = await Promise.all([
-      getJson(`/api/documents/${encodeURIComponent(route.documentId)}`, documentDetailResponseSchema),
-      getJson(
-        `/api/engagements/${encodeURIComponent(route.engagementId)}/validations`,
-        validationsResponseSchema,
-      ),
-    ]);
-
-    // A deep link that pairs a document with someone else's engagement is a miss, not a 403.
-    if (detail.document.engagementId !== route.engagementId) {
-      throw new ApiError(404, "Not found");
-    }
+    const detail = await getJson(
+      `/api/documents/${encodeURIComponent(route.documentId)}`,
+      documentDetailResponseSchema,
+    );
+    // The engagement is derived from the document, so its validations load second.
+    const validations = await getJson(
+      `/api/engagements/${encodeURIComponent(detail.document.engagementId)}/validations`,
+      validationsResponseSchema,
+    );
 
     return {
-      engagementId: route.engagementId,
+      engagementId: detail.document.engagementId,
       document: detail.document,
       documentType: detail.documentType ?? null,
       validations: validations.checks,
@@ -609,7 +592,8 @@ export const reviewPage: PageModule<ReviewData> = {
   },
   render: renderReview,
   bind(root, data, repaint) {
-    bindFieldActions(root, data, repaint);
+    bindFieldInputs(root, data);
+    bindSourceToggles(root);
     bindTrust(root, data, repaint);
     bindRerun(root, data, repaint);
     bindDefineDocumentType(root, data, repaint);

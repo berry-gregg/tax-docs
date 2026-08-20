@@ -13,6 +13,7 @@ import {
   createEngagementInputSchema,
   engagementSchema,
   engagementStatusSchema,
+  filingTypeSchema,
   type Engagement,
 } from "../../shared/schemas/engagement.ts";
 import {
@@ -50,6 +51,15 @@ const updateEngagementInputSchema = z.object({
   status: engagementStatusSchema,
 });
 
+/** List-view query contract — every field maps straight onto an engagement document field. */
+const engagementListQuerySchema = z.object({
+  clientId: z.string().min(1).optional(),
+  taxYear: z.coerce.number().int().min(2000).max(2100).optional(),
+  filingType: filingTypeSchema.optional(),
+  status: engagementStatusSchema.optional(),
+  sort: z.enum(["newest", "oldest"]).default("newest"),
+});
+
 const updateRequestItemInputSchema = z.object({
   status: requestItemStatusSchema.extract(["waived", "open"]).optional(),
   title: createRequestItemInputSchema.shape.title.optional(),
@@ -69,10 +79,35 @@ async function findEngagement(id: string) {
 }
 
 engagementRoutes.get("/", async (c) => {
+  const parsed = engagementListQuerySchema.safeParse(c.req.query());
+  if (!parsed.success) {
+    return c.json({ error: zodIssueSummary(parsed.error) }, 400);
+  }
+
+  const { sort, ...fields } = parsed.data;
+  const filter: {
+    clientId?: string;
+    taxYear?: number;
+    filingType?: Engagement["filingType"];
+    status?: Engagement["status"];
+  } = {};
+  if (fields.clientId) {
+    filter.clientId = fields.clientId;
+  }
+  if (fields.taxYear !== undefined) {
+    filter.taxYear = fields.taxYear;
+  }
+  if (fields.filingType) {
+    filter.filingType = fields.filingType;
+  }
+  if (fields.status) {
+    filter.status = fields.status;
+  }
+
   const db = await connectDb();
   const engagementDocs = await engagementsCollection(db)
-    .find({})
-    .sort({ createdAt: -1 })
+    .find(filter)
+    .sort({ createdAt: sort === "oldest" ? 1 : -1 })
     .toArray();
 
   const engagements = await Promise.all(
@@ -295,8 +330,19 @@ engagementRoutes.post("/:id/request-items", async (c) => {
     matchedDocumentIds: [],
     createdAt: new Date().toISOString(),
   });
+  const activity: Activity = activitySchema.parse({
+    id: randomUUID(),
+    engagementId,
+    actor: "cpa",
+    action: "request-item-added",
+    detail: item.title,
+    direction: "outbound",
+    requestItemId: item.id,
+    createdAt: item.createdAt,
+  });
 
   await requestItemsCollection(db).insertOne(toStored(item));
+  await activitiesCollection(db).insertOne(toStored(activity));
 
   return c.json({ item }, 201);
 });
@@ -334,6 +380,21 @@ engagementRoutes.patch("/:id/request-items/:itemId", async (c) => {
   });
 
   await requestItemsCollection(db).replaceOne({ _id: itemId }, toStored(item));
+
+  // Outbound like request-sent: a CPA action on the request, emitted only on the transition.
+  if (item.status === "waived" && existing.status !== "waived") {
+    const activity: Activity = activitySchema.parse({
+      id: randomUUID(),
+      engagementId,
+      actor: "cpa",
+      action: "request-item-waived",
+      detail: item.title,
+      direction: "outbound",
+      requestItemId: item.id,
+      createdAt: new Date().toISOString(),
+    });
+    await activitiesCollection(db).insertOne(toStored(activity));
+  }
 
   return c.json({ item });
 });

@@ -331,7 +331,12 @@ describe("runPipeline happy path", () => {
     const activities = await loadActivities();
     expect(activities.length).toBeGreaterThanOrEqual(1);
     const matched = activities.find((entry) => entry.action === "checklist-item-matched");
-    expect(matched).toMatchObject({ actor: "agent", direction: "internal" });
+    // Visible in the inbox thread: it is the client's request being fulfilled.
+    expect(matched).toMatchObject({
+      actor: "agent",
+      direction: "inbound",
+      requestItemId: "item-oldest",
+    });
     const extracted = activities.find((entry) => entry.action === "document-extracted");
     expect(extracted).toMatchObject({ actor: "agent", direction: "inbound", documentId: document.id });
     expect(extracted?.detail).toContain("3");

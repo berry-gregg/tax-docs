@@ -160,7 +160,7 @@ describe("export page", () => {
   test("source refs link to each document review page", () => {
     const html = renderExport(data());
 
-    expect(html).toContain('href="/engagements/eng-1/review/doc-pl"');
+    expect(html).toContain('href="/documents/doc-pl"');
     expect(html).toContain("salaries_wages");
   });
 

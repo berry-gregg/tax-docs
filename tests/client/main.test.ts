@@ -3,7 +3,7 @@ import {
   closeOpenDialog,
   dialogOpen,
   handleShellKeydown,
-  refreshInboxBadgeState,
+  refreshBadgeState,
   replaceWorkspaceBody,
   type ShellKeydownDeps,
 } from "../../src/client/main.ts";
@@ -14,8 +14,8 @@ type Badge = {
   textContent: string;
 };
 
-describe("refreshInboxBadgeState", () => {
-  test("queries the badge after awaiting the unread count and persists the count", async () => {
+describe("refreshBadgeState", () => {
+  test("queries the badge after awaiting the count and persists the count", async () => {
     const discardedBadge: Badge = { hidden: true, textContent: "" };
     const visibleBadge: Badge = { hidden: true, textContent: "" };
     let domReplaced = false;
@@ -27,13 +27,13 @@ describe("refreshInboxBadgeState", () => {
       resolveCount = resolve;
     });
 
-    const refresh = refreshInboxBadgeState({
-      fetchUnreadCount: () => countPromise,
+    const refresh = refreshBadgeState({
+      fetchCount: () => countPromise,
       queryBadge: () => {
         queryCalls += 1;
         return domReplaced ? visibleBadge : discardedBadge;
       },
-      writeUnreadCount: (count) => {
+      writeCount: (count) => {
         persistedCount = count;
       },
     });
@@ -52,9 +52,11 @@ describe("refreshInboxBadgeState", () => {
 });
 
 describe("dialogOpen", () => {
-  test("is true for the three live dialog hosts and false when they are hidden or absent", () => {
+  test("is true for the four live dialog hosts and false when they are hidden or absent", () => {
     const openModal = new FakeWorkspace();
     openModal.openSelectors.push("[data-new-engagement-modal]:not([hidden])");
+    const portalWaive = new FakeWorkspace();
+    portalWaive.openSelectors.push("[data-portal-waive-form]:not([hidden])");
     const sidePanel = new FakeWorkspace();
     sidePanel.openSelectors.push(".side-panel");
     const exportConfirm = new FakeWorkspace();
@@ -63,6 +65,7 @@ describe("dialogOpen", () => {
     hiddenModal.openSelectors.push("[data-new-engagement-modal]");
 
     expect(dialogOpen(openModal)).toBe(true);
+    expect(dialogOpen(portalWaive)).toBe(true);
     expect(dialogOpen(sidePanel)).toBe(true);
     expect(dialogOpen(exportConfirm)).toBe(true);
     expect(dialogOpen(hiddenModal)).toBe(false);

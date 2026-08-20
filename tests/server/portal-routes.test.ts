@@ -5,15 +5,17 @@ import { connectDb, disconnectDb } from "../../src/server/db/client.ts";
 import {
   activitiesCollection,
   clientsCollection,
+  documentTypesCollection,
   engagementsCollection,
   fromStored,
   requestItemsCollection,
   taxDocumentsCollection,
   toStored,
 } from "../../src/server/db/collections.ts";
-import { portalStateSchema } from "../../src/shared/schemas/api.ts";
+import { portalStateSchema, type PortalState } from "../../src/shared/schemas/api.ts";
 import { requestItemSchema, type RequestItem } from "../../src/shared/schemas/request.ts";
 import type { Client } from "../../src/shared/schemas/client.ts";
+import type { DocumentType } from "../../src/shared/schemas/document-type.ts";
 import type { TaxDocument } from "../../src/shared/schemas/document.ts";
 import type { Engagement } from "../../src/shared/schemas/engagement.ts";
 
@@ -29,8 +31,27 @@ const client: Client = {
   createdAt: "2026-01-01T00:00:00.000Z",
 };
 
+const portalDocType: DocumentType = {
+  id: "dt-portal-routes-pl",
+  name: "Profit and loss",
+  description: "Management-prepared profit and loss statement.",
+  active: true,
+  createdBy: "seed",
+  fields: [
+    {
+      key: "revenue",
+      label: "Revenue",
+      metadataType: "dollar-amount",
+      dataType: "double",
+      required: true,
+      description: "Total revenue for the year.",
+    },
+  ],
+  createdAt: "2026-01-01T00:00:00.000Z",
+};
+
 const explicitItem = {
-  documentTypeId: "dt-profit-loss",
+  documentTypeId: portalDocType.id,
   title: "Custom P&L",
   description: "Management-prepared P&L for the tax year.",
   required: true,
@@ -56,12 +77,14 @@ async function clearCollections() {
     engagementsCollection(db).deleteMany({}),
     requestItemsCollection(db).deleteMany({}),
     taxDocumentsCollection(db).deleteMany({}),
+    documentTypesCollection(db).deleteMany({ _id: portalDocType.id }),
   ]);
 }
 
-async function seedClient() {
+async function seedClientAndType() {
   const db = await connectDb();
   await clientsCollection(db).insertOne(toStored(client));
+  await documentTypesCollection(db).insertOne(toStored(portalDocType));
 }
 
 async function createEngagement(app: ReturnType<typeof createApp>) {
@@ -89,10 +112,25 @@ async function requestItemFor(engagementId: string): Promise<RequestItem> {
   return fromStored(requestItemSchema, doc);
 }
 
+function plantedDocument(overrides: Partial<TaxDocument> & Pick<TaxDocument, "id">): TaxDocument {
+  return {
+    engagementId: "unset",
+    filename: "planted.pdf",
+    mimeType: "application/pdf",
+    size: 40,
+    storagePath: `data/uploads/${overrides.id}.pdf`,
+    uploadedBy: "client",
+    pipelineStatus: "received",
+    createdAt: "2026-04-01T00:00:00.000Z",
+    updatedAt: "2026-04-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 beforeEach(async () => {
   storagePaths.length = 0;
   await clearCollections();
-  await seedClient();
+  await seedClientAndType();
 });
 
 afterEach(async () => {
@@ -101,25 +139,21 @@ afterEach(async () => {
   await disconnectDb();
 });
 
-describe("portal routes", () => {
+describe("portal state", () => {
   test("returns coarse portal status and never leaks extraction confidence", async () => {
     const app = createApp();
     const engagement = await createEngagement(app);
     const item = await requestItemFor(engagement.id);
 
     const db = await connectDb();
-    const planted: TaxDocument = {
+    const planted = plantedDocument({
       id: "doc-portal-leak",
       engagementId: engagement.id,
       requestItemId: item.id,
       filename: "pl.pdf",
-      mimeType: "application/pdf",
-      size: 40,
-      storagePath: "data/uploads/doc-portal-leak.pdf",
-      uploadedBy: "client",
       pipelineStatus: "needs-review",
       classification: {
-        documentTypeId: "dt-profit-loss",
+        documentTypeId: portalDocType.id,
         confidence: 0.94,
         reasoning: "Matches P&L layout",
       },
@@ -137,9 +171,7 @@ describe("portal routes", () => {
           reviewStatus: "unreviewed",
         }],
       },
-      createdAt: "2026-04-01T00:00:00.000Z",
-      updatedAt: "2026-04-01T00:00:00.000Z",
-    };
+    });
     await taxDocumentsCollection(db).insertOne(toStored(planted));
     await requestItemsCollection(db).updateOne(
       { _id: item.id },
@@ -147,13 +179,7 @@ describe("portal routes", () => {
     );
 
     const response = await app.request(`/api/portal/${engagement.portalToken}`);
-    const body = await response.json() as {
-      firmName: string;
-      clientName: string;
-      taxYear: number;
-      filingType: string;
-      items: Array<{ id: string; title: string; description: string; required: boolean; portalStatus: string }>;
-    };
+    const body = await response.json() as PortalState;
 
     expect(response.status).toBe(200);
     expect(() => portalStateSchema.parse(body)).not.toThrow();
@@ -163,19 +189,95 @@ describe("portal routes", () => {
       taxYear: 2026,
       filingType: "1065",
     });
-    expect(body.items).toEqual([
-      {
-        id: item.id,
-        title: explicitItem.title,
-        description: explicitItem.description,
-        required: true,
-        portalStatus: "received",
-      },
-    ]);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      id: item.id,
+      title: explicitItem.title,
+      description: explicitItem.description,
+      required: true,
+      portalStatus: "received",
+      status: "open",
+    });
     const serialized = JSON.stringify(body);
     expect(serialized).not.toContain("confidence");
     expect(serialized).not.toContain("extraction");
     expect(serialized).not.toContain("reasoning");
+  });
+
+  test("nests matched documents under their item with a resolved type name", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+    const item = await requestItemFor(engagement.id);
+
+    const db = await connectDb();
+    const planted = plantedDocument({
+      id: "doc-portal-nested",
+      engagementId: engagement.id,
+      filename: "pl-2026.pdf",
+      pipelineStatus: "needs-review",
+      classification: {
+        documentTypeId: portalDocType.id,
+        confidence: 0.94,
+        reasoning: "Matches P&L layout",
+      },
+    });
+    await taxDocumentsCollection(db).insertOne(toStored(planted));
+    await requestItemsCollection(db).updateOne(
+      { _id: item.id },
+      { $set: { status: "received", matchedDocumentIds: [planted.id] } },
+    );
+
+    const response = await app.request(`/api/portal/${engagement.portalToken}`);
+    const body = portalStateSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.items[0]?.status).toBe("received");
+    expect(body.items[0]?.documents).toEqual([
+      {
+        id: planted.id,
+        filename: "pl-2026.pdf",
+        pipelineStatus: "needs-review",
+        documentTypeName: "Profit and loss",
+        uploadedAt: planted.createdAt,
+      },
+    ]);
+    expect(body.unmatched).toEqual([]);
+  });
+
+  test("lists client uploads not matched to any item in unmatched, never cpa uploads", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+
+    const db = await connectDb();
+    const inFlight = plantedDocument({
+      id: "doc-portal-inflight",
+      engagementId: engagement.id,
+      filename: "mystery.pdf",
+      pipelineStatus: "classifying",
+    });
+    const cpaUpload = plantedDocument({
+      id: "doc-portal-cpa",
+      engagementId: engagement.id,
+      filename: "internal.pdf",
+      uploadedBy: "cpa",
+      pipelineStatus: "received",
+    });
+    await taxDocumentsCollection(db).insertOne(toStored(inFlight));
+    await taxDocumentsCollection(db).insertOne(toStored(cpaUpload));
+
+    const response = await app.request(`/api/portal/${engagement.portalToken}`);
+    const body = portalStateSchema.parse(await response.json());
+
+    expect(body.items[0]?.documents).toEqual([]);
+    expect(body.unmatched).toEqual([
+      {
+        id: inFlight.id,
+        filename: "mystery.pdf",
+        pipelineStatus: "classifying",
+        documentTypeName: null,
+        uploadedAt: inFlight.createdAt,
+      },
+    ]);
   });
 
   test("unknown portal token returns 404 never 403", async () => {
@@ -187,20 +289,21 @@ describe("portal routes", () => {
     expect(response.status).not.toBe(403);
     expect(body).toEqual({ error: "Not found" });
   });
+});
 
-  test("portal upload marks inbound activity and maps the item to processing", async () => {
+describe("portal upload", () => {
+  test("marks inbound activity, maps the item to processing, and surfaces the upload in unmatched", async () => {
     const { started, runner } = recordingRunner();
     const app = createApp({ runner });
     const engagement = await createEngagement(app);
     const item = await requestItemFor(engagement.id);
 
     const waiting = await app.request(`/api/portal/${engagement.portalToken}`);
-    const waitingBody = await waiting.json() as { items: Array<{ portalStatus: string }> };
-    expect(waitingBody.items[0].portalStatus).toBe("waiting");
+    const waitingBody = portalStateSchema.parse(await waiting.json());
+    expect(waitingBody.items[0]?.portalStatus).toBe("waiting");
 
     const form = new FormData();
     form.set("file", new File([pdfBytes], "client-pl.pdf", { type: "application/pdf" }));
-    form.set("requestItemId", item.id);
 
     const upload = await app.request(`/api/portal/${engagement.portalToken}/upload`, {
       method: "POST",
@@ -211,7 +314,6 @@ describe("portal routes", () => {
     expect(upload.status).toBe(201);
     expect(uploaded.document).toMatchObject({
       engagementId: engagement.id,
-      requestItemId: item.id,
       uploadedBy: "client",
       pipelineStatus: "received",
     });
@@ -227,11 +329,13 @@ describe("portal routes", () => {
     expect(activity).toMatchObject({ actor: "client", documentId: uploaded.document.id });
 
     const after = await app.request(`/api/portal/${engagement.portalToken}`);
-    const afterBody = await after.json() as { items: Array<{ portalStatus: string }> };
-    expect(afterBody.items[0].portalStatus).toBe("processing");
+    const afterBody = portalStateSchema.parse(await after.json());
+    expect(afterBody.items[0]?.id).toBe(item.id);
+    expect(afterBody.unmatched.map((doc) => doc.id)).toEqual([uploaded.document.id]);
+    expect(afterBody.unmatched[0]?.pipelineStatus).toBe("received");
   });
 
-  test("portal upload of an unknown token is 404", async () => {
+  test("upload with an unknown token is 404", async () => {
     const { started, runner } = recordingRunner();
     const app = createApp({ runner });
     const form = new FormData();
@@ -252,28 +356,191 @@ describe("portal routes", () => {
     const engagement = await createEngagement(app);
     const item = await requestItemFor(engagement.id);
     const db = await connectDb();
-    await taxDocumentsCollection(db).insertOne(toStored({
+    await taxDocumentsCollection(db).insertOne(toStored(plantedDocument({
       id: "doc-rejected",
       engagementId: engagement.id,
       requestItemId: item.id,
       filename: "lease.pdf",
-      mimeType: "application/pdf",
-      size: 12,
-      storagePath: "data/uploads/doc-rejected.pdf",
-      uploadedBy: "client",
       pipelineStatus: "rejected",
       rejection: { kind: "irrelevant", reason: "Residential lease" },
-      createdAt: "2026-04-01T00:00:00.000Z",
-      updatedAt: "2026-04-01T00:00:00.000Z",
-    }));
+    })));
     await requestItemsCollection(db).updateOne(
       { _id: item.id },
       { $set: { status: "needs-attention", matchedDocumentIds: ["doc-rejected"] } },
     );
 
     const response = await app.request(`/api/portal/${engagement.portalToken}`);
-    const body = await response.json() as { items: Array<{ portalStatus: string }> };
-    expect(body.items[0].portalStatus).toBe("needs-attention");
-    expect(JSON.stringify(body)).not.toContain("confidence");
+    const body = portalStateSchema.parse(await response.json());
+    expect(body.items[0]?.portalStatus).toBe("needs-attention");
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain("confidence");
+    expect(serialized).not.toContain("Residential lease");
+  });
+});
+
+describe("portal waive", () => {
+  test("waives an open item with a note and writes client activity", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+    const item = await requestItemFor(engagement.id);
+
+    const response = await app.request(
+      `/api/portal/${engagement.portalToken}/items/${item.id}/waive`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: "The entity had no payroll this year" }),
+      },
+    );
+    const body = await response.json() as { item: { status: string; waiveNote?: string } };
+
+    expect(response.status).toBe(200);
+    expect(body.item.status).toBe("waived");
+    expect(body.item.waiveNote).toBe("The entity had no payroll this year");
+
+    const db = await connectDb();
+    const stored = fromStored(
+      requestItemSchema,
+      (await requestItemsCollection(db).findOne({ _id: item.id }))!,
+    );
+    expect(stored.status).toBe("waived");
+    expect(stored.waiveNote).toBe("The entity had no payroll this year");
+
+    const activity = await activitiesCollection(db).findOne({
+      engagementId: engagement.id,
+      action: "request-item-waived",
+    });
+    expect(activity).toMatchObject({
+      actor: "client",
+      direction: "inbound",
+      requestItemId: item.id,
+    });
+    expect(String(activity?.detail)).toContain(item.title);
+    expect(String(activity?.detail)).toContain("The entity had no payroll this year");
+  });
+
+  test("waiving a non-open item is 409 with a real message", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+    const item = await requestItemFor(engagement.id);
+    const db = await connectDb();
+    await requestItemsCollection(db).updateOne({ _id: item.id }, { $set: { status: "received" } });
+
+    const response = await app.request(
+      `/api/portal/${engagement.portalToken}/items/${item.id}/waive`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    );
+    const body = await response.json() as { error: string };
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("received");
+  });
+
+  test("waiving with an unknown token is 404", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+    const item = await requestItemFor(engagement.id);
+
+    const response = await app.request(`/api/portal/wrong-token/items/${item.id}/waive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Not found" });
+  });
+
+  test("waiving an item from another engagement is 404, not 403", async () => {
+    const app = createApp();
+    const engagementA = await createEngagement(app);
+    const engagementB = await createEngagement(app);
+    const itemB = await requestItemFor(engagementB.id);
+
+    const response = await app.request(
+      `/api/portal/${engagementA.portalToken}/items/${itemB.id}/waive`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.status).not.toBe(403);
+
+    const db = await connectDb();
+    const stored = fromStored(
+      requestItemSchema,
+      (await requestItemsCollection(db).findOne({ _id: itemB.id }))!,
+    );
+    expect(stored.status).toBe("open");
+  });
+
+  test("an over-long note is a 400, not a truncation", async () => {
+    const app = createApp();
+    const engagement = await createEngagement(app);
+    const item = await requestItemFor(engagement.id);
+
+    const response = await app.request(
+      `/api/portal/${engagement.portalToken}/items/${item.id}/waive`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: "x".repeat(501) }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("portal file passthrough", () => {
+  async function uploadThroughPortal(app: ReturnType<typeof createApp>, token: string) {
+    const form = new FormData();
+    form.set("file", new File([pdfBytes], "client-pl.pdf", { type: "application/pdf" }));
+    const upload = await app.request(`/api/portal/${token}/upload`, {
+      method: "POST",
+      body: form,
+    });
+    expect(upload.status).toBe(201);
+    const { document } = await upload.json() as { document: TaxDocument };
+    storagePaths.push(document.storagePath);
+    return document;
+  }
+
+  test("serves the client's own uploaded PDF", async () => {
+    const { runner } = recordingRunner();
+    const app = createApp({ runner });
+    const engagement = await createEngagement(app);
+    const document = await uploadThroughPortal(app, engagement.portalToken);
+
+    const response = await app.request(
+      `/api/portal/${engagement.portalToken}/documents/${document.id}/file`,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/pdf");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(pdfBytes);
+  });
+
+  test("a document from another engagement is 404, not 403", async () => {
+    const { runner } = recordingRunner();
+    const app = createApp({ runner });
+    const engagementA = await createEngagement(app);
+    const engagementB = await createEngagement(app);
+    const documentA = await uploadThroughPortal(app, engagementA.portalToken);
+
+    const response = await app.request(
+      `/api/portal/${engagementB.portalToken}/documents/${documentA.id}/file`,
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.status).not.toBe(403);
+    expect(await response.json()).toEqual({ error: "Not found" });
+  });
+
+  test("an unknown token is 404", async () => {
+    const app = createApp();
+    const response = await app.request("/api/portal/wrong-token/documents/doc-x/file");
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Not found" });
   });
 });

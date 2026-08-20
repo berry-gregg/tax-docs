@@ -6,6 +6,7 @@ import {
   type DocumentType,
   type UpdateDocumentTypeInput,
 } from "../../../shared/schemas/document-type.ts";
+import { documentTypesResponseSchema } from "../../../shared/schemas/api.ts";
 import { getJson, sendJson } from "../api.ts";
 import { bindSchemaBuilder, renderSchemaBuilder } from "../components/schema-builder.ts";
 import {
@@ -23,10 +24,6 @@ export type SettingsData = {
 };
 
 type SettingsTab = "company" | "document-types";
-
-const documentTypesResponseSchema = z.object({
-  documentTypes: z.array(documentTypeSchema),
-});
 
 const documentTypeResponseSchema = z.object({
   documentType: documentTypeSchema,

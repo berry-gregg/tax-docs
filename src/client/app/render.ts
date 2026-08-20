@@ -8,7 +8,7 @@ import {
 } from "./command-palette.ts";
 import { formatConfidence } from "./format.ts";
 import { icons, paletteIcons } from "./icons.ts";
-import { navIdForRoute, navItems, type NavItem } from "./nav.ts";
+import { navIdForRoute, navItems, type NavBadge, type NavItem } from "./nav.ts";
 import { parseRoute, type Route } from "./router.ts";
 import type { TaxDocument } from "../../shared/schemas/document.ts";
 import type { Engagement } from "../../shared/schemas/engagement.ts";
@@ -20,8 +20,12 @@ export type RenderInput = {
   /** Markup produced by the page module the registry resolved for this route. */
   body: string;
   inboxUnreadCount?: number;
+  /** `needsReviewCount` from `/api/metrics` — the same count the documents Needs review tab shows. */
+  documentsNeedsReviewCount?: number;
   paletteIndex?: PaletteIndex;
 };
+
+type NavBadgeCounts = Record<NavBadge, number>;
 
 export function renderApp(input: RenderInput): string {
   const route = parseRoute(input.pathname);
@@ -31,7 +35,10 @@ export function renderApp(input: RenderInput): string {
   }
 
   return `<div class="app" data-app-shell="true">
-    ${renderSidebar(route, `${input.pathname}${input.search ?? ""}`, input.inboxUnreadCount ?? 0)}
+    ${renderSidebar(route, `${input.pathname}${input.search ?? ""}`, {
+      "inbox-unread": input.inboxUnreadCount ?? 0,
+      "documents-needs-review": input.documentsNeedsReviewCount ?? 0,
+    })}
     <div class="workspace">
       ${input.body}
     </div>
@@ -48,11 +55,11 @@ function renderChromeless(body: string): string {
   </div>`;
 }
 
-function renderSidebar(route: Route, currentHref: string, inboxUnreadCount: number): string {
+function renderSidebar(route: Route, currentHref: string, badgeCounts: NavBadgeCounts): string {
   const navId = navIdForRoute(route);
   const main = navItems.filter((item) => item.section === "main");
   const footer = navItems.filter((item) => item.section === "footer");
-  const renderItem = (item: NavItem) => renderNavItem(item, navId, currentHref, inboxUnreadCount);
+  const renderItem = (item: NavItem) => renderNavItem(item, navId, currentHref, badgeCounts);
 
   return `<aside class="sidebar">
     <div class="sidebar-head">
@@ -80,7 +87,7 @@ function renderNavItem(
   item: NavItem,
   navId: string | null,
   currentHref: string,
-  inboxUnreadCount: number,
+  badgeCounts: NavBadgeCounts,
 ): string {
   const current = item.id === navId;
   const expanded = Boolean(item.children) && current;
@@ -92,7 +99,7 @@ function renderNavItem(
     <a class="nav-item" href="${item.href}" data-nav-link aria-label="${escapeHtml(item.label)}" title="${escapeHtml(item.label)}" ${current ? 'aria-current="page"' : ""}>
       <span class="nav-icon">${icons[item.icon]}</span>
       <span class="nav-label">${escapeHtml(item.label)}</span>
-      ${item.badge === "inbox-unread" ? renderInboxBadge(inboxUnreadCount) : ""}
+      ${item.badge ? renderNavBadge(item.badge, badgeCounts[item.badge]) : ""}
     </a>
     ${
       expanded
@@ -107,10 +114,17 @@ function renderNavItem(
   </div>`;
 }
 
-function renderInboxBadge(count: number): string {
+const navBadgeAttrs: Record<NavBadge, string> = {
+  "inbox-unread": "data-inbox-badge",
+  "documents-needs-review": "data-documents-badge",
+};
+
+/** One pill recipe for every live nav count: never hardcoded, hidden at zero. */
+function renderNavBadge(badge: NavBadge, count: number): string {
+  const attr = navBadgeAttrs[badge];
   return count > 0
-    ? `<span class="badge" data-inbox-badge>${count}</span>`
-    : `<span class="badge" data-inbox-badge hidden></span>`;
+    ? `<span class="badge" ${attr}>${count}</span>`
+    : `<span class="badge" ${attr} hidden></span>`;
 }
 
 /**
@@ -142,6 +156,32 @@ export function renderNotFound(): string {
     <p class="muted">That route is not part of the product yet.</p>
     <a class="text-link" href="/" data-nav-link>Back to home${icons.arrow}</a>
   </div>`;
+}
+
+export type BreadcrumbItem = {
+  label: string;
+  href?: string;
+};
+
+/**
+ * Ash trail above `pageHeader` on detail pages. The current page is always the last item and
+ * renders as ink text, never a link — even if a href was passed for it.
+ */
+export function breadcrumbs(items: BreadcrumbItem[]): string {
+  const parts = items.map((item, index) => {
+    const isLast = index === items.length - 1;
+    if (!isLast && item.href) {
+      return `<a class="breadcrumb-link" href="${escapeHtml(item.href)}" data-nav-link>${escapeHtml(item.label)}</a>`;
+    }
+    if (isLast) {
+      return `<span class="breadcrumb-current" aria-current="page">${escapeHtml(item.label)}</span>`;
+    }
+    return `<span class="breadcrumb-label">${escapeHtml(item.label)}</span>`;
+  });
+
+  return `<nav class="breadcrumbs" aria-label="Breadcrumb">${parts.join(
+    '<span class="breadcrumb-sep" aria-hidden="true"> / </span>',
+  )}</nav>`;
 }
 
 export type PageAction = {
