@@ -64,3 +64,7 @@ only adds a caller.
   ever shows up, the fix is to drop the regex from the wire schema and validate the key after parsing.
 - Task 22 consumes this route (`{ draft }` prefills the schema-builder panel, then
   `POST /api/document-types` + `POST /api/documents/:id/rerun`).
+- **Wave hygiene:** Task 14's commit `fe9b501` swept up my in-flight `src/server/app.ts` edit
+  (`opts.ai` + `unavailableAi` + `createDocumentRoutes(runner, ai)`), so that change landed under
+  "feat: add tax-engine line mapping and human-confirmed export flow" instead of this task's commit
+  (`074294d`). The file content is correct and the gate is green; only the commit attribution is off.
