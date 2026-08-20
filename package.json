@@ -18,7 +18,9 @@
     "feather-icons": "^4.29.2",
     "hono": "^4.7.2",
     "mongodb": "^6.15.0",
-    "zod": "^3.24.2"
+    "pdf-lib": "^1.17.1",
+    "zod": "^3.24.2",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@types/bun": "^1.2.5",
