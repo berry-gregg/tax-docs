@@ -12,7 +12,7 @@ One layout tree. Shell markup and shared helpers live in `src/client/app/render.
 
 ## Page framework
 
-`src/client/main.ts` runs one loop: `parseRoute(pathname)` → `moduleFor(route)` → `load()` (skeleton on screen) → `render()` into `.workspace` → `bind()` → `startPolling` when the module sets `pollMs`. Polling stops on navigation, and a stale load never paints over a newer one.
+`src/client/main.ts` runs one loop: `parseRoute(pathname)` → `moduleFor(route)` → `load()` (skeleton on screen) → `render()` into `.workspace` → `bind()` → `startPolling` when the module sets `pollMs`. Poll updates replace the `.workspace` node so delegated listeners die with the old node; unchanged HTML skips bind. Polling stops on navigation, and a stale load never paints over a newer one.
 
 - Routes: `src/client/app/router.ts` returns a `Route` union. Path params only — `?tab=`, `?new=1` are view state a page reads from `window.location.search`.
 - Pages: `src/client/app/pages/*.ts` each export a `PageModule<T>` (`load` / `render` / optional `bind` / optional `pollMs`) registered in `pages/registry.ts`. `moduleFor` is exhaustive: every route resolves, so navigation can never throw.
