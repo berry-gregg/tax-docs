@@ -4,6 +4,8 @@ import { clientRoutes } from "./routes/clients.ts";
 import { documentTypeRoutes } from "./routes/document-types.ts";
 import { engagementRoutes } from "./routes/engagements.ts";
 import { healthRoutes } from "./routes/health.ts";
+import { inboxRoutes } from "./routes/inbox.ts";
+import { metricsRoutes } from "./routes/metrics.ts";
 import { recordRoutes } from "./routes/records.ts";
 import { requestTemplateRoutes } from "./routes/request-templates.ts";
 
@@ -23,6 +25,8 @@ export function createApp() {
   app.route("/api/request-templates", requestTemplateRoutes);
   app.route("/api/clients", clientRoutes);
   app.route("/api/engagements", engagementRoutes);
+  app.route("/api/inbox", inboxRoutes);
+  app.route("/api/metrics", metricsRoutes);
 
   app.notFound((c) => c.json({ error: "Not found" }, 404));
 

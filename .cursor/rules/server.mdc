@@ -11,6 +11,7 @@ The API is a Hono app on Bun. `createApp()` in `src/server/app.ts` is the factor
 ## Routes
 
 - One module per resource under `src/server/routes/`. Register with `app.route("/api/...", routes)`.
+- Register static path segments before parameterized ones (`GET /unread-count` before `POST /:id/read`) so the static name is not captured as an id.
 - Parse JSON with Zod `safeParse`. Invalid body → `400` + `{ error: "..." }`. Do not hand a raw body to Mongo.
 - Map driver docs through the shared schema before `c.json`.
 - `app.notFound` stays JSON `404`. Do not leak stack traces to clients; log the cause server-side.

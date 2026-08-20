@@ -10,14 +10,20 @@ import type { RequestItem, RequestTemplate } from "../../shared/schemas/request.
 
 export type StoredDoc<T extends { id: string }> = Omit<T, "id"> & { _id: string };
 
+function omitNullishTopLevel<T extends object>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, field]) => field !== null && field !== undefined),
+  ) as T;
+}
+
 export function fromStored<T extends { id: string }>(schema: z.ZodType<T>, doc: StoredDoc<T>): T {
   const { _id, ...rest } = doc;
-  return schema.parse({ id: _id, ...rest });
+  return schema.parse({ id: _id, ...omitNullishTopLevel(rest) });
 }
 
 export function toStored<T extends { id: string }>(item: T): StoredDoc<T> {
   const { id, ...rest } = item;
-  return { _id: id, ...rest } as StoredDoc<T>;
+  return { _id: id, ...omitNullishTopLevel(rest) } as StoredDoc<T>;
 }
 
 export const collectionNames = {

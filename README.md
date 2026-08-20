@@ -65,3 +65,7 @@ bun run build        # production client build
 - `GET /api/health` — service and database status
 - `GET /api/records` — list sample records
 - `POST /api/records` — create a sample record (`{ "title": "..." }`)
+- `GET /api/inbox` — non-internal activity ledger (newest first) with joined `clientName`, `portalToken`, and `unread`
+- `GET /api/inbox/unread-count` — inbound unread count
+- `POST /api/inbox/:id/read` — mark an activity read (204)
+- `GET /api/metrics` — live integer metrics (`documentsAutoProcessed`, `fieldsAwaitingReview`, `straightThroughRate`, `needsReviewCount`, `outstandingRequests`, `activeClients`)

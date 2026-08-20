@@ -21,6 +21,7 @@ Mongo will store whatever you insert. **Zod is the schema.**
 
 - `safeParse` on HTTP input before write.
 - `.parse` (or `safeParse` + 5xx) on documents after read — never return a raw driver doc to a route or the client.
+- `fromStored` / `toStored` omit top-level `null` and `undefined`. The Mongo driver serializes `undefined` as `null`, which fails Zod `.optional()` fields; nested nulls (extraction `value: null`) stay.
 - Infer TS types from those schemas (`src/shared/schemas/`). Do not keep a second Mongo-only type that diverges.
 
 ## Tenant / client scope
