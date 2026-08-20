@@ -4,7 +4,9 @@
 
 **Theme:** light
 
-Ramp operates as a black-and-white editorial system punctuated by a single highlighter-yellow accent — the visual equivalent of a finance journal with a neon Sharpie. The interface stays nearly monochrome: warm off-white canvas, white cards, hairline gray borders, and deep near-black text. That one vivid chartreuse (#e4f222) appears only where money moves — CTAs, live counters, active states — making every action feel switched-on. Typography is a single-weight, neo-grotesque custom face (lausanne) at 400, used at large display sizes with tight leading (lineHeight ~1.0 at 64px) and positive tracking on small uppercase labels. Components are flat, hairline-bordered, and shadow-free: cards rest on borders, not shadows, with 12–16px radii; buttons are 6px-radius rectangles. Density is comfortable, rhythm is 8/12/16/24px, and motion is moderate and utility-focused rather than decorative.
+Ramp operates as a black-and-white editorial system punctuated by a single highlighter-yellow accent — the visual equivalent of a finance journal with a neon Sharpie. The **product application** (try.ramp.com) is the source for tax-docs chrome: white workspace, bone sidebar, olive ink `#2e2e27`, olive ash `#707062`, warm hairline `#ebe8e5`, sharp 0-radius CTAs, 4px nav chips, and circular highlighter count badges. Marketing ramp.com used a slightly darker ink (`#0c0a08`) and 6px buttons — do not mix those into the app. Body copy in the app may use weight 300; chrome and titles stay 400. Status color is semantic (`#26763b` trusted / `#876634` waiting) and never highlighter. Layout: 256px sidebar, 32px nav rows, 40px buttons, optional 298px home rail. Components are flat and hairline-bordered. Density is comfortable, rhythm is 8/12/16/24px, and motion is moderate and utility-focused rather than decorative.
+
+**Agents:** this file is the visual catalog. How those tokens assemble into the dashboard (nav wash/punch-out, Home vs list vs settings recipes, Feather icons, file SSOT) lives in `.cursor/rules/product-shell.mdc` and `.cursor/skills/building-product-ui/SKILL.md`. When a component recipe here conflicts with the product app, the product app wins for `src/client/`.
 
 ## Tokens — Colors
 
@@ -14,17 +16,23 @@ Ramp operates as a black-and-white editorial system punctuated by a single highl
 
 | Highlighter Yellow | `#e4f222` | `--color-highlighter-yellow` | Primary action fill, live counters, active-state highlights — the only chromatic accent in the system, making CTAs read as switched-on |
 
-| Ink | `#0c0a08` | `--color-ink` | Primary text, heading fill, dark surface backgrounds — near-black with the faintest warm cast |
+| Ink | `#2e2e27` | `--color-ink` | Primary text and chrome — warm olive-black sampled from the product app |
 
 | Obsidian | `#1a1919` | `--color-obsidian` | Dark panels, navigation bar, inverted sections — slightly warmer and lighter than Ink for tonal variation |
 
 | Paper | `#ffffff` | `--color-paper` | Card surfaces, modal panels, light fills, reversed text on dark backgrounds |
 
-| Bone | `#f4f2f0` | `--color-bone` | Page canvas, subtle card washes, link background hover states — warm off-white base layer |
+| Bone | `#f4f3ef` | `--color-bone` | Sidebar wash, nav hover, muted card fills |
 
-| Ash | `#6d6c6b` | `--color-ash` | Secondary text, hushed captions, muted labels — the 60% opacity voice of --text-primary |
+| Ash | `#707062` | `--color-ash` | Secondary text, inactive nav, captions |
 
-| Hairline | `#e5e7eb` | `--color-hairline` | Card borders, divider lines, structural outlines — 1px hairlines replace shadows as the elevation primitive |
+| Hairline | `#ebe8e5` | `--color-hairline` | Table rules, list rows, nav active fill |
+
+| Outline | `#91917b` | `--color-outline` | Secondary button border |
+
+| Success | `#26763b` | `--color-success` | Trusted / paid / ready status text |
+
+| Warning | `#876634` | `--color-warning` | Missing items / waiting-for-client status text |
 
 | Smoke | `#d3d3d3` | `--color-smoke` | Subtle borders, muted backgrounds, skeleton states — the 200-step in the black scale |
 
@@ -114,7 +122,7 @@ Ramp operates as a black-and-white editorial system punctuated by a single highl
 
 | inputs | 10px |
 
-| buttons | 6px |
+| buttons | 0px (product app). Marketing ramp.com used 6px — do not use in `src/client/`. |
 
 ### Shadows
 
@@ -123,6 +131,8 @@ Ramp operates as a black-and-white editorial system punctuated by a single highl
 |------|-------|-------|
 
 | subtle | `rgba(255, 255, 255, 0.6) 0px 0px 2px 0px inset` | `--shadow-subtle` |
+
+| palette | layered drop + 1px `#91917b` at 20% | `--shadow-palette` |
 
 ### Layout
 
@@ -192,9 +202,29 @@ Full-width #1a1919 dark band, uppercase 10px lausanne labels in Ash (#6d6c6b), m
 
 ### Sticky Navigation Bar
 
-**Role:** Primary site navigation
+**Role:** Marketing-site primary navigation (ramp.com). The product app uses Product Sidebar instead.
 
 102px total height including 40px announcement bar above. #ffffff fill, 1px bottom border, 15 interactive elements (logo, Products, Partners, Solutions, Resources, Customers, Pricing, Sign in, See a demo). Frosted-glass inset shadow rgba(255,255,255,0.6) inset 0 0 2px adds subtle top highlight.
+
+### Product Sidebar
+
+**Role:** Product app chrome — sampled from try.ramp.com/home
+
+256px bone column (`#f4f3ef`). 32px rows at 14px/400. Idle top-level items are olive ash; the expanded section is a 4px-radius `#ebe8e5` wash wrapping the parent and its children. The current nested page punches out as a bone chip inside that wash. Nested rows keep a 12px empty icon spacer so labels line up with the parent. Feather icons at 12px expanded / 16px collapsed (stroke 2) — Ramp's `RyuIconSvg` wraps the same set (`asSizeS` / `asSizeM`). Settings is the Feather gear, not a custom path. Search uses Ctrl+K and opens Command K. Settings pinned to the foot. Collapsed rail is 60px. Collapsed header is one slot: GB mark at 28px, expand control hidden on top of it until hover/focus.
+
+### Product Command K
+
+**Role:** Global search — sampled from try.ramp.com Ctrl+K
+
+Bone 80% overlay (`rgba(244, 243, 239, 0.8)`), not a dark dim. White 640×432 panel, 0 radius, layered `--shadow-palette` plus 1px outline `#91917b` at 20%. 56px header: floating “Search …” label in ash 16px/300, placeholder “Where do you want to go?”, 16px Feather search on the right, bottom rule `#dbdac9`. Group labels 12px/300 ash on `#fcfbfa` with hairline. Rows 48px, 16px icon, 16px/300 ink; hover/active bone. Default groups: Actions (`Parent / Child` labels) then Pages. Query also searches documents and clients.
+
+Favicon and sidebar brand are `design-system/gb-favicon.png` (GB on highlighter).
+
+### Product Table
+
+**Role:** Expenses / Accounting / People list pattern
+
+Full-bleed white workspace. Page title 28px/400 with tracking -0.56px, secondary + primary (highlighter, 0 radius, 40px) actions, underline tabs with counts, search + Add filter toolbar, dual-line cells (title + muted meta), hairline row rules, status in success/warning/ash — never highlighter.
 
 ### Announcement Bar
 
@@ -220,7 +250,7 @@ Transparent fill, 1px #e5e7eb grid borders forming cells, centered grayscale log
 
 - Use lausanne at weight 400 exclusively — never introduce a bold or semibold variant; hierarchy comes from size and tracking.
 
-- Use #e4f222 only for primary action fills, live counters, and active states — never as a background wash or decorative accent.
+- Use #e4f222 only for primary action fills, count badges, and active states — never as a background wash or decorative accent.
 
 - Express card elevation with 1px #e5e7eb borders on #ffffff fills — avoid box-shadow except for the nav's inset white highlight.
 
@@ -228,7 +258,7 @@ Transparent fill, 1px #e5e7eb grid borders forming cells, centered grayscale log
 
 - Apply 0.018em positive letter-spacing on 10px uppercase micro-labels and metric captions.
 
-- Use 6px radius for buttons and tags, 10px for inputs, 12px for wash cards, and 16px for content cards.
+- Use product-app radii in `src/client/`: 0 buttons, 4 nav, 10 inputs, 12 wash cards, 16 marketing cards, pill count badges. Marketing 6px buttons are ramp.com only.
 
 - Include "ss01" in font-feature-settings on every lausanne declaration to preserve the typeface's editorial character.
 
@@ -238,7 +268,7 @@ Transparent fill, 1px #e5e7eb grid borders forming cells, centered grayscale log
 
 - Don't use bold or semibold font weights — lausanne 400 at larger sizes carries all heading hierarchy.
 
-- Don't apply box-shadow to content cards, modals, or panels — use 1px #e5e7eb borders instead.
+- Don't apply box-shadow to content cards or page panels — use 1px hairline instead. Command K is the product exception (`--shadow-palette`).
 
 - Don't use #0c0a08 as a background fill for large sections — reserve it for text; use #1a1919 for inverted panels.
 
@@ -246,7 +276,7 @@ Transparent fill, 1px #e5e7eb grid borders forming cells, centered grayscale log
 
 - Don't add decorative gradients, illustrations, or stock photography — the visual language is typography, product screenshots, and grayscale logos only.
 
-- Don't use radii outside the system: 6 / 10 / 12 / 16px — never 4px or fully rounded pill shapes on UI elements.
+- Don't invent radii. Product app: 0 (buttons), 4 (nav), 10 (inputs), 12 (wash cards), 16 (marketing cards), pill (count badges only).
 
 ## Surfaces
 
@@ -254,7 +284,7 @@ Transparent fill, 1px #e5e7eb grid borders forming cells, centered grayscale log
 
 |-------|------|-------|---------|
 
-| 1 | Canvas | `#f4f2f0` | Page background — warm off-white sets a paper-like editorial feel |
+| 1 | Canvas | `#ffffff` | Product workspace — white; bone is the sidebar, not the page |
 
 | 2 | Card | `#ffffff` | Standard card and content surface — pure white lifts above the Bone canvas |
 
@@ -344,17 +374,17 @@ Motion is utility-focused and moderate: 0.3–0.4s durations with ease-out timin
 
   --color-highlighter-yellow: #e4f222;
 
-  --color-ink: #0c0a08;
+  --color-ink: #2e2e27;
 
   --color-obsidian: #1a1919;
 
   --color-paper: #ffffff;
 
-  --color-bone: #f4f2f0;
+  --color-bone: #f4f3ef;
 
-  --color-ash: #6d6c6b;
+  --color-ash: #707062;
 
-  --color-hairline: #e5e7eb;
+  --color-hairline: #ebe8e5;
 
   --color-smoke: #d3d3d3;
 
@@ -436,6 +466,24 @@ Motion is utility-focused and moderate: 0.3–0.4s durations with ease-out timin
 
   --element-gap: 8px;
 
+  --app-sidebar-width: 256px;
+
+  --app-rail-width: 298px;
+
+  --app-palette-width: 640px;
+
+  --app-palette-height: 432px;
+
+  --icon-size-nav: 12px;
+
+  --icon-size-nav-collapsed: 16px;
+
+  --icon-size-brand: 20px;
+
+  --icon-size-brand-collapsed: 28px;
+
+  --app-sidebar-collapsed-width: 60px;
+
   /* Border Radius */
 
   --radius-md: 6px;
@@ -452,7 +500,9 @@ Motion is utility-focused and moderate: 0.3–0.4s durations with ease-out timin
 
   --radius-inputs: 10px;
 
-  --radius-buttons: 6px;
+  --radius-buttons: 0px;
+
+  --radius-nav: 4px;
 
   /* Shadows */
 
@@ -460,11 +510,15 @@ Motion is utility-focused and moderate: 0.3–0.4s durations with ease-out timin
 
   /* Surfaces */
 
-  --surface-canvas: #f4f2f0;
+  --surface-canvas: #ffffff;
 
   --surface-card: #ffffff;
 
-  --surface-wash: #f4f2f0;
+  --surface-wash: #f4f3ef;
+
+  --surface-nav-active: #ebe8e5;
+
+  --surface-section: #fcfbfa;
 
   --surface-inverted: #1a1919;
 
@@ -484,17 +538,17 @@ Motion is utility-focused and moderate: 0.3–0.4s durations with ease-out timin
 
   --color-highlighter-yellow: #e4f222;
 
-  --color-ink: #0c0a08;
+  --color-ink: #2e2e27;
 
   --color-obsidian: #1a1919;
 
   --color-paper: #ffffff;
 
-  --color-bone: #f4f2f0;
+  --color-bone: #f4f3ef;
 
-  --color-ash: #6d6c6b;
+  --color-ash: #707062;
 
-  --color-hairline: #e5e7eb;
+  --color-hairline: #ebe8e5;
 
   --color-smoke: #d3d3d3;
 

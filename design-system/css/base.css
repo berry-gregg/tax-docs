@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap");
 
 *,
 *::before,
@@ -17,7 +17,7 @@ body {
   color: var(--color-ink);
   font-family: var(--font-lausanne);
   font-size: var(--text-body);
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-light);
   line-height: var(--leading-body);
   font-feature-settings: "ss01" on;
 }
@@ -26,8 +26,17 @@ h1,
 h2,
 h3,
 h4,
-p {
+p,
+dl,
+dd,
+dt {
   margin: 0;
+}
+
+button,
+input,
+kbd {
+  font: inherit;
 }
 
 a {
@@ -52,21 +61,112 @@ img {
   padding: var(--card-padding);
 }
 
-.btn-primary {
+.btn-primary,
+.btn-secondary,
+.btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--spacing-12) var(--spacing-20);
-  border: none;
+  gap: var(--spacing-8);
+  min-height: var(--control-height);
+  padding: 0 var(--spacing-16);
   border-radius: var(--radius-buttons);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+  cursor: pointer;
+  transition: background-color 0.3s ease-out, color 0.3s ease-out, border-color 0.3s ease-out;
+}
+
+.btn-primary {
+  border: 1px solid var(--surface-action);
   background: var(--surface-action);
   color: var(--color-ink);
-  font: inherit;
-  cursor: pointer;
-  transition: background-color 0.3s ease-out, color 0.3s ease-out;
 }
 
 .btn-primary:hover {
   background: var(--color-ink);
+  border-color: var(--color-ink);
   color: var(--color-paper);
+}
+
+.btn-secondary {
+  border: 1px solid var(--color-outline);
+  background: var(--surface-card);
+  color: var(--color-ink);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-wash);
+}
+
+.btn-ghost {
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
+  min-height: var(--nav-item-height);
+  padding: 0 var(--spacing-8);
+  border-radius: var(--radius-nav);
+}
+
+.btn-ghost:hover {
+  background: var(--surface-wash);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--nav-item-height);
+  height: var(--nav-item-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-nav);
+  background: transparent;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--surface-nav-active);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--spacing-4);
+  border-radius: var(--radius-badge);
+  background: var(--surface-action);
+  color: var(--color-ink);
+  font-size: var(--text-micro);
+  font-weight: var(--font-weight-regular);
+  line-height: 1;
+}
+
+.muted {
+  display: block;
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-16);
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+}
+
+.text-link:hover {
+  text-decoration: underline;
 }

@@ -15,12 +15,14 @@
     "db:down": "docker compose down"
   },
   "dependencies": {
+    "feather-icons": "^4.29.2",
     "hono": "^4.7.2",
     "mongodb": "^6.15.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/bun": "^1.2.5",
+    "@types/feather-icons": "^4.29.4",
     "bun-types": "^1.2.5",
     "mongodb-memory-server": "^10.1.4",
     "typescript": "^5.8.2",

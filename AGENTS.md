@@ -8,7 +8,7 @@ Nucleus (Claude Code) is the provenance for this discipline. Cursor is the harne
 
 tax-docs is a Ramp-inspired product surface for tax teams and CPA firms: collect the right client documents, classify and extract them, review trusted data with a human in the loop, and prepare it for tax engines. Visual language lives in `design-system/`. App code lives in `src/` (`server/`, `client/`, `shared/`).
 
-**Stack:** Bun · TypeScript (strict) · Hono API · MongoDB (NoSQL) · Zod at every boundary · Vite client. Do not add Node-as-runtime, npm, SQL/ORMs, Jest, or Vitest.
+**Stack:** Bun · TypeScript (strict) · Hono API · MongoDB (NoSQL) · Zod at every boundary · Vite client shell (Ramp product chrome in `src/client/`). Do not add Node-as-runtime, npm, SQL/ORMs, Jest, or Vitest.
 
 ## Engineering discipline (non-negotiable)
 
@@ -66,10 +66,11 @@ The seven rules below describe the steady-state contract, not a sprint workflow.
 | Tests | `.cursor/rules/testing.mdc` | `tests/**`, `src/**/*.ts` |
 | Security | `.cursor/rules/security.mdc` | always |
 | Web UI | `.cursor/rules/web-ui.mdc` | `*.html`, `*.css`, `*.ts`, `*.tsx` |
+| Product shell | `.cursor/rules/product-shell.mdc` | `src/client/**`, `tests/client/**` |
 | Design tokens | `.cursor/rules/design-system.mdc` | `design-system/**`, `src/styles/**` |
 | AI / agents | `.cursor/rules/agentic-systems.mdc` | `src/**`, prompts, extract/agent paths |
 
-Skills (description match): `keeping-docs-fresh`, `red-green-tdd`, `implement-plan-task`, `parallelizing-dev-work`.
+Skills (description match): `keeping-docs-fresh`, `red-green-tdd`, `implement-plan-task`, `parallelizing-dev-work`, `building-product-ui`.
 
 ## Dev commands
 

@@ -4,55 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tax Docs</title>
+    <link rel="icon" type="image/png" href="./design-system/gb-favicon.png" />
+    <link rel="apple-touch-icon" href="./design-system/gb-favicon.png" />
   </head>
   <body>
-    <main class="page" style="padding-block: var(--section-gap);">
-      <section class="card" style="display: grid; gap: var(--spacing-24);">
-        <p
-          style="
-            font-size: var(--text-caption);
-            line-height: var(--leading-caption);
-            letter-spacing: var(--tracking-caption);
-            text-transform: uppercase;
-            color: var(--color-ash);
-          "
-        >
-          Tax Docs
-        </p>
-        <h1
-          style="
-            font-size: var(--text-display);
-            line-height: var(--leading-display);
-            max-width: 18ch;
-          "
-        >
-          Editorial finance desk for your documents.
-        </h1>
-        <p style="font-size: var(--text-subheading); color: var(--color-ash); max-width: 48ch;">
-          Bun + TypeScript API with MongoDB. Design tokens live in <code>design-system/</code>.
-        </p>
-        <p data-api-status data-state="loading" style="color: var(--color-ash);">Checking API…</p>
-        <div data-records data-state="loading" style="display: grid; gap: var(--spacing-8);"></div>
-        <form data-record-form style="display: flex; gap: var(--spacing-8);">
-          <input
-            data-record-title
-            type="text"
-            placeholder="Sample record title"
-            aria-label="Record title"
-            style="
-              flex: 1;
-              border: 1px solid var(--color-hairline);
-              border-radius: var(--radius-inputs);
-              padding: var(--spacing-12) var(--spacing-16);
-              background: var(--surface-card);
-              color: var(--color-ink);
-              font: inherit;
-            "
-          />
-          <button class="btn-primary" type="submit">Add record</button>
-        </form>
-      </section>
-    </main>
+    <div id="app">
+      <div class="app" data-app-shell="true">
+        <aside class="sidebar">
+          <div class="sidebar-head">
+            <a class="brand" href="/">Tax Docs</a>
+          </div>
+          <p class="muted">Editorial finance desk for client documents.</p>
+        </aside>
+        <div class="workspace">
+          <p class="eyebrow">Tax Docs</p>
+          <h1 class="page-title">3 documents need review</h1>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/client/main.ts"></script>
   </body>
 </html>

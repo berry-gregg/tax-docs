@@ -6,9 +6,9 @@
         "$description": "Highlighter Yellow — Primary action fill, live counters, active-state highlights — the only chromatic accent in the system, making CTAs read as switched-on"
       },
       "ink": {
-        "$value": "#0c0a08",
+        "$value": "#2e2e27",
         "$type": "color",
-        "$description": "Ink — Primary text, heading fill, dark surface backgrounds — near-black with the faintest warm cast"
+        "$description": "Ink — Primary text and chrome in the product app — warm olive-black sampled from try.ramp.com"
       },
       "obsidian": {
         "$value": "#1a1919",
@@ -21,31 +21,56 @@
         "$description": "Paper — Card surfaces, modal panels, light fills, reversed text on dark backgrounds"
       },
       "bone": {
-        "$value": "#f4f2f0",
+        "$value": "#f4f3ef",
         "$type": "color",
-        "$description": "Bone — Page canvas, subtle card washes, link background hover states — warm off-white base layer"
+        "$description": "Bone — Sidebar wash, nav hover, muted card fills — warm off-white sampled from the product app"
       },
       "ash": {
-        "$value": "#6d6c6b",
+        "$value": "#707062",
         "$type": "color",
-        "$description": "Ash — Secondary text, hushed captions, muted labels — the 60% opacity voice of --text-primary"
+        "$description": "Ash — Secondary text, inactive nav, captions — olive gray sampled from try.ramp.com"
       },
       "hairline": {
-        "$value": "#e5e7eb",
+        "$value": "#ebe8e5",
         "$type": "color",
-        "$description": "Hairline — Card borders, divider lines, structural outlines — 1px hairlines replace shadows as the elevation primitive"
+        "$description": "Hairline — Table rules, list rows, nav active fill — warm 1px structural line"
       },
       "smoke": {
         "$value": "#d3d3d3",
         "$type": "color",
         "$description": "Smoke — Subtle borders, muted backgrounds, skeleton states — the 200-step in the black scale"
+      },
+      "outline": {
+        "$value": "#91917b",
+        "$type": "color",
+        "$description": "Outline — Secondary button border in the product app"
+      },
+      "success": {
+        "$value": "#26763b",
+        "$type": "color",
+        "$description": "Success — Paid, trusted, ready-to-export status text"
+      },
+      "warning": {
+        "$value": "#876634",
+        "$type": "color",
+        "$description": "Warning — Missing items and waiting-for-client status text"
+      },
+      "banner": {
+        "$value": "#2f4842",
+        "$type": "color",
+        "$description": "Banner — Optional inverted promo strip; not used in the tax-docs chrome"
+      },
+      "input-hairline": {
+        "$value": "#dbdac9",
+        "$type": "color",
+        "$description": "Command K search field bottom rule, sampled from try.ramp.com"
       }
     },
     "font": {
       "lausanne": {
         "$value": "lausanne",
         "$type": "fontFamily",
-        "$description": "Sole typeface across the entire system — headings, body, UI labels, nav, buttons, inputs. A single weight (400) forces hierarchy through size and tracking rather than weight contrast."
+        "$description": "Sole typeface across the entire system. Product chrome and titles use 400; body and status copy may use 300. Never 600/700."
       }
     },
     "typography": {
@@ -322,6 +347,21 @@
         "$value": "16px",
         "$type": "dimension",
         "$description": "Border radius 2xl"
+      },
+      "nav": {
+        "$value": "4px",
+        "$type": "dimension",
+        "$description": "Nav items, icon buttons, and search chip"
+      },
+      "buttons": {
+        "$value": "0px",
+        "$type": "dimension",
+        "$description": "Product CTAs are sharp rectangles"
+      },
+      "badge": {
+        "$value": "999px",
+        "$type": "dimension",
+        "$description": "Count badges are circular"
       }
     },
     "shadow": {
@@ -329,13 +369,18 @@
         "$value": "rgba(255, 255, 255, 0.6) 0px 0px 2px 0px inset",
         "$type": "shadow",
         "$description": "Shadow elevation subtle"
+      },
+      "palette": {
+        "$value": "rgba(0, 0, 0, 0.16) 10px 16px 40px 0px, rgba(0, 0, 0, 0.08) 40px 60px 72px 0px, rgba(0, 0, 0, 0.05) 84px 124px 90px 0px, rgba(145, 145, 123, 0.2) 0px 0px 0px 1px",
+        "$type": "shadow",
+        "$description": "Command K panel — the product app's one drop-shadow surface"
       }
     },
     "surface": {
       "canvas": {
-        "$value": "#f4f2f0",
+        "$value": "#ffffff",
         "$type": "color",
-        "$description": "Surface level 1: Page background — warm off-white sets a paper-like editorial feel"
+        "$description": "Surface level 1: Product workspace background — white, with bone reserved for the sidebar"
       },
       "card": {
         "$value": "#ffffff",
@@ -343,9 +388,24 @@
         "$description": "Surface level 2: Standard card and content surface — pure white lifts above the Bone canvas"
       },
       "wash": {
-        "$value": "#f4f2f0",
+        "$value": "#f4f3ef",
         "$type": "color",
-        "$description": "Surface level 3: Subtle secondary surface, link hover backgrounds, feature callouts"
+        "$description": "Surface level 3: Sidebar hover, empty-state cards, avatar fills"
+      },
+      "sidebar": {
+        "$value": "#f4f3ef",
+        "$type": "color",
+        "$description": "Product left navigation column — same bone as the app wash"
+      },
+      "nav-active": {
+        "$value": "#ebe8e5",
+        "$type": "color",
+        "$description": "Active nav row fill"
+      },
+      "section": {
+        "$value": "#fcfbfa",
+        "$type": "color",
+        "$description": "Command K group label wash, sampled from try.ramp.com"
       },
       "inverted": {
         "$value": "#1a1919",

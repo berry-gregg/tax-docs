@@ -22,7 +22,7 @@ Stale agent instructions actively mislead. Update them in the same change. "Docs
 
 ## Triggers
 
-New pattern adopted or rejected; new convention; flipped default; dependency add/remove; new endpoint or agent tool; security posture change; new test-policy exception; deprecation.
+New pattern adopted or rejected; new convention; flipped default; dependency add/remove; new endpoint or agent tool; security posture change; new test-policy exception; deprecation; new product page recipe or Ramp-clone decision (update `product-shell.mdc` + `building-product-ui` together).
 
 Trivial internal refactors (rename a private helper) do not need docs. If a new contributor would want to know — document it.
 

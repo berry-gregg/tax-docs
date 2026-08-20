@@ -11,7 +11,7 @@ Every piece of project guidance lives at exactly one rung. Mixing rungs is the d
 | Rung | Where | When it loads | Use for |
 |------|-------|---------------|---------|
 | **AGENTS.md** | repo root | every Cursor session | universal core: 7 rules, commit hygiene, cross-cutting invariants, index. Target: ≤200 lines. |
-| **Path-scoped rule** | `.cursor/rules/<name>.mdc` with `globs:` / `alwaysApply:` | matching files, or always if `alwaysApply: true` | area contracts: web UI, tests, agentic systems, design tokens |
+| **Path-scoped rule** | `.cursor/rules/<name>.mdc` with `globs:` / `alwaysApply:` | matching files, or always if `alwaysApply: true` | area contracts: web UI, product shell, tests, agentic systems, design tokens |
 | **Skill** | `.cursor/skills/<name>/SKILL.md` with `name:` + `description:` | description match | workflows, decision logs, rejected-alternatives history |
 
 Cursor frontmatter is `globs:` and `alwaysApply:` — not Claude Code's `paths:`. A rule with neither `globs` nor `alwaysApply: true` will not load reliably.

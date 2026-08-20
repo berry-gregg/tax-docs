@@ -8,9 +8,11 @@ alwaysApply: false
 
 This product is a **review console for CPAs**, not a marketing site. The reviewer has a few seconds to trust a number or reject it. Visual tokens live in `design-system/`; this rule is the interaction contract. Token values: `.cursor/rules/design-system.mdc`. Client code is TypeScript in `src/client/` — do not add new `.js` UI files.
 
+The app chrome clones Ramp's product shell (`try.ramp.com`). Layout, nav nesting, and page recipes: `.cursor/rules/product-shell.mdc`. How tokens + primitives + recipes compose: `.cursor/skills/building-product-ui/SKILL.md`. Markup is rendered from `src/client/app/render.ts`. Do not add a second layout tree.
+
 ## Density and hierarchy
 
-Comfortable Ramp spacing, not cramped. Density comes from smaller controls and visible affordances — not from dropping actions. One primary CTA per page. Highlighter yellow (`--color-highlighter-yellow`) is only for primary action, live money signals, and active state. Inline links stay ink + underline. In-row actions are quiet (ghost), not filled.
+Comfortable Ramp spacing, not cramped. Density comes from smaller controls and visible affordances — not from dropping actions. One primary CTA per page. Highlighter yellow (`--color-highlighter-yellow`) is only for primary action, count badges, and active state. Inline links stay ink + underline. In-row actions are quiet (ghost), not filled.
 
 ## Sentence case
 

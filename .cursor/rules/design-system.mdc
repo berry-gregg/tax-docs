@@ -8,22 +8,25 @@ alwaysApply: false
 
 `design-system/` is the visual SSOT. App CSS consumes tokens; it does not reinvent them. Source: `design-system/tokens/design-tokens.json` → `design-system/css/tokens.css`. Rationale: `design-system/docs/DESIGN.md`.
 
+The **product app** (sidebar chrome at `try.ramp.com`) is the token source for `src/client/`. Marketing-site radii and ink from ramp.com still appear in DESIGN.md as historical context; do not mix them into app CSS. Composition of those tokens into pages: `.cursor/rules/product-shell.mdc` and `.cursor/skills/building-product-ui/SKILL.md`.
+
 ## Tokens to use
 
-- **Surfaces:** `--surface-canvas` (bone), `--surface-card` (paper), `--surface-inverted` (obsidian), `--surface-action` (highlighter).
-- **Ink:** `--color-ink` primary text, `--color-ash` secondary, `--color-hairline` / `--color-smoke` borders. Cards elevate with 1px hairline, not drop shadows.
-- **Type:** `--font-lausanne` (Inter fallback), weight 400 only. Hierarchy is size + tracking, not weight. Use `--text-*` / `--leading-*` scale.
-- **Space:** 4px base; named `--spacing-8` … `--spacing-64`. Round to the scale — no `13px` padding.
-- **Radius:** `--radius-buttons` 6px, `--radius-inputs` 10px, `--radius-cards` 16px.
+- **Surfaces:** `--surface-canvas` (white workspace), `--surface-sidebar` (bone `#f4f3ef` nav column), `--surface-card` (paper), `--surface-wash` (empty card), `--surface-nav-active` (expanded group / current item), `--surface-action` (highlighter).
+- **Ink:** `--color-ink` `#2e2e27` primary text, `--color-ash` `#707062` secondary, `--color-hairline` `#ebe8e5` rules, `--color-input-hairline` `#dbdac9` for the Command K field rule. Status uses `--color-success` / `--color-warning`. Cards and tables elevate with 1px hairline, not drop shadows. Command K is the exception: `--shadow-palette`.
+- **Type:** `--font-lausanne` (Inter fallback). Chrome and titles are weight 400; body and status copy may use `--font-weight-light` (300). Never 600/700. Hierarchy is size + tracking.
+- **Space:** 4px base; named `--spacing-8` … `--spacing-64`. `--app-sidebar-width` 256px, `--app-sidebar-collapsed-width` 60px, `--app-rail-width` 298px, `--nav-item-height` 32px, `--control-height` 40px.
+- **Icons:** Feather Icons (`feather-icons`) at `--icon-size-nav` 12px expanded / `--icon-size-nav-collapsed` 16px collapsed, stroke 2, viewBox 24 — the same family Ramp wraps as `RyuIconSvg`. Do not hand-draw nav glyphs. Sidebar brand (`gb-favicon.png`) is `--icon-size-brand` 20px expanded / `--icon-size-brand-collapsed` 28px collapsed.
+- **Radius:** `--radius-buttons` 0px, `--radius-nav` 4px, `--radius-inputs` 10px, `--radius-xl` 12px wash cards, `--radius-cards` 16px, `--radius-badge` pill for counts.
 
 ## Highlighter is scarce
 
-`--color-highlighter-yellow` / `--surface-action` marks money-moving or primary action only. Do not tint links, chips, or status with it. Status uses semantic meaning (review needed / trusted / failed) without consuming the brand accent.
+`--color-highlighter-yellow` / `--surface-action` marks primary action, count badges, and active money/queue signals only. Do not tint links, table status, or fills with it. Status uses `--color-success` / `--color-warning` / `--color-ash`.
 
 ## SSOT for repeating visuals
 
-One card treatment, one status-pill treatment, one empty-state treatment. If two screens show "needs review," they share a component or a documented class string. Do not fork a local copy that will drift.
+One sidebar, one page header, one tab row, one table, one list-row, one empty-state wash card. If two screens show "needs review," they share a class (`status-needs-review`) or a documented helper. Do not fork a local copy that will drift.
 
 ## Anti-patterns
 
-Hardcoded `#e4f222` or `#0c0a08` in app CSS. `font-weight: 700`. New typeface. Box shadows for elevation. Arbitrary spacing (`padding: 13px`). A second token file beside `design-tokens.json`.
+Hardcoded `#e4f222` or `#2e2e27` in app CSS. `font-weight: 700`. New typeface. Box shadows for elevation except `--shadow-palette` on Command K. Arbitrary spacing (`padding: 13px`). A second token file beside `design-tokens.json`. Marketing 6px buttons in the product shell.
