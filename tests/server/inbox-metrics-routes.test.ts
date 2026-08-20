@@ -320,7 +320,7 @@ describe("inbox routes", () => {
 });
 
 describe("metrics routes", () => {
-  test("straightThroughRate is 67 for 2 needs-review and 1 rejected document", async () => {
+  test("needs-review documents do not raise auto-processed or produce a 100% straight-through rate", async () => {
     const db = await connectDb();
     await taxDocumentsCollection(db).insertMany(
       [
@@ -333,11 +333,36 @@ describe("metrics routes", () => {
 
     const response = await app.request("/api/metrics");
     const body = await response.json();
+    const metrics = metricsSchema.parse(body);
 
     expect(response.status).toBe(200);
-    expect(metricsSchema.parse(body).documentsAutoProcessed).toBe(2);
-    expect(body.straightThroughRate).toBe(67);
-    expect(Number.isInteger(body.straightThroughRate)).toBe(true);
+    expect(metrics.documentsAutoProcessed).toBe(0);
+    expect(metrics.needsReviewCount).toBe(2);
+    expect(metrics.straightThroughRate).toBe(0);
+    expect(metrics.straightThroughRate).not.toBe(100);
+    expect(Number.isInteger(metrics.straightThroughRate)).toBe(true);
+  });
+
+  test("straightThroughRate is trusted over terminal-ish statuses", async () => {
+    const db = await connectDb();
+    await taxDocumentsCollection(db).insertMany(
+      [
+        document({ id: "doc-trusted-1", pipelineStatus: "trusted" }),
+        document({ id: "doc-trusted-2", pipelineStatus: "trusted" }),
+        document({ id: "doc-nr-queued", pipelineStatus: "needs-review" }),
+        document({ id: "doc-rejected", pipelineStatus: "rejected" }),
+      ].map((doc) => toStored(doc)),
+    );
+    const app = createApp();
+
+    const response = await app.request("/api/metrics");
+    const body = await response.json();
+    const metrics = metricsSchema.parse(body);
+
+    expect(response.status).toBe(200);
+    expect(metrics.documentsAutoProcessed).toBe(2);
+    expect(metrics.needsReviewCount).toBe(1);
+    expect(metrics.straightThroughRate).toBe(50);
   });
 
   test("computes field, request, client, and empty-denominator metrics as integers", async () => {
@@ -386,9 +411,9 @@ describe("metrics routes", () => {
 
     expect(response.status).toBe(200);
     expect(metricsSchema.parse(body)).toEqual({
-      documentsAutoProcessed: 3,
+      documentsAutoProcessed: 1,
       fieldsAwaitingReview: 3,
-      straightThroughRate: 60,
+      straightThroughRate: 20,
       needsReviewCount: 3,
       outstandingRequests: 2,
       activeClients: 1,

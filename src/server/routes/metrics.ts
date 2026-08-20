@@ -11,7 +11,8 @@ import {
 
 export const metricsRoutes = new Hono();
 
-const AUTO_PROCESSED_STATUSES = ["needs-review", "trusted"] as const;
+/** Trusted without sitting in the human queue — not `needs-review`. */
+const AUTO_PROCESSED_STATUSES = ["trusted"] as const;
 const TERMINAL_ISH_STATUSES = [
   "needs-review",
   "trusted",

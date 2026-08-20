@@ -67,6 +67,12 @@ export const inboxUnreadCountSchema = z.object({
 });
 export type InboxUnreadCount = z.infer<typeof inboxUnreadCountSchema>;
 
+/**
+ * Home metrics. `documentsAutoProcessed` is trusted-only — straight-through
+ * without sitting in the human queue. `straightThroughRate` is
+ * round(100 × trusted / terminal-ish), 0 when the denominator is empty.
+ * Terminal-ish statuses: needs-review, trusted, rejected, unclassified, failed.
+ */
 export const metricsSchema = z.object({
   documentsAutoProcessed: countSchema,
   fieldsAwaitingReview: countSchema,
