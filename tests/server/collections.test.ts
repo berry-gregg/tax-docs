@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Client } from "../../src/shared/schemas/client.ts";
 import { clientSchema } from "../../src/shared/schemas/client.ts";
-import { fromStored, toStored, type StoredDoc } from "../../src/server/db/collections.ts";
+import {
+  collectionNames,
+  fromStored,
+  toStored,
+  type StoredDoc,
+} from "../../src/server/db/collections.ts";
 
 const iso = new Date().toISOString();
 
@@ -15,6 +20,14 @@ const validClient = {
   state: "CA",
   createdAt: iso,
 };
+
+describe("collectionNames", () => {
+  test("uses spec Mongo collection strings for documents, activity, and exports", () => {
+    expect(collectionNames.taxDocuments).toBe("documents");
+    expect(collectionNames.activities).toBe("activity");
+    expect(collectionNames.engineExports).toBe("exports");
+  });
+});
 
 describe("fromStored / toStored", () => {
   test("fromStored maps _id to id and parses through schema", () => {

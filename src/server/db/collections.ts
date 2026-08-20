@@ -27,9 +27,9 @@ export const collectionNames = {
   documentTypes: "documentTypes",
   requestTemplates: "requestTemplates",
   requestItems: "requestItems",
-  taxDocuments: "taxDocuments",
-  activities: "activities",
-  engineExports: "engineExports",
+  taxDocuments: "documents",
+  activities: "activity",
+  engineExports: "exports",
 } as const;
 
 export function recordsCollection(db: Db) {
