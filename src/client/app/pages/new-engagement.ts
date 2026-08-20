@@ -20,7 +20,7 @@ import {
 import { zodIssueSummary } from "../../../shared/zod-issue-summary.ts";
 import { newClientFields } from "../components/new-client-fields.ts";
 import { getJson, sendJson } from "../api.ts";
-import { escapeHtml } from "../render.ts";
+import { bindPortalLinkControls, escapeHtml, portalLinkControl } from "../render.ts";
 
 export type ChecklistItemDraft = {
   title: string;
@@ -299,9 +299,8 @@ function renderSuccess(state: NewEngagementModalState): string {
   return `<div data-new-engagement-success>
     <p class="wash-title">Request sent</p>
     <p class="muted">Portal link minted for the client.</p>
-    <a class="text-link" href="${portalHref}" data-nav-link>${escapeHtml(portalHref)}</a>
+    ${portalLinkControl(portalHref)}
     <div class="modal-actions">
-      <button class="btn-secondary" type="button" data-copy-portal-link="${portalHref}">Copy portal link</button>
       <a class="btn-primary" href="/engagements/${encodeURIComponent(engagementId)}" data-nav-link>Open engagement</a>
     </div>
   </div>`;
@@ -377,6 +376,8 @@ export function bindNewEngagementModal(
 ): void {
   const modal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
   if (!modal) return;
+  // A restored draft can open straight on the success step, so the initial markup needs it too.
+  bindPortalLinkControls(modal);
   let currentState = opts.state;
   const setState = (next: NewEngagementModalState) => {
     currentState = next;
@@ -385,8 +386,16 @@ export function bindNewEngagementModal(
   };
   const renderCurrent = () => {
     const currentModal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
-    if (currentModal) {
-      currentModal.outerHTML = renderNewEngagementModal(currentState);
+    if (!currentModal) {
+      return;
+    }
+
+    currentModal.outerHTML = renderNewEngagementModal(currentState);
+    // The swap detaches the old node and its listeners; the success step's copy button
+    // needs the shared portal-control binding attached to the fresh markup.
+    const nextModal = root.querySelector<HTMLElement>("[data-new-engagement-modal]");
+    if (nextModal) {
+      bindPortalLinkControls(nextModal);
     }
   };
 
@@ -501,11 +510,6 @@ export function bindNewEngagementModal(
           });
           renderCurrent();
         });
-    }
-
-    const portalHref = target.getAttribute("data-copy-portal-link");
-    if (portalHref) {
-      void navigator.clipboard?.writeText(new URL(portalHref, window.location.origin).toString());
     }
   });
 }

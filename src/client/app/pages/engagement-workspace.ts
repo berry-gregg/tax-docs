@@ -14,14 +14,15 @@ import {
 import { getJson, sendJson, uploadFile } from "../api.ts";
 import { formatRelativeTime } from "../format.ts";
 import {
+  bindPortalLinkControls,
   bindRowLinks,
   confidenceChip,
   dataTable,
   emptyState,
   escapeHtml,
-  listRow,
   pageHeader,
   pipelineChip,
+  portalLinkControl,
   railWidget,
   stageChip,
 } from "../render.ts";
@@ -77,10 +78,7 @@ export function renderEngagementWorkspace(data: EngagementWorkspaceData): string
     <main>
       ${pageHeader(detail.client.legalName, `${detail.engagement.filingType} · ${detail.engagement.taxYear}`, actions)}
       <div class="page-actions">
-        <a class="btn-secondary" href="/portal/${encodeURIComponent(detail.engagement.portalToken)}" data-nav-link>Open portal</a>
-        <button class="btn-ghost" type="button" data-copy-portal-link="/portal/${encodeURIComponent(
-          detail.engagement.portalToken,
-        )}">Copy portal link</button>
+        ${portalLinkControl(`/portal/${encodeURIComponent(detail.engagement.portalToken)}`)}
         ${stageChip(detail.engagement.status)}
       </div>
       ${renderValidationSummary(data.validations)}
@@ -143,16 +141,13 @@ function renderRequestChecklist(items: RequestItem[]): string {
     return emptyState("No request items yet.");
   }
 
-  return `<div class="row-list">
+  return `<div class="row-list checklist-list">
     ${items
       .map(
         (item) =>
           `<div class="list-row">
-            <span class="list-row-body">
-              <span class="list-row-title">${escapeHtml(item.title)}</span>
-              <span class="muted">${escapeHtml(item.description)}</span>
-            </span>
-            <span data-request-item-id="${escapeHtml(item.id)}">${requestItemChip(item)}${
+            <span class="list-row-title" title="${escapeHtml(item.description)}">${escapeHtml(item.title)}</span>
+            <span class="checklist-actions" data-request-item-id="${escapeHtml(item.id)}">${requestItemChip(item)}${
               item.status === "open" && !item.required
                 ? ` <button class="btn-ghost" type="button" data-waive-request-item="${escapeHtml(item.id)}">Waive</button>`
                 : ""
@@ -231,15 +226,15 @@ function renderActivity(detail: EngagementDetail, now: Date): string {
     return emptyState("No activity yet.");
   }
 
-  return `<div class="row-list">
+  return `<div class="row-list activity-list">
     ${detail.activity
       .slice(0, 5)
-      .map((item) =>
-        listRow({
-          href: `/engagements/${detail.engagement.id}`,
-          title: item.action,
-          meta: `${formatRelativeTime(item.createdAt, now)} · ${item.detail}`,
-        }),
+      .map(
+        (item) =>
+          `<div class="list-row activity-row">
+            <span class="muted activity-time">${escapeHtml(formatRelativeTime(item.createdAt, now))}</span>
+            <span class="muted activity-text">${escapeHtml(item.action)} · ${escapeHtml(item.detail)}</span>
+          </div>`,
       )
       .join("")}
   </div>`;
@@ -277,6 +272,7 @@ export const engagementPage: PageModule<EngagementWorkspaceData> = {
   render: renderEngagementWorkspace,
   bind(root, data, repaint) {
     bindRowLinks(root, repaint);
+    bindPortalLinkControls(root);
 
     const startUpload = (file: File) => {
       void uploadFile("/api/documents", file, { engagementId: data.detail.engagement.id }, documentResponseSchema)
@@ -340,11 +336,6 @@ export const engagementPage: PageModule<EngagementWorkspaceData> = {
           .catch((error: unknown) => {
             showError(root, messageFor(error));
           });
-      }
-
-      const portalHref = target.getAttribute("data-copy-portal-link");
-      if (portalHref) {
-        void navigator.clipboard?.writeText(new URL(portalHref, window.location.origin).toString());
       }
     });
   },

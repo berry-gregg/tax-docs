@@ -421,25 +421,6 @@
   border-bottom-color: var(--color-ink);
 }
 
-.search-field {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-8);
-  min-height: var(--nav-item-height);
-  padding: 0 var(--spacing-12);
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-inputs);
-  color: var(--color-ash);
-}
-
-.search-field input {
-  width: 220px;
-  border: 0;
-  background: transparent;
-  color: var(--color-ink);
-  outline: none;
-}
-
 .table-wrap {
   overflow: auto;
 }
@@ -1002,8 +983,8 @@
 }
 
 /* Portal link control — SHARED compact copy + open pair rendered by portalLinkControl()
-   in src/client/app/render.ts. Consumed by inbox rows today; the engagement workspace and
-   new-engagement success panel adopt it next wave. */
+   in src/client/app/render.ts. Consumed everywhere a portal link surfaces: inbox rows,
+   the engagement workspace header actions, and the new-engagement success panel. */
 .portal-link-control {
   display: inline-flex;
   align-items: center;
@@ -1478,6 +1459,54 @@
 .row-list-dense .avatar {
   width: 24px;
   height: 24px;
+}
+
+/*
+ * Engagement workspace — dense checklist and activity rows. Single-line anatomy: the
+ * checklist item description lives in the title tooltip, the trailing cluster is the
+ * 22px chip plus a compact ghost Waive; activity rows are muted time · action · target.
+ * Both compose .list-row rather than forking it.
+ */
+.checklist-list .list-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-block: var(--spacing-8);
+}
+
+.checklist-list .list-row-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.checklist-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  white-space: nowrap;
+}
+
+.checklist-actions .btn-ghost {
+  min-height: var(--spacing-24);
+  padding: 0 var(--spacing-8);
+  font-size: var(--text-micro);
+}
+
+.activity-list .list-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-8);
+  align-items: baseline;
+  padding: var(--spacing-8) var(--spacing-12);
+  font-size: var(--text-micro);
+}
+
+.activity-list .activity-time {
+  white-space: nowrap;
+}
+
+.activity-list .activity-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .page-home .wash-card {

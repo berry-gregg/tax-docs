@@ -416,11 +416,11 @@ describe("shell.css page furniture", () => {
     expect(css).not.toMatch(/^\.confidence \{/m);
   });
 
-  test("dead status, toolbar, and search-field-lg recipes are gone", async () => {
+  test("dead status, toolbar, and search-field recipes are gone", async () => {
     const css = await Bun.file("src/client/styles/shell.css").text();
 
     expect(css).not.toContain(".toolbar");
-    expect(css).not.toContain(".search-field-lg");
+    expect(css).not.toContain(".search-field");
     expect(css).not.toMatch(/^\.status \{/m);
     expect(css).not.toContain(".status-");
   });

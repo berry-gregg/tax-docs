@@ -193,6 +193,30 @@ describe("engagement workspace", () => {
     expect(html).toContain("Waive");
   });
 
+  test("checklist rows are dense single-line rows with the description as a tooltip", () => {
+    const html = renderEngagementWorkspace(data());
+    const start = html.indexOf("Request checklist");
+    const end = html.indexOf(">Documents<");
+    const checklist = html.slice(start, end);
+
+    expect(checklist).toContain('class="row-list checklist-list"');
+    expect(checklist).not.toContain("list-row-body");
+    expect(checklist).toContain('title="Upload every shareholder K-1."');
+    expect(checklist).not.toContain(">Upload every shareholder K-1.<");
+    expect(checklist).toContain('title="Full-year statement."');
+    expect(checklist).not.toContain(">Full-year statement.<");
+  });
+
+  test("the portal link is the shared compact control, not a secondary-button cluster", () => {
+    const html = renderEngagementWorkspace(data());
+
+    expect(html).toContain("data-portal-link-control");
+    expect(html).toContain('data-copy-portal-link="/portal/portal-token"');
+    expect(html).toContain('class="portal-link-open" href="/portal/portal-token"');
+    expect(html).not.toContain(">Open portal</a>");
+    expect(html).not.toContain('class="btn-secondary" href="/portal/');
+  });
+
   test("renders the document table with type names, confidence, review links, failed cause, and retry", () => {
     const html = renderEngagementWorkspace(data());
 
@@ -234,6 +258,24 @@ describe("engagement workspace", () => {
     expect(html).toContain("30m ago");
     expect(html).toContain("Trusted documents");
     expect(html).toContain("Open requests");
+  });
+
+  test("activity entries are compact single-line muted rows: time, action, target", () => {
+    const html = renderEngagementWorkspace(data());
+    const activity = html.slice(html.indexOf(">Activity<"));
+
+    expect(activity).toContain('class="row-list activity-list"');
+    expect(activity).toContain('class="list-row activity-row"');
+    expect(activity).not.toContain("list-row-body");
+    expect(activity).not.toContain("avatar-spacer");
+    expect(activity).not.toContain('<a class="list-row"');
+
+    const timeAt = activity.indexOf("30m ago");
+    const actionAt = activity.indexOf("document-uploaded");
+    const targetAt = activity.indexOf("profit-loss.pdf");
+    expect(timeAt).toBeGreaterThan(-1);
+    expect(actionAt).toBeGreaterThan(timeAt);
+    expect(targetAt).toBeGreaterThan(actionAt);
   });
 
   test("polls on the shared live interval", () => {

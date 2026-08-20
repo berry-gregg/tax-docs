@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { engagementListRowSchema, type EngagementListRow } from "../../src/shared/schemas/api.ts";
 import { POLL_INTERVAL_MS } from "../../src/shared/constants.ts";
 import { engagementsPage, renderEngagements } from "../../src/client/app/pages/engagements.ts";
+import type { NewEngagementModalState } from "../../src/client/app/pages/new-engagement.ts";
 
 function row(overrides: Record<string, unknown> = {}): EngagementListRow {
   return engagementListRowSchema.parse({
@@ -65,6 +66,33 @@ describe("engagements page", () => {
 
     expect(html).toContain('data-new-engagement-modal');
     expect(html).toContain("Create engagement");
+  });
+
+  test("the success panel portal link is the shared compact control", () => {
+    const success: NewEngagementModalState = {
+      step: "success",
+      mode: "existing",
+      selectedClientId: "client-1",
+      taxYear: 2025,
+      filingType: "1120-S",
+      clients: [],
+      documentTypes: [],
+      items: [],
+      portalToken: "portal-token",
+      engagementId: "eng-1",
+    };
+    const html = renderEngagements({
+      engagements: [row()],
+      showNewEngagementModal: true,
+      newEngagement: success,
+    });
+
+    expect(html).toContain("data-portal-link-control");
+    expect(html).toContain('data-copy-portal-link="/portal/portal-token"');
+    expect(html).toContain("Open engagement");
+    expect(html).toContain('href="/engagements/eng-1"');
+    expect(html).not.toContain('class="btn-secondary" type="button" data-copy-portal-link');
+    expect(html).not.toContain('class="text-link" href="/portal/portal-token"');
   });
 
   test("escapes client names instead of injecting them", () => {
