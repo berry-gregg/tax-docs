@@ -6,7 +6,7 @@ import type { RawExtraction } from "./stages.ts";
 
 const BOOLEAN_TRUE = new Set(["true", "yes", "x", "checked"]);
 const BOOLEAN_FALSE = new Set(["false", "no"]);
-const NUMERIC_LITERAL = /^\s*-?\d+(\.\d+)?\s*$/;
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s]|$)/;
 
 type RawField = RawExtraction["fields"][number];
 
@@ -15,10 +15,35 @@ function parseSignedNumber(raw: string): number | null {
   if (trimmed.length === 0) return null;
   const negative = trimmed.includes("(") && trimmed.includes(")");
   const cleaned = trimmed.replace(/[$,()]/g, "");
-  if (!NUMERIC_LITERAL.test(cleaned)) return null;
   const n = Number.parseFloat(cleaned);
   if (!Number.isFinite(n)) return null;
   return negative ? -Math.abs(n) : n;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function isValidYmd(year: number, month: number, day: number): boolean {
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  return utc.getUTCFullYear() === year && utc.getUTCMonth() === month - 1 && utc.getUTCDate() === day;
+}
+
+function coerceDate(raw: string): string | null {
+  const trimmed = raw.trim();
+  const iso = ISO_DATE.exec(trimmed);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    return isValidYmd(year, month, day) ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
+  }
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const year = parsed.getFullYear();
+  const month = parsed.getMonth() + 1;
+  const day = parsed.getDate();
+  return isValidYmd(year, month, day) ? `${String(year).padStart(4, "0")}-${pad2(month)}-${pad2(day)}` : null;
 }
 
 export function coerceValue(
@@ -40,10 +65,8 @@ export function coerceValue(
       if (BOOLEAN_FALSE.has(token)) return false;
       return null;
     }
-    case "date": {
-      const date = new Date(raw);
-      return Number.isNaN(date.getTime()) ? null : date.toISOString();
-    }
+    case "date":
+      return coerceDate(raw);
   }
 }
 

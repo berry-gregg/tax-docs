@@ -91,6 +91,10 @@ describe("coerceValue", () => {
     expect(coerceValue("($1,234.56)", "double")).toBe(-1234.56);
   });
 
+  test("parseFloat after strip keeps trailing units like percent", () => {
+    expect(coerceValue("5.4%", "double")).toBe(5.4);
+  });
+
   test("parses an integer after the same numeric stripping", () => {
     expect(coerceValue("1,234", "int")).toBe(1234);
     expect(coerceValue("(500.00)", "int")).toBe(-500);
@@ -109,8 +113,9 @@ describe("coerceValue", () => {
     expect(coerceValue("no", "boolean")).toBe(false);
   });
 
-  test("returns an ISO date string when new Date(raw) is valid", () => {
-    expect(coerceValue("2024-03-15", "date")).toBe(new Date("2024-03-15").toISOString());
+  test("returns a timezone-stable ISO date string", () => {
+    expect(coerceValue("2024-03-15", "date")).toBe("2024-03-15");
+    expect(coerceValue("3/15/2024", "date")).toBe("2024-03-15");
   });
 
   test("returns null when the value is uncoercible for the dataType", () => {
@@ -337,8 +342,6 @@ describe("finalizeFields", () => {
     expect(result.every((f) => f.reviewStatus === "unreviewed")).toBe(true);
     expect(result.find((f) => f.key === "employee_count")?.value).toBe(12);
     expect(result.find((f) => f.key === "is_corrected")?.value).toBe(true);
-    expect(result.find((f) => f.key === "period_start")?.value).toBe(
-      new Date("2024-03-15").toISOString(),
-    );
+    expect(result.find((f) => f.key === "period_start")?.value).toBe("2024-03-15");
   });
 });

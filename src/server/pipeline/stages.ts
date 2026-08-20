@@ -81,7 +81,10 @@ export async function runClassifyStage(
 ): Promise<ClassifyResult> {
   return ai.completeStructured({
     system: CLASSIFY_SYSTEM,
-    parts: [...documentParts(doc), { type: "text", text: candidateCatalog(candidates) }],
+    parts: [
+      ...documentParts(doc),
+      { type: "text", text: fenceUntrusted("document-type-catalog", candidateCatalog(candidates)) },
+    ],
     schemaName: "classify_result",
     schema: classifyResultSchema,
   });
@@ -94,7 +97,10 @@ export async function runExtractStage(
 ): Promise<RawExtraction> {
   return ai.completeStructured({
     system: EXTRACT_SYSTEM,
-    parts: [...documentParts(doc), { type: "text", text: fieldCatalog(docType) }],
+    parts: [
+      ...documentParts(doc),
+      { type: "text", text: fenceUntrusted("field-catalog", fieldCatalog(docType)) },
+    ],
     schemaName: "raw_extraction",
     schema: rawExtractionSchema,
   });

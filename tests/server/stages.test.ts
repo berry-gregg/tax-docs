@@ -147,6 +147,14 @@ describe("runClassifyStage", () => {
     expect(req.system).not.toContain("dt-w2");
     expect(req.system).not.toContain(DOC.filename);
     expectDocumentParts(req.parts);
+    const catalog = [
+      "dt-941 — Form 941: Employer's quarterly federal tax return.",
+      "dt-w2 — Form W-2: Wage and tax statement.",
+    ].join("\n");
+    expect(req.parts[2]).toEqual({
+      type: "text",
+      text: fenceUntrusted("document-type-catalog", catalog),
+    });
     const userText = textOf(req.parts);
     expect(userText).toContain("dt-941 — Form 941: Employer's quarterly federal tax return.");
     expect(userText).toContain("dt-w2 — Form W-2: Wage and tax statement.");
@@ -186,6 +194,15 @@ describe("runExtractStage", () => {
     expect(req.system).not.toContain(DOC.filename);
     expect(req.system).not.toContain("UNTRUSTED DATA.");
     expectDocumentParts(req.parts);
+    const catalog = [
+      "employer_ein (ein-tin, string): Employer identification number in the EIN field.",
+      "format pattern: ^\\d{2}-\\d{7}$",
+      "wages_tips_compensation (dollar-amount, double): Line 2 — total wages, tips, and other compensation.",
+    ].join("\n");
+    expect(req.parts[2]).toEqual({
+      type: "text",
+      text: fenceUntrusted("field-catalog", catalog),
+    });
     const userText = textOf(req.parts);
     expect(userText).toContain(
       "employer_ein (ein-tin, string): Employer identification number in the EIN field.",
