@@ -62,6 +62,116 @@ export function dialogOpen(workspace: { querySelector(selector: string): unknown
   return OPEN_DIALOG_SELECTORS.some((selector) => workspace.querySelector(selector) != null);
 }
 
+/**
+ * Escape closes a dialog by clicking its existing close/cancel control so the page's own close
+ * path runs (new-engagement Cancel clears the draft singleton and strips `?new=1`, export Cancel
+ * hides the confirm modal, schema-builder Close empties its slot). The new-engagement success
+ * step renders no Cancel button, so the backdrop is its fallback — the page's click handler
+ * treats a click on the modal element itself as close. Order is stacking order: a modal sits
+ * above the side panel, so only the topmost match is clicked.
+ */
+const ESCAPE_CLOSE_SELECTORS = [
+  "[data-new-engagement-modal]:not([hidden]) [data-close-new-engagement]",
+  "[data-new-engagement-modal]:not([hidden])",
+  "[data-export-confirm-modal]:not([hidden]) [data-export-cancel]",
+  ".side-panel [data-schema-close]",
+] as const;
+
+export type EscapeCloseHost = { querySelector(selector: string): unknown };
+
+export function closeOpenDialog(host: EscapeCloseHost | null): boolean {
+  if (!host) {
+    return false;
+  }
+
+  for (const selector of ESCAPE_CLOSE_SELECTORS) {
+    const control = host.querySelector(selector);
+    if (isClickable(control)) {
+      control.click();
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isClickable(value: unknown): value is { click(): void } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "click" in value &&
+    typeof (value as { click: unknown }).click === "function"
+  );
+}
+
+export type ShellKeydownEvent = {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  preventDefault(): void;
+};
+
+export type ShellKeydownDeps = {
+  /** Chromeless routes (client portal) render no palette; ⌘K must fall through to the browser there. */
+  paletteExists(): boolean;
+  paletteIsOpen(): boolean;
+  setPalette(open: boolean): void;
+  movePaletteSelection(delta: number): void;
+  activatePaletteSelection(): void;
+  dialogHost(): EscapeCloseHost | null;
+};
+
+/**
+ * Window-level keyboard shell. Dialog Escape must live here: handlers bound to `.workspace`
+ * never fire when focus sits on `document.body` (keydown bubbles up from the target, not down
+ * through descendants), which is exactly where focus lands after a repaint.
+ */
+export function handleShellKeydown(event: ShellKeydownEvent, deps: ShellKeydownDeps): void {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    if (!deps.paletteExists()) {
+      return;
+    }
+
+    event.preventDefault();
+    deps.setPalette(!deps.paletteIsOpen());
+    return;
+  }
+
+  if (event.key === "Escape") {
+    if (deps.paletteIsOpen()) {
+      event.preventDefault();
+      deps.setPalette(false);
+      return;
+    }
+
+    if (closeOpenDialog(deps.dialogHost())) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (!deps.paletteIsOpen()) {
+    return;
+  }
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    deps.movePaletteSelection(1);
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    deps.movePaletteSelection(-1);
+    return;
+  }
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    deps.activatePaletteSelection();
+  }
+}
+
 export type ReplaceWorkspaceBodyResult<T> = {
   changed: boolean;
   workspace: T | null;
@@ -444,38 +554,14 @@ if (typeof window !== "undefined") {
   });
 
   window.addEventListener("keydown", (event) => {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      setPalette(!paletteIsOpen());
-      return;
-    }
-
-    if (!paletteIsOpen()) {
-      return;
-    }
-
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setPalette(false);
-      return;
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      movePaletteSelection(1);
-      return;
-    }
-
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      movePaletteSelection(-1);
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      activatePaletteSelection();
-    }
+    handleShellKeydown(event, {
+      paletteExists: () => root?.querySelector("[data-command-palette]") != null,
+      paletteIsOpen,
+      setPalette,
+      movePaletteSelection,
+      activatePaletteSelection,
+      dialogHost: () => root?.querySelector<HTMLElement>(".workspace") ?? null,
+    });
   });
 
   void paint();

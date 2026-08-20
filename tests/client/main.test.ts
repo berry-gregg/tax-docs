@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { dialogOpen, refreshInboxBadgeState, replaceWorkspaceBody } from "../../src/client/main.ts";
+import {
+  closeOpenDialog,
+  dialogOpen,
+  handleShellKeydown,
+  refreshInboxBadgeState,
+  replaceWorkspaceBody,
+  type ShellKeydownDeps,
+} from "../../src/client/main.ts";
+import { renderNewEngagementModal } from "../../src/client/app/pages/new-engagement.ts";
 
 type Badge = {
   hidden: boolean;
@@ -59,6 +67,210 @@ describe("dialogOpen", () => {
     expect(dialogOpen(exportConfirm)).toBe(true);
     expect(dialogOpen(hiddenModal)).toBe(false);
     expect(dialogOpen(new FakeWorkspace())).toBe(false);
+  });
+});
+
+const NEW_ENGAGEMENT_CANCEL = "[data-new-engagement-modal]:not([hidden]) [data-close-new-engagement]";
+const NEW_ENGAGEMENT_BACKDROP = "[data-new-engagement-modal]:not([hidden])";
+const EXPORT_CANCEL = "[data-export-confirm-modal]:not([hidden]) [data-export-cancel]";
+const SCHEMA_CLOSE = ".side-panel [data-schema-close]";
+
+class FakeControl {
+  clicks = 0;
+  click(): void {
+    this.clicks += 1;
+  }
+}
+
+class FakeDialogHost {
+  controls = new Map<string, FakeControl>();
+
+  add(selector: string): FakeControl {
+    const control = new FakeControl();
+    this.controls.set(selector, control);
+    return control;
+  }
+
+  querySelector(selector: string): FakeControl | null {
+    return this.controls.get(selector) ?? null;
+  }
+}
+
+describe("closeOpenDialog", () => {
+  test("Escape path clicks the new-engagement Cancel control, not the backdrop", () => {
+    const host = new FakeDialogHost();
+    const cancel = host.add(NEW_ENGAGEMENT_CANCEL);
+    const backdrop = host.add(NEW_ENGAGEMENT_BACKDROP);
+
+    expect(closeOpenDialog(host)).toBe(true);
+    expect(cancel.clicks).toBe(1);
+    expect(backdrop.clicks).toBe(0);
+  });
+
+  test("success step has no Cancel, so the backdrop takes the close click", () => {
+    const host = new FakeDialogHost();
+    const backdrop = host.add(NEW_ENGAGEMENT_BACKDROP);
+
+    expect(closeOpenDialog(host)).toBe(true);
+    expect(backdrop.clicks).toBe(1);
+  });
+
+  test("Escape path clicks the export-confirm Cancel control", () => {
+    const host = new FakeDialogHost();
+    const cancel = host.add(EXPORT_CANCEL);
+
+    expect(closeOpenDialog(host)).toBe(true);
+    expect(cancel.clicks).toBe(1);
+  });
+
+  test("Escape path clicks the schema-builder side panel close control", () => {
+    const host = new FakeDialogHost();
+    const close = host.add(SCHEMA_CLOSE);
+
+    expect(closeOpenDialog(host)).toBe(true);
+    expect(close.clicks).toBe(1);
+  });
+
+  test("reports unhandled when no dialog is open and when the host is null", () => {
+    expect(closeOpenDialog(new FakeDialogHost())).toBe(false);
+    expect(closeOpenDialog(null)).toBe(false);
+  });
+
+  test("only the topmost dialog closes when a modal sits over the side panel", () => {
+    const host = new FakeDialogHost();
+    const modalCancel = host.add(NEW_ENGAGEMENT_CANCEL);
+    const panelClose = host.add(SCHEMA_CLOSE);
+
+    expect(closeOpenDialog(host)).toBe(true);
+    expect(modalCancel.clicks).toBe(1);
+    expect(panelClose.clicks).toBe(0);
+  });
+
+  test("the success step really renders no Cancel control but keeps the backdrop hook", () => {
+    const html = renderNewEngagementModal({
+      step: "success",
+      mode: "existing",
+      selectedClientId: "client-1",
+      taxYear: 2025,
+      filingType: "1120-S",
+      clients: [],
+      documentTypes: [],
+      items: [],
+      portalToken: "portal-token",
+      engagementId: "eng-1",
+    });
+
+    expect(html).not.toContain("data-close-new-engagement");
+    expect(html).toContain("data-new-engagement-modal");
+  });
+});
+
+type KeyInit = Partial<Pick<KeyboardEvent, "ctrlKey" | "metaKey">>;
+
+class FakeKeyEvent {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  prevented = false;
+
+  constructor(key: string, init: KeyInit = {}) {
+    this.key = key;
+    this.ctrlKey = init.ctrlKey ?? false;
+    this.metaKey = init.metaKey ?? false;
+  }
+
+  preventDefault(): void {
+    this.prevented = true;
+  }
+}
+
+function makeShell(overrides: Partial<ShellKeydownDeps> = {}): {
+  deps: ShellKeydownDeps;
+  calls: string[];
+  host: FakeDialogHost;
+} {
+  const calls: string[] = [];
+  const host = new FakeDialogHost();
+  const deps: ShellKeydownDeps = {
+    paletteExists: () => true,
+    paletteIsOpen: () => false,
+    setPalette: (open) => calls.push(`setPalette:${open}`),
+    movePaletteSelection: (delta) => calls.push(`move:${delta}`),
+    activatePaletteSelection: () => calls.push("activate"),
+    dialogHost: () => host,
+    ...overrides,
+  };
+  return { deps, calls, host };
+}
+
+describe("handleShellKeydown", () => {
+  test("Escape closes the open dialog through its existing close control", () => {
+    const { deps, host } = makeShell();
+    const cancel = host.add(NEW_ENGAGEMENT_CANCEL);
+    const event = new FakeKeyEvent("Escape");
+
+    handleShellKeydown(event, deps);
+
+    expect(cancel.clicks).toBe(1);
+    expect(event.prevented).toBe(true);
+  });
+
+  test("Escape with no open dialog is a no-op and leaves the browser default alone", () => {
+    const { deps, calls } = makeShell();
+    const event = new FakeKeyEvent("Escape");
+
+    handleShellKeydown(event, deps);
+
+    expect(event.prevented).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  test("Escape closes the palette before touching a dialog underneath", () => {
+    const { deps, calls, host } = makeShell({ paletteIsOpen: () => true });
+    const cancel = host.add(NEW_ENGAGEMENT_CANCEL);
+    const event = new FakeKeyEvent("Escape");
+
+    handleShellKeydown(event, deps);
+
+    expect(calls).toEqual(["setPalette:false"]);
+    expect(cancel.clicks).toBe(0);
+    expect(event.prevented).toBe(true);
+  });
+
+  test("Ctrl-K and Meta-K toggle the palette on firm pages", () => {
+    const opened = makeShell();
+    const openEvent = new FakeKeyEvent("k", { ctrlKey: true });
+    handleShellKeydown(openEvent, opened.deps);
+    expect(opened.calls).toEqual(["setPalette:true"]);
+    expect(openEvent.prevented).toBe(true);
+
+    const closed = makeShell({ paletteIsOpen: () => true });
+    const closeEvent = new FakeKeyEvent("K", { metaKey: true });
+    handleShellKeydown(closeEvent, closed.deps);
+    expect(closed.calls).toEqual(["setPalette:false"]);
+    expect(closeEvent.prevented).toBe(true);
+  });
+
+  test("Ctrl-K on the chromeless portal falls through to the browser", () => {
+    const { deps, calls } = makeShell({ paletteExists: () => false });
+    const event = new FakeKeyEvent("k", { ctrlKey: true });
+
+    handleShellKeydown(event, deps);
+
+    expect(event.prevented).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  test("palette navigation keys only act while the palette is open", () => {
+    const closedShell = makeShell();
+    handleShellKeydown(new FakeKeyEvent("ArrowDown"), closedShell.deps);
+    expect(closedShell.calls).toEqual([]);
+
+    const openShell = makeShell({ paletteIsOpen: () => true });
+    handleShellKeydown(new FakeKeyEvent("ArrowDown"), openShell.deps);
+    handleShellKeydown(new FakeKeyEvent("ArrowUp"), openShell.deps);
+    handleShellKeydown(new FakeKeyEvent("Enter"), openShell.deps);
+    expect(openShell.calls).toEqual(["move:1", "move:-1", "activate"]);
   });
 });
 
