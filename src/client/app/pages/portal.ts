@@ -70,6 +70,7 @@ function renderValidPortal(data: Extract<PortalData, { kind: "valid" }>): string
       <h1 class="portal-firm">${escapeHtml(state.firmName)}</h1>
       <p class="portal-intro">${escapeHtml(introLine(state))}</p>
     </header>
+    <p class="load-error-message" data-portal-error hidden></p>
     <div class="portal-checklist">
       ${state.items.map((item) => renderPortalCard(item, token)).join("")}
     </div>
@@ -94,7 +95,27 @@ export function renderPortal(data: PortalData): string {
   return renderValidPortal(data);
 }
 
-function bindDropzone(dropzone: HTMLElement, token: string, requestItemId: string | undefined, repaint: () => void): void {
+function messageFor(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function showPortalError(root: HTMLElement, message: string): void {
+  const slot = root.querySelector<HTMLElement>("[data-portal-error]");
+  if (!slot) {
+    return;
+  }
+
+  slot.textContent = message;
+  slot.hidden = false;
+}
+
+function bindDropzone(
+  dropzone: HTMLElement,
+  token: string,
+  requestItemId: string | undefined,
+  repaint: () => void,
+  root: HTMLElement,
+): void {
   const input = dropzone.querySelector<HTMLInputElement>("[data-portal-file]");
   if (!input) {
     return;
@@ -108,8 +129,7 @@ function bindDropzone(dropzone: HTMLElement, token: string, requestItemId: strin
     void uploadFile(uploadPath, file, extra, portalUploadResponseSchema)
       .then(() => repaint())
       .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        window.alert(message);
+        showPortalError(root, messageFor(error));
       })
       .finally(() => {
         dropzone.removeAttribute("aria-busy");
@@ -167,7 +187,7 @@ export const portalPage: PageModule<PortalData> = {
       );
       return { kind: "valid", token: route.token, state };
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
+      if (error instanceof ApiError && (error.status === 404 || error.status === 403)) {
         return { kind: "invalid" };
       }
       throw error;
@@ -182,7 +202,7 @@ export const portalPage: PageModule<PortalData> = {
     root.querySelectorAll<HTMLElement>("[data-portal-dropzone]").forEach((dropzone) => {
       const token = dropzone.getAttribute("data-portal-token") ?? data.token;
       const requestItemId = dropzone.getAttribute("data-request-item-id") ?? undefined;
-      bindDropzone(dropzone, token, requestItemId, repaint);
+      bindDropzone(dropzone, token, requestItemId, repaint, root);
     });
   },
   pollMs: POLL_INTERVAL_MS,

@@ -26,7 +26,7 @@ function data(overrides: Partial<InboxData> = {}): InboxData {
 }
 
 describe("inbox page", () => {
-  test("request-sent entries use listRow with portal link input and Open portal control", () => {
+  test("request-sent entries use a non-navigating list-row with copy and open portal controls", () => {
     const html = renderInbox(
       data({
         entries: [entry({ id: "act-sent", action: "request-sent", direction: "outbound" })],
@@ -34,11 +34,15 @@ describe("inbox page", () => {
     );
 
     expect(html).toContain('class="list-row"');
+    expect(html).not.toMatch(/<a[^>]*class="list-row"/);
+    expect(html).not.toMatch(/<a class="list-row"[^>]*>[\s\S]*<(?:input|button|a)\b/);
     expect(html).not.toContain("inbox-entry-outbound");
     expect(html).toContain("Request sent · 3 items");
     expect(html).toContain('value="/portal/portal-token-abc"');
     expect(html).toContain('data-portal-open="/portal/portal-token-abc"');
     expect(html).toContain("Open portal");
+    expect(html).toContain("Copy portal link");
+    expect(html).toContain('data-copy-portal-link="/portal/portal-token-abc"');
     expect(html).toContain("readonly");
   });
 

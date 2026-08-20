@@ -46,6 +46,58 @@ function data(overrides: Partial<ExportData> = {}): ExportData {
   };
 }
 
+class FakeExportNode {
+  hidden = true;
+  textContent = "";
+  private readonly listeners = new Map<string, Array<() => void>>();
+
+  constructor(
+    readonly selector: string,
+    private readonly children: Record<string, FakeExportNode> = {},
+  ) {}
+
+  querySelector(selector: string): FakeExportNode | null {
+    return this.children[selector] ?? null;
+  }
+
+  addEventListener(type: string, listener: () => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  dispatch(type: string): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener();
+    }
+  }
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+
+    await Bun.sleep(0);
+  }
+}
+
+function makeExportRoot() {
+  const confirmButton = new FakeExportNode("[data-export-confirm]");
+  const errorSlot = new FakeExportNode("[data-export-error]");
+  const modal = new FakeExportNode("[data-export-confirm-modal]");
+  const openButton = new FakeExportNode("[data-export-open]");
+  const cancelButton = new FakeExportNode("[data-export-cancel]");
+  const root = new FakeExportNode("root", {
+    "[data-export-confirm-modal]": modal,
+    "[data-export-open]": openButton,
+    "[data-export-cancel]": cancelButton,
+    "[data-export-confirm]": confirmButton,
+    "[data-export-error]": errorSlot,
+  });
+
+  return Object.assign(root, { confirmButton, errorSlot });
+}
+
 describe("export page", () => {
   test("line rows format money and show missing trusted-source state", () => {
     const html = renderExport(data());
@@ -117,5 +169,46 @@ describe("export page", () => {
     expect(typeof exportPage.load).toBe("function");
     expect(typeof exportPage.render).toBe("function");
     expect(typeof exportPage.bind).toBe("function");
+  });
+
+  test("confirm modal keeps an inline slot for confirm failures", () => {
+    const html = renderExport(data());
+
+    expect(html).toContain("data-export-confirm-modal");
+    expect(html).toContain("data-export-error");
+    expect(html).toContain("load-error-message");
+    expect(html).toMatch(/data-export-error[^>]*hidden|hidden[^>]*data-export-error/);
+  });
+
+  test("confirm failure writes the ApiError into the modal slot, not a browser dialog", async () => {
+    const alerts: string[] = [];
+    const originalAlert = globalThis.alert;
+    const originalFetch = globalThis.fetch;
+    globalThis.alert = ((message: string) => {
+      alerts.push(String(message));
+    }) as typeof alert;
+
+    try {
+      globalThis.fetch = ((() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ error: "Export is no longer a draft" }), {
+            status: 409,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )) as unknown) as typeof fetch;
+
+      const root = makeExportRoot();
+      exportPage.bind?.(root as unknown as HTMLElement, data(), () => {});
+      root.confirmButton.dispatch("click");
+
+      await waitUntil(() => root.errorSlot.hidden === false);
+
+      expect(alerts).toEqual([]);
+      expect(root.errorSlot.hidden).toBe(false);
+      expect(root.errorSlot.textContent).toBe("Export is no longer a draft");
+    } finally {
+      globalThis.alert = originalAlert;
+      globalThis.fetch = originalFetch;
+    }
   });
 });

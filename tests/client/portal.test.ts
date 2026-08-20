@@ -61,6 +61,79 @@ function validData(state: PortalState = portalState(), token = "portal-tok"): Po
   return { kind: "valid", token, state };
 }
 
+class FakePortalNode {
+  hidden = true;
+  textContent = "";
+  value = "";
+  files: File[] = [];
+  readonly attributes = new Map<string, string>();
+  readonly classList = { add() {}, remove() {} };
+  private readonly listeners = new Map<string, Array<(event: { preventDefault(): void }) => void>>();
+
+  constructor(
+    readonly selector: string,
+    private readonly children: Record<string, FakePortalNode> = {},
+  ) {}
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+
+  querySelector(selector: string): FakePortalNode | null {
+    return this.children[selector] ?? null;
+  }
+
+  querySelectorAll(selector: string): FakePortalNode[] {
+    const child = this.children[selector];
+    return child ? [child] : [];
+  }
+
+  addEventListener(type: string, listener: (event: { preventDefault(): void }) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  dispatch(type: string): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener({ preventDefault() {} });
+    }
+  }
+}
+
+async function waitUntil(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+
+    await Bun.sleep(0);
+  }
+}
+
+function makePortalRoot() {
+  const fileInput = new FakePortalNode("[data-portal-file]");
+  const dropzone = new FakePortalNode("[data-portal-dropzone]", {
+    "[data-portal-file]": fileInput,
+  });
+  dropzone.attributes.set("data-portal-token", "portal-tok");
+  dropzone.attributes.set("data-request-item-id", "item-wait");
+
+  const errorSlot = new FakePortalNode("[data-portal-error]");
+  const root = new FakePortalNode("root", {
+    "[data-portal-dropzone]": dropzone,
+    "[data-portal-error]": errorSlot,
+  });
+
+  return Object.assign(root, { fileInput, errorSlot });
+}
+
 describe("portal page", () => {
   test("intro line names the firm, client, year, and filing type", () => {
     const html = renderPortal(validData());
@@ -150,7 +223,16 @@ describe("portal page", () => {
     expect(data).toEqual({ kind: "invalid" });
   });
 
-  test("load rethrows non-404 ApiError for the shell load-error path", async () => {
+  test("load maps a 403 ApiError to the same invalid-token state as 404", async () => {
+    globalThis.fetch = ((() =>
+      Promise.resolve(jsonResponse({ error: "Forbidden" }, 403))) as unknown) as typeof fetch;
+
+    const data = await portalPage.load({ page: "portal", token: "forbidden" });
+
+    expect(data).toEqual({ kind: "invalid" });
+  });
+
+  test("load rethrows non-404/403 ApiError for the shell load-error path", async () => {
     globalThis.fetch = ((() =>
       Promise.resolve(jsonResponse({ error: "Server exploded" }, 500))) as unknown) as typeof fetch;
 
@@ -160,6 +242,42 @@ describe("portal page", () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(500);
+  });
+
+  test("valid portal keeps a hidden in-page slot for upload failures", () => {
+    const html = renderPortal(validData());
+
+    expect(html).toContain('data-portal-error');
+    expect(html).toContain("load-error-message");
+    expect(html).toMatch(/data-portal-error[^>]*hidden|hidden[^>]*data-portal-error/);
+  });
+
+  test("upload failure writes the ApiError into the in-page slot, not a browser dialog", async () => {
+    const alerts: string[] = [];
+    const originalAlert = globalThis.alert;
+    globalThis.alert = ((message: string) => {
+      alerts.push(String(message));
+    }) as typeof alert;
+
+    try {
+      globalThis.fetch = ((() =>
+        Promise.resolve(jsonResponse({ error: "Upload must be a PDF" }, 400))) as unknown) as typeof fetch;
+
+      const root = makePortalRoot();
+      portalPage.bind?.(root as unknown as HTMLElement, validData(), () => {});
+
+      const input = root.fileInput;
+      input.files = [new File(["%PDF"], "notes.txt", { type: "text/plain" })];
+      input.dispatch("change");
+
+      await waitUntil(() => root.errorSlot.hidden === false);
+
+      expect(alerts).toEqual([]);
+      expect(root.errorSlot.hidden).toBe(false);
+      expect(root.errorSlot.textContent).toBe("Upload must be a PDF");
+    } finally {
+      globalThis.alert = originalAlert;
+    }
   });
 
   test("polls on the shared interval", () => {

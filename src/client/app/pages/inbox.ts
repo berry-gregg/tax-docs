@@ -38,8 +38,15 @@ function renderPortalTrailing(portalHref: string): string {
     <label class="search-field portal-link-field">
       <input type="text" readonly value="${escapeHtml(portalHref)}" aria-label="Portal link" />
     </label>
+    <button type="button" class="btn-secondary" data-copy-portal-link="${escapeHtml(portalHref)}">Copy portal link</button>
     <button type="button" class="btn-secondary" data-portal-open="${escapeHtml(portalHref)}">Open portal</button>
   </div>`;
+}
+
+function staticListRow(opts: Parameters<typeof listRow>[0]): string {
+  return listRow(opts)
+    .replace(/^<a class="list-row" href="[^"]+" data-nav-link>/, '<div class="list-row">')
+    .replace(/<\/a>$/, "</div>");
 }
 
 function renderRequestSentEntry(entry: InboxEntry): string {
@@ -47,7 +54,7 @@ function renderRequestSentEntry(entry: InboxEntry): string {
   const title = itemCount === null ? "Request sent" : `Request sent · ${itemCount} items`;
   const portalHref = entry.portalToken ? `/portal/${entry.portalToken}` : "";
 
-  return listRow({
+  return staticListRow({
     href: `/engagements/${entry.engagementId}`,
     title,
     meta: entry.clientName,
@@ -111,6 +118,20 @@ function bindPortalControls(root: HTMLElement, repaint: () => void): void {
 
       window.history.pushState({}, "", href);
       repaint();
+    });
+  });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-copy-portal-link]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const href = button.getAttribute("data-copy-portal-link");
+      if (!href) {
+        return;
+      }
+
+      void navigator.clipboard?.writeText(new URL(href, window.location.origin).toString());
     });
   });
 }

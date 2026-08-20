@@ -79,6 +79,7 @@ function renderConfirmModal(data: ExportData): string {
     <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="export-confirm-title">
       <h2 class="modal-title" id="export-confirm-title">Confirm export</h2>
       <p>${escapeHtml(confirmModalCopy(data))}</p>
+      <p class="load-error-message" data-export-error hidden></p>
       <div class="modal-actions">
         <button class="btn-secondary" type="button" data-export-cancel>Cancel</button>
         <button class="btn-primary" type="button" data-export-confirm>Confirm &amp; send to tax engine</button>
@@ -187,8 +188,13 @@ function bindExportModal(root: HTMLElement, data: ExportData, repaint: () => voi
         root.innerHTML = renderExport({ ...data, export: confirmed.export });
         bindExport(root, { ...data, export: confirmed.export }, repaint);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        window.alert(message);
+        const slot = root.querySelector<HTMLElement>("[data-export-error]");
+        if (!slot) {
+          return;
+        }
+
+        slot.textContent = error instanceof Error ? error.message : String(error);
+        slot.hidden = false;
       }
     })();
   });
