@@ -88,6 +88,7 @@ export function renderEngagementWorkspace(data: EngagementWorkspaceData): string
       <section class="stack">
         <h2 class="section-title">Documents</h2>
         ${renderDropzone(detail.engagement.id)}
+        <p class="load-error-message" data-workspace-error hidden></p>
         ${renderDocumentsTable(detail, data.documentTypes)}
       </section>
     </main>
@@ -159,17 +160,19 @@ function renderRequestChecklist(items: RequestItem[]): string {
 
   return `<div class="row-list">
     ${items
-      .map((item) =>
-        listRow({
-          href: "#",
-          title: item.title,
-          meta: item.description,
-          trailing: `<span data-request-item-id="${escapeHtml(item.id)}">${requestItemChip(item)}${
-            item.status === "open" && !item.required
-              ? ` <button class="btn-ghost" type="button" data-waive-request-item="${escapeHtml(item.id)}">Waive</button>`
-              : ""
-          }</span>`,
-        }),
+      .map(
+        (item) =>
+          `<div class="list-row">
+            <span class="list-row-body">
+              <span class="list-row-title">${escapeHtml(item.title)}</span>
+              <span class="muted">${escapeHtml(item.description)}</span>
+            </span>
+            <span data-request-item-id="${escapeHtml(item.id)}">${requestItemChip(item)}${
+              item.status === "open" && !item.required
+                ? ` <button class="btn-ghost" type="button" data-waive-request-item="${escapeHtml(item.id)}">Waive</button>`
+                : ""
+            }</span>
+          </div>`,
       )
       .join("")}
   </div>`;
@@ -258,6 +261,20 @@ function renderActivity(detail: EngagementDetail, now: Date): string {
   </div>`;
 }
 
+function messageFor(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function showError(root: HTMLElement, message: string): void {
+  const slot = root.querySelector<HTMLElement>("[data-workspace-error]");
+  if (!slot) {
+    return;
+  }
+
+  slot.textContent = message;
+  slot.hidden = false;
+}
+
 function bindTableRows(root: HTMLElement, repaint: () => void): void {
   root.querySelectorAll<HTMLElement>("[data-href]").forEach((row) => {
     row.addEventListener("click", (event) => {
@@ -303,14 +320,20 @@ export const engagementPage: PageModule<EngagementWorkspaceData> = {
   bind(root, data, repaint) {
     bindTableRows(root, repaint);
 
+    const startUpload = (file: File) => {
+      void uploadFile("/api/documents", file, { engagementId: data.detail.engagement.id }, documentResponseSchema)
+        .then(() => repaint())
+        .catch((error: unknown) => {
+          showError(root, messageFor(error));
+        });
+    };
+
     root.querySelectorAll<HTMLElement>("[data-dropzone]").forEach((dropzone) => {
       const input = dropzone.querySelector<HTMLInputElement>("[data-document-upload]");
       input?.addEventListener("change", () => {
         const file = input.files?.[0];
         if (!file) return;
-        void uploadFile("/api/documents", file, { engagementId: data.detail.engagement.id }, documentResponseSchema).then(
-          () => repaint(),
-        );
+        startUpload(file);
       });
       dropzone.addEventListener("dragover", (event) => {
         event.preventDefault();
@@ -322,11 +345,12 @@ export const engagementPage: PageModule<EngagementWorkspaceData> = {
         dropzone.classList.remove("is-dragover");
         const file = event.dataTransfer?.files[0];
         if (!file) return;
-        void uploadFile("/api/documents", file, { engagementId: data.detail.engagement.id }, documentResponseSchema).then(
-          () => repaint(),
-        );
+        startUpload(file);
       });
     });
+
+    if (root.dataset.boundWorkspace) return;
+    root.dataset.boundWorkspace = "true";
 
     root.addEventListener("click", (event) => {
       const target = event.target;
@@ -339,7 +363,11 @@ export const engagementPage: PageModule<EngagementWorkspaceData> = {
           `/api/engagements/${encodeURIComponent(data.detail.engagement.id)}/request-items/${encodeURIComponent(itemId)}`,
           { status: "waived" },
           itemUpdateResponseSchema,
-        ).then(() => repaint());
+        )
+          .then(() => repaint())
+          .catch((error: unknown) => {
+            showError(root, messageFor(error));
+          });
       }
 
       const documentId = target.getAttribute("data-rerun-document-id");
@@ -349,7 +377,11 @@ export const engagementPage: PageModule<EngagementWorkspaceData> = {
           `/api/documents/${encodeURIComponent(documentId)}/rerun`,
           {},
           documentResponseSchema,
-        ).then(() => repaint());
+        )
+          .then(() => repaint())
+          .catch((error: unknown) => {
+            showError(root, messageFor(error));
+          });
       }
 
       const portalHref = target.getAttribute("data-copy-portal-link");
