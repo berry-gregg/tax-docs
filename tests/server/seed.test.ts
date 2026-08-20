@@ -15,6 +15,7 @@ import {
   taxDocumentsCollection,
 } from "../../src/server/db/collections.ts";
 import { figuresSchema, loadDemoFigures } from "../../src/server/seed/figures.ts";
+import { seedRequestTemplates } from "../../src/server/seed/definitions.ts";
 import { resetAndSeed, seedIfEmpty } from "../../src/server/seed/seed.ts";
 import { activitySchema } from "../../src/shared/schemas/activity.ts";
 import { clientSchema } from "../../src/shared/schemas/client.ts";
@@ -126,6 +127,17 @@ describe("demo seed persistence", () => {
     }))!);
     expect(spareEngagement.status).toBe("in-review");
 
+    const spareRequestItems = (
+      await requestItemsCollection(db).find({ engagementId: spareEngagement.id }).toArray()
+    ).map((doc) => fromStored(requestItemSchema, doc));
+    const template1065 = seedRequestTemplates.find((template) => template.filingType === "1065");
+    if (!template1065) {
+      throw new Error("Missing seeded 1065 request template");
+    }
+    expect(spareRequestItems.map((item) => item.documentTypeId)).toEqual(
+      template1065.items.map((item) => item.documentTypeId),
+    );
+
     const spareNeedsReviewDocuments = (
       await taxDocumentsCollection(db).find({
         engagementId: spareEngagement.id,
@@ -133,6 +145,11 @@ describe("demo seed persistence", () => {
       }).toArray()
     ).map((doc) => fromStored(taxDocumentSchema, doc));
     expect(spareNeedsReviewDocuments.length).toBeGreaterThanOrEqual(1);
+    expect(spareNeedsReviewDocuments.map((document) => document.classification?.documentTypeId).sort()).toEqual([
+      "dt-k1-1065",
+      "dt-k1-1065",
+      "dt-profit-loss",
+    ]);
     expect(spareNeedsReviewDocuments.flatMap((document) => document.extraction?.fields ?? []).every((field) =>
       field.reviewStatus === "unreviewed"
     )).toBe(true);

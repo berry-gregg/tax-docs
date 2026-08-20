@@ -4,10 +4,10 @@ import { basename } from "node:path";
 import { activitySchema, type Activity } from "../../shared/schemas/activity.ts";
 import { clientSchema, type Client } from "../../shared/schemas/client.ts";
 import { extractionFieldSchema, taxDocumentSchema, type ExtractionField, type TaxDocument } from "../../shared/schemas/document.ts";
-import { type DocumentType } from "../../shared/schemas/document-type.ts";
+import { documentTypeSchema, type DocumentType } from "../../shared/schemas/document-type.ts";
 import { engagementSchema, type Engagement } from "../../shared/schemas/engagement.ts";
 import { exportLineSchema, exportSchema, type EngineExport, type ExportLine } from "../../shared/schemas/export.ts";
-import { requestItemSchema, type RequestItem, type RequestTemplate } from "../../shared/schemas/request.ts";
+import { requestItemSchema, requestTemplateSchema, type RequestItem, type RequestTemplate } from "../../shared/schemas/request.ts";
 import {
   activitiesCollection,
   clientsCollection,
@@ -254,6 +254,14 @@ function requireFigureDocument(company: DemoCompany, documentTypeId: string): De
   return document;
 }
 
+function requireFigureDocuments(company: DemoCompany, documentTypeId: string): DemoFigureDocument[] {
+  const documents = company.documents.filter((candidate) => candidate.documentTypeId === documentTypeId);
+  if (documents.length === 0) {
+    throw new Error(`Missing ${documentTypeId} documents for ${company.name}`);
+  }
+  return documents;
+}
+
 async function buildSeedBook() {
   const heroCompany = requireCompany(HERO_NAME);
   const spareCompany = requireCompany(SPARE_NAME);
@@ -324,7 +332,11 @@ async function buildSeedBook() {
     }),
   ];
 
-  const spareSeedDocuments = spareCompany.documents.filter((document) => document.documentTypeId);
+  const spareSeedDocuments = [
+    requireFigureDocument(spareCompany, "dt-profit-loss"),
+    requireFigureDocument(spareCompany, "dt-balance-sheet"),
+    ...requireFigureDocuments(spareCompany, "dt-k1-1065"),
+  ];
   const spareMatched = new Map<string, string[]>();
   spareSeedDocuments.forEach((document, index) => {
     const documentId = `doc-alder-creek-${index + 1}`;
@@ -332,7 +344,7 @@ async function buildSeedBook() {
     ids.push(documentId);
     spareMatched.set(document.documentTypeId ?? "", ids);
   });
-  const spareTemplateItems = requestTemplateFor(spareCompany).items.filter((item) => spareMatched.has(item.documentTypeId));
+  const spareTemplateItems = requestTemplateFor(spareCompany).items;
   const spareItems = requestItemsFromTemplate(spareEngagement, spareTemplateItems, spareMatched);
   const spareItemByType = new Map(spareItems.map((item) => [item.documentTypeId, item]));
   const spareDocuments = await Promise.all(
@@ -463,14 +475,24 @@ async function buildSeedBook() {
 
 async function insertSeedBook(db: Db): Promise<void> {
   const seedBook = await buildSeedBook();
-  await documentTypesCollection(db).insertMany(seedBook.documentTypes.map((item) => toStored(item)));
-  await requestTemplatesCollection(db).insertMany(seedBook.requestTemplates.map((item) => toStored(item)));
-  await clientsCollection(db).insertMany(seedBook.clients.map((item) => toStored(item)));
-  await engagementsCollection(db).insertMany(seedBook.engagements.map((item) => toStored(item)));
-  await requestItemsCollection(db).insertMany(seedBook.requestItems.map((item) => toStored(item)));
-  await taxDocumentsCollection(db).insertMany(seedBook.documents.map((item) => toStored(item)));
-  await activitiesCollection(db).insertMany(seedBook.activities.map((item) => toStored(item)));
-  await engineExportsCollection(db).insertMany(seedBook.exports.map((item) => toStored(item)));
+  await documentTypesCollection(db).insertMany(
+    seedBook.documentTypes.map((item) => toStored(documentTypeSchema.parse(item))),
+  );
+  await requestTemplatesCollection(db).insertMany(
+    seedBook.requestTemplates.map((item) => toStored(requestTemplateSchema.parse(item))),
+  );
+  await clientsCollection(db).insertMany(seedBook.clients.map((item) => toStored(clientSchema.parse(item))));
+  await engagementsCollection(db).insertMany(
+    seedBook.engagements.map((item) => toStored(engagementSchema.parse(item))),
+  );
+  await requestItemsCollection(db).insertMany(
+    seedBook.requestItems.map((item) => toStored(requestItemSchema.parse(item))),
+  );
+  await taxDocumentsCollection(db).insertMany(
+    seedBook.documents.map((item) => toStored(taxDocumentSchema.parse(item))),
+  );
+  await activitiesCollection(db).insertMany(seedBook.activities.map((item) => toStored(activitySchema.parse(item))));
+  await engineExportsCollection(db).insertMany(seedBook.exports.map((item) => toStored(exportSchema.parse(item))));
 }
 
 export async function seedIfEmpty(db: Db): Promise<boolean> {
