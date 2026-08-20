@@ -172,10 +172,14 @@ describe("shell.css page furniture", () => {
   test("adds the ticker strip, pipeline chips, modal, side panel, dropzone, and confidence badges", async () => {
     const css = await Bun.file("src/client/styles/shell.css").text();
 
-    expect(css).toMatch(/\.ticker \{[^}]*background:\s*var\(--surface-inverted\)/s);
-    expect(css).toMatch(/\.ticker-label \{[^}]*font-size:\s*var\(--text-caption\)/s);
+    expect(css).not.toMatch(/\.ticker \{[^}]*background:\s*var\(--surface-inverted\)/s);
+    expect(css).toMatch(/\.ticker \{[^}]*border-top:\s*1px solid var\(--color-hairline\)/s);
+    expect(css).not.toMatch(/\.ticker-label \{[^}]*text-transform:\s*uppercase/s);
     expect(css).toMatch(/\.ticker-label \{[^}]*color:\s*var\(--color-ash\)/s);
-    expect(css).toMatch(/\.ticker-value \{[^}]*color:\s*var\(--color-paper\)/s);
+    expect(css).toMatch(/\.ticker-label \{[^}]*font-weight:\s*var\(--font-weight-regular\)/s);
+    expect(css).toMatch(/\.ticker-value \{[^}]*color:\s*var\(--color-ink\)/s);
+    expect(css).toMatch(/\.ticker-value \{[^}]*font-size:\s*var\(--text-ui\)/s);
+    expect(css).toMatch(/\.ticker-value \{[^}]*font-weight:\s*var\(--font-weight-regular\)/s);
     expect(css).toMatch(/\.chip-processing \{[^}]*color:\s*var\(--color-ash\)/s);
     expect(css).toMatch(/\.chip-warning \{[^}]*color:\s*var\(--color-warning\)/s);
     expect(css).toMatch(/\.chip-success \{[^}]*color:\s*var\(--color-success\)/s);

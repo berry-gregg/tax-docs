@@ -45,7 +45,7 @@ A new route picks one recipe. Extend `pageHeader` / `tabs` / `toolbar` / `dataTa
 
 Buttons live in `design-system/css/base.css`: primary highlighter `0` radius `40px` (hover inverts to ink), secondary `1px --color-outline`, ghost, `32px` `.icon-btn`. Status is `--color-success` / `--color-warning` / `--color-ash` — never highlighter. Elevation is `1px --color-hairline`, not shadow.
 
-Pipeline state renders through `pipelineChip(status)`: `received` / `quality-review` / `classifying` / `extracting` are ash `.chip-processing`; `needs-review` / `unclassified` are `.chip-warning`; `trusted` is `.chip-success`; `rejected` / `failed` are `.chip-halted` (hairline fill, warning text). Extraction confidence uses `.confidence-high` / `-medium` / `-low` from `formatConfidence`. Shared furniture in `shell.css`: `.ticker` (inverted band, 10px uppercase ash labels over 14px paper values), `.modal`, `.side-panel`, `.dropzone`, `.page-skeleton`, `.load-error`.
+Pipeline state renders through `pipelineChip(status)`: `received` / `quality-review` / `classifying` / `extracting` are ash `.chip-processing`; `needs-review` / `unclassified` are `.chip-warning`; `trusted` is `.chip-success`; `rejected` / `failed` are `.chip-halted` (hairline fill, warning text). Extraction confidence uses `.confidence-high` / `-medium` / `-low` from `formatConfidence`. Shared furniture in `shell.css`: `.ticker` (full-width hairline band — `border-top` only, transparent background, sentence-case ash caption labels, ink `--text-ui` values, weight 400; **never** `--surface-inverted` — that token is marketing-only), `.modal`, `.side-panel`, `.dropzone`, `.page-skeleton`, `.load-error`.
 
 ## Anti-patterns
 
