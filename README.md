@@ -258,7 +258,7 @@ Tests run on `bun:test` and mock only at system boundaries. Persistence tests us
 **Engagements**
 
 - `GET /api/engagements` - list with client name and counts
-- `POST /api/engagements` - create, with optional checklist items
+- `POST /api/engagements` - create, with optional checklist items; a checklist opens the client conversation with the request as the first message
 - `GET /api/engagements/:id` - detail: client, items, documents, activity
 - `PATCH /api/engagements/:id` - update status
 - `POST /api/engagements/:id/request-items`
