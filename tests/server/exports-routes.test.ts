@@ -218,4 +218,31 @@ describe("export routes", () => {
     );
     expect(await payloadResponse.text()).toBe(buildBody.export.payloadJson);
   });
+
+  test("returns a newer rebuilt draft as the latest export after an older draft is confirmed", async () => {
+    const app = createApp();
+    await seedTrustedProfitLoss();
+
+    const firstBuildResponse = await app.request(`/api/engagements/${engagement.id}/export`, { method: "POST" });
+    const firstBuildBody = await firstBuildResponse.json();
+    const confirmResponse = await app.request(`/api/exports/${firstBuildBody.export.id}/confirm`, { method: "POST" });
+    const confirmBody = await confirmResponse.json();
+
+    expect(confirmResponse.status).toBe(200);
+    expect(confirmBody.export.status).toBe("sent");
+
+    const secondBuildResponse = await app.request(`/api/engagements/${engagement.id}/export`, { method: "POST" });
+    const secondBuildBody = await secondBuildResponse.json();
+    const latestResponse = await app.request(`/api/engagements/${engagement.id}/export`);
+    const latestBody = await latestResponse.json();
+
+    expect(secondBuildResponse.status).toBe(200);
+    expect(secondBuildBody.export.status).toBe("draft");
+    expect(secondBuildBody.export.id).not.toBe(confirmBody.export.id);
+    expect(latestResponse.status).toBe(200);
+    expect(latestBody.export).toMatchObject({
+      id: secondBuildBody.export.id,
+      status: "draft",
+    });
+  });
 });

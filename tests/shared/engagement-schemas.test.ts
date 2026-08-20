@@ -62,6 +62,7 @@ describe("engagement-side schemas", () => {
       id: "x1", engagementId: "e1", status: "draft",
       lines: [{ engineForm: "1120-S", lineId: "8", lineLabel: "Salaries and wages",
                 value: 512000, sourceRefs: [{ documentId: "d2", fieldKey: "salaries_wages" }] }],
+      createdAt: iso,
       payloadJson: "{}",
     });
     expect(ex.lines[0]?.sourceRefs[0]?.fieldKey).toBe("salaries_wages");

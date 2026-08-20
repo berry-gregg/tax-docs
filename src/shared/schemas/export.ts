@@ -21,6 +21,7 @@ export const exportSchema = z.object({
   engagementId: z.string().min(1),
   status: z.enum(["draft", "sent"]),
   lines: z.array(exportLineSchema),
+  createdAt: z.string().datetime(),
   confirmedAt: z.string().datetime().optional(),
   payloadJson: z.string(),
 });

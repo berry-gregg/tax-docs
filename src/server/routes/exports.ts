@@ -35,9 +35,15 @@ export async function getLatestExportForEngagement(engagementId: string): Promis
   const db = await connectDb();
   const doc = await engineExportsCollection(db).findOne(
     { engagementId },
-    { sort: { confirmedAt: -1, _id: -1 } },
+    { sort: { createdAt: -1, _id: -1 } },
   );
   return doc ? fromStored(exportSchema, doc) : null;
+}
+
+function nextIsoAfter(timestamp: string | undefined): string {
+  const nowMs = Date.now();
+  const latestMs = timestamp ? Date.parse(timestamp) : Number.NEGATIVE_INFINITY;
+  return new Date(Math.max(nowMs, latestMs + 1)).toISOString();
 }
 
 export async function buildDraftExportForEngagement(engagementId: string): Promise<BuildExportResult> {
@@ -74,11 +80,18 @@ export async function buildDraftExportForEngagement(engagementId: string): Promi
     engagementId: engagement.id,
     status: "draft",
   });
+  const latestExport = existingDraft
+    ? null
+    : await engineExportsCollection(db).findOne(
+        { engagementId: engagement.id },
+        { sort: { createdAt: -1, _id: -1 } },
+      );
   const exportRecord = exportSchema.parse({
     id: existingDraft?._id ?? randomUUID(),
     engagementId: engagement.id,
     status: "draft",
     lines,
+    createdAt: existingDraft?.createdAt ?? nextIsoAfter(latestExport?.createdAt),
     payloadJson,
   });
 
