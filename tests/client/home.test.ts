@@ -42,8 +42,34 @@ describe("home page", () => {
     const html = renderHome(data());
 
     expect(html).toContain("3 documents need review");
+    expect(html).toContain("7 extracted fields still need a person");
     expect(html).toContain("Good evening");
     expect(html).not.toContain("Welcome back");
+  });
+
+  test("headline and wash card use singular copy at one", () => {
+    const html = renderHome(
+      data({
+        metrics: metricsSchema.parse({ ...metrics, needsReviewCount: 1, fieldsAwaitingReview: 1 }),
+      }),
+    );
+
+    expect(html).toContain('<h1 class="page-title">1 document needs review</h1>');
+    expect(html).not.toContain("1 documents need review");
+    expect(html).toContain("1 extracted field still needs a person");
+    expect(html).not.toContain("1 extracted fields");
+  });
+
+  test("a queued document with no extracted fields uses honest wash copy", () => {
+    const html = renderHome(
+      data({
+        metrics: metricsSchema.parse({ ...metrics, needsReviewCount: 2, fieldsAwaitingReview: 0 }),
+      }),
+    );
+
+    expect(html).toContain("2 documents need review");
+    expect(html).toContain("No extracted fields are waiting");
+    expect(html).not.toContain("0 extracted fields");
   });
 
   test("recent document rows deep-link into the engagement review page", () => {
@@ -129,7 +155,8 @@ describe("home page", () => {
       }),
     );
 
-    expect(html).toContain("0 documents need review");
+    expect(html).toContain('<h1 class="page-title">Nothing is waiting on you</h1>');
+    expect(html).not.toContain("0 documents need review");
     expect(html).toContain("Nothing is waiting on you");
     expect(html).toContain("No documents yet");
   });

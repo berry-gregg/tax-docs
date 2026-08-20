@@ -60,7 +60,7 @@ function renderSidebar(route: Route, currentHref: string, inboxUnreadCount: numb
       </a>
       <button class="icon-btn" type="button" data-collapse-nav aria-expanded="true" aria-label="Collapse navigation">${icons.collapse}</button>
     </div>
-    <button class="nav-search" type="button" data-open-search>
+    <button class="nav-search" type="button" data-open-search aria-label="Search" title="Search">
       ${icons.search}
       <span>Search</span>
       <span class="nav-search-keys"><kbd>Ctrl</kbd><kbd>K</kbd></span>
@@ -88,7 +88,7 @@ function renderNavItem(
   const currentChild = matchedChild === -1 ? 0 : matchedChild;
 
   return `<div data-nav-group="${item.id}" class="${groupClass}">
-    <a class="nav-item" href="${item.href}" data-nav-link ${current ? 'aria-current="page"' : ""}>
+    <a class="nav-item" href="${item.href}" data-nav-link aria-label="${escapeHtml(item.label)}" title="${escapeHtml(item.label)}" ${current ? 'aria-current="page"' : ""}>
       <span class="nav-icon">${icons[item.icon]}</span>
       <span class="nav-label">${escapeHtml(item.label)}</span>
       ${item.badge === "inbox-unread" ? renderInboxBadge(inboxUnreadCount) : ""}
@@ -98,7 +98,7 @@ function renderNavItem(
         ? `<div class="nav-children">${children
             .map((child, index) => {
               const childClass = index === currentChild ? "nav-child is-current" : "nav-child";
-              return `<a data-nav-child="${child.id}" class="${childClass}" href="${child.href}" data-nav-link><span class="nav-icon-spacer" aria-hidden="true"></span><span class="nav-label">${escapeHtml(child.label)}</span></a>`;
+              return `<a data-nav-child="${child.id}" class="${childClass}" href="${child.href}" data-nav-link aria-label="${escapeHtml(child.label)}" title="${escapeHtml(child.label)}"><span class="nav-icon-spacer" aria-hidden="true"></span><span class="nav-label">${escapeHtml(child.label)}</span></a>`;
             })
             .join("")}</div>`
         : ""
@@ -159,7 +159,8 @@ export function pageHeader(title: string, count?: string, actions: PageAction[] 
       ${actions
         .map((action) => {
           const cls = action.kind === "primary" ? "btn-primary" : "btn-secondary";
-          return `<a class="${cls}" href="${action.href}" ${action.href.startsWith("/") ? "data-nav-link" : ""}>${escapeHtml(action.label)}</a>`;
+          const isAppRoute = action.href.startsWith("/") && !action.href.startsWith("/api/");
+          return `<a class="${cls}" href="${action.href}" ${isAppRoute ? "data-nav-link" : ""}>${escapeHtml(action.label)}</a>`;
         })
         .join("")}
     </div>

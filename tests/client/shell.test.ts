@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { greetingFor } from "../../src/client/app/greeting.ts";
 import { navItems } from "../../src/client/app/nav.ts";
-import { renderApp, renderLoadError, renderPageSkeleton } from "../../src/client/app/render.ts";
+import { pageHeader, renderApp, renderLoadError, renderPageSkeleton } from "../../src/client/app/render.ts";
 
 describe("home greeting", () => {
   test("uses time of day without a welcome-back line", () => {
@@ -120,6 +120,40 @@ describe("app shell chrome", () => {
     expect(html).toContain('viewBox="0 0 24 24"');
     expect(html).toContain("M19.4 15");
     expect(html).toContain('stroke-width="2"');
+  });
+
+  test("collapsed nav links keep an accessible name and tooltip from the item label", () => {
+    const home = renderApp({ pathname: "/", body: "" });
+    const documents = renderApp({ pathname: "/documents", body: "" });
+
+    for (const item of navItems) {
+      expect(home).toContain(`aria-label="${item.label}"`);
+      expect(home).toContain(`title="${item.label}"`);
+    }
+
+    expect(home).toMatch(
+      /<button class="nav-search"[^>]*aria-label="Search"[^>]*title="Search"/,
+    );
+    expect(documents).toMatch(
+      /<a data-nav-child="documents-all"[^>]*aria-label="All"[^>]*title="All"/,
+    );
+    expect(documents).toMatch(
+      /<a data-nav-child="documents-needs-review"[^>]*aria-label="Needs review"[^>]*title="Needs review"/,
+    );
+  });
+
+  test("pageHeader leaves /api/ action hrefs as normal downloads", () => {
+    const html = pageHeader("Export", undefined, [
+      { href: "/engagements/eng-1", label: "Back", kind: "secondary" },
+      { href: "/api/exports/exp-1/payload", label: "Download payload", kind: "secondary" },
+    ]);
+
+    const back = html.match(/<a[^>]*href="\/engagements\/eng-1"[^>]*>/)?.[0];
+    const download = html.match(/<a[^>]*href="\/api\/exports\/exp-1\/payload"[^>]*>/)?.[0];
+
+    expect(back).toContain("data-nav-link");
+    expect(download).toBeDefined();
+    expect(download).not.toContain("data-nav-link");
   });
 });
 

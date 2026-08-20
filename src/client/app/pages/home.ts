@@ -36,7 +36,7 @@ export function renderHome(data: HomeData): string {
   return `<div class="page-home">
     <div class="home-main">
       <p class="eyebrow">${escapeHtml(greetingFor(data.now))}</p>
-      <h1 class="page-title">${metrics.needsReviewCount} documents need review</h1>
+      <h1 class="page-title">${escapeHtml(reviewHeadline(metrics.needsReviewCount))}</h1>
       ${renderNextStep(metrics)}
       <section class="stack">
         <h2 class="section-title">Recent documents</h2>
@@ -68,9 +68,21 @@ function renderNextStep(metrics: Metrics): string {
   }
 
   return `<div class="wash-card">
-    <p class="wash-title">${metrics.fieldsAwaitingReview} extracted fields still need a person</p>
+    <p class="wash-title">${escapeHtml(fieldsWashTitle(metrics.fieldsAwaitingReview))}</p>
     <p class="muted">Confirm each field in review before anything is marked trusted or sent to a tax engine.</p>
   </div>`;
+}
+
+function reviewHeadline(count: number): string {
+  if (count === 0) return "Nothing is waiting on you";
+  if (count === 1) return "1 document needs review";
+  return `${count} documents need review`;
+}
+
+function fieldsWashTitle(count: number): string {
+  if (count === 0) return "No extracted fields are waiting";
+  if (count === 1) return "1 extracted field still needs a person";
+  return `${count} extracted fields still need a person`;
 }
 
 function renderRecentRow(now: Date): (row: DocumentListRow) => string {
