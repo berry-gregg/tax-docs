@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { taxDocumentSchema } from "../../shared/schemas/document.ts";
-import { metricsSchema } from "../../shared/schemas/metrics.ts";
+import { metricsSchema } from "../../shared/schemas/api.ts";
 import { connectDb } from "../db/client.ts";
 import {
   engagementsCollection,

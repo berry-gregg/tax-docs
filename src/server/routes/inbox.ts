@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { activitySchema } from "../../shared/schemas/activity.ts";
-import { clientSchema } from "../../shared/schemas/client.ts";
-import { engagementSchema } from "../../shared/schemas/engagement.ts";
 import {
   inboxEntrySchema,
+  inboxListResponseSchema,
   inboxUnreadCountSchema,
   type InboxEntry,
-} from "../../shared/schemas/inbox.ts";
+} from "../../shared/schemas/api.ts";
+import { clientSchema } from "../../shared/schemas/client.ts";
+import { engagementSchema } from "../../shared/schemas/engagement.ts";
 import { connectDb } from "../db/client.ts";
 import {
   activitiesCollection,
@@ -75,7 +76,7 @@ inboxRoutes.get("/", async (c) => {
     });
   });
 
-  return c.json({ entries });
+  return c.json(inboxListResponseSchema.parse({ entries }));
 });
 
 inboxRoutes.post("/:id/read", async (c) => {

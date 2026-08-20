@@ -1,8 +1,9 @@
 import { Hono } from "hono";
-import { z } from "zod";
+import { FIRM_NAME } from "../../shared/constants.ts";
+import { portalStateSchema, type PortalStatus } from "../../shared/schemas/api.ts";
 import { clientSchema } from "../../shared/schemas/client.ts";
 import { taxDocumentSchema, type TaxDocument } from "../../shared/schemas/document.ts";
-import { engagementSchema, filingTypeSchema } from "../../shared/schemas/engagement.ts";
+import { engagementSchema } from "../../shared/schemas/engagement.ts";
 import { requestItemSchema, type RequestItem } from "../../shared/schemas/request.ts";
 import { connectDb } from "../db/client.ts";
 import {
@@ -14,26 +15,6 @@ import {
 } from "../db/collections.ts";
 import type { PipelineRunner } from "../pipeline/runner.ts";
 import { ingestUploadedFile } from "./documents.ts";
-
-export const FIRM_NAME = "Tax Docs LLP";
-
-const portalStatusSchema = z.enum(["waiting", "processing", "received", "needs-attention"]);
-
-export const portalStateSchema = z.object({
-  firmName: z.literal(FIRM_NAME),
-  clientName: z.string().min(1),
-  taxYear: z.number().int(),
-  filingType: filingTypeSchema,
-  items: z.array(
-    z.object({
-      id: z.string().min(1),
-      title: z.string().min(1),
-      description: z.string().min(1),
-      required: z.boolean(),
-      portalStatus: portalStatusSchema,
-    }),
-  ),
-});
 
 const PROCESSING_STATUSES = new Set<TaxDocument["pipelineStatus"]>([
   "received",
@@ -47,7 +28,7 @@ const RECEIVED_STATUSES = new Set<TaxDocument["pipelineStatus"]>([
   "unclassified",
 ]);
 
-function portalStatusFor(item: RequestItem, documents: TaxDocument[]): z.infer<typeof portalStatusSchema> {
+function portalStatusFor(item: RequestItem, documents: TaxDocument[]): PortalStatus {
   const matched = documents.filter(
     (document) => item.matchedDocumentIds.includes(document.id) || document.requestItemId === item.id,
   );

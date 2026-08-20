@@ -8,29 +8,45 @@ alwaysApply: false
 
 The tax-docs client is a **clone of Ramp's product app** (`try.ramp.com`), relabeled for CPA document work. Tokens: `.cursor/rules/design-system.mdc`. Interaction/voice: `.cursor/rules/web-ui.mdc`. How the pieces compose: `.cursor/skills/building-product-ui/SKILL.md`.
 
-One layout tree. Markup from `src/client/app/render.ts`. Chrome CSS in `src/client/styles/shell.css`. Do not add a second shell, a React tree, or a page that skips the recipes below.
+One layout tree. Shell markup and shared helpers live in `src/client/app/render.ts`; chrome CSS in `src/client/styles/shell.css`. Do not add a second shell, a React tree, or a page that skips the recipes below.
+
+## Page framework
+
+`src/client/main.ts` runs one loop: `parseRoute(pathname)` → `moduleFor(route)` → `load()` (skeleton on screen) → `render()` into `.workspace` → `bind()` → `startPolling` when the module sets `pollMs`. Polling stops on navigation, and a stale load never paints over a newer one.
+
+- Routes: `src/client/app/router.ts` returns a `Route` union. Path params only — `?tab=`, `?new=1` are view state a page reads from `window.location.search`.
+- Pages: `src/client/app/pages/*.ts` each export a `PageModule<T>` (`load` / `render` / optional `bind` / optional `pollMs`) registered in `pages/registry.ts`. `moduleFor` is exhaustive: every route resolves, so navigation can never throw.
+- Data: `src/client/app/api.ts` (`getJson`, `sendJson`, `uploadFile`, `startPolling`) is the only fetch seam. Responses parse through `src/shared/schemas/api.ts` — the same schemas the server builds its payloads with.
+- Failures: `ApiError.message` is the server's own `{ error }` string and pages render it verbatim next to a retry control. A generic "something went wrong" is a regression.
+- The `portal` route renders chromeless (`.app-chromeless`) — no sidebar, no palette, no nav links.
+
+No fixture module. If a page needs data, it fetches it.
 
 ## Chrome
 
 `.app` is `256px` bone sidebar + white workspace. Optional `298px` right rail on Home only. Settings live in `.sidebar-foot`. Search is `Ctrl+K` → Command K (bone 80% wash, 640×432 white panel, grouped list, Feather search on the right). `.palette[hidden]` must stay `display: none`. Collapse is `.app.is-collapsed` at `--app-sidebar-collapsed-width` (60px). Collapsed header is one slot: the GB mark grows to `--icon-size-brand-collapsed` (28px) and is centered (`justify-content: center` on `.sidebar-head` — the expanded `space-between` must not leak through). The expand control sits absolutely on top of it at `opacity: 0` until `.sidebar-head:hover` or `:focus-within`. Do not stack logo and toggle as two visible rows, and do not leave the expand button `space-between` next to the logo in that rail. Collapsed nav/search/expand icons use `--icon-size-nav-collapsed` 16px; expanded stays `--icon-size-nav` 12px. Expanded brand stays `--icon-size-brand` 20px.
 
-Idle nav is ash on bone. An expanded group is a `4px` hairline wash (`--surface-nav-active`) wrapping parent + children. The current child punches out as a bone chip. Nested rows keep a `12px` `.nav-icon-spacer` so labels line up. Children render only while the group is current. Badges are highlighter pills. Icons are Feather at `--icon-size-nav` 12px expanded (`src/client/app/icons.ts`) — never hand-drawn SVGs. The sidebar brand next to “Tax Docs” is `design-system/gb-favicon.png`, same file as the tab favicon — not a clip-path square.
+Idle nav is ash on bone. An expanded group is a `4px` hairline wash (`--surface-nav-active`) wrapping parent + children. The current child punches out as a bone chip — matched by comparing the child `href` to `pathname + search`, so `?tab=needs-review` moves the punch-out. Nested rows keep a `12px` `.nav-icon-spacer` so labels line up. Children render only while the group is current. Icons are Feather at `--icon-size-nav` 12px expanded (`src/client/app/icons.ts`) — never hand-drawn SVGs. The sidebar brand next to “Tax Docs” is `design-system/gb-favicon.png`, same file as the tab favicon — not a clip-path square.
+
+Nav is Inbox, Home, Documents (children All / Needs review), Engagements, Clients, with Settings in the footer. Engagement detail, review, and export all keep the Engagements group current (`navIdForRoute`). The only badge is the Inbox pill, whose value is the live `/api/inbox/unread-count` written into `[data-inbox-badge]` — never a hardcoded number, and hidden at zero.
 
 ## Page recipes
 
 | Recipe | Use for | Stack |
 |--------|---------|-------|
-| **Home** | `/` | Eyebrow greeting, 28px queue title, wash card, `.row-list`, rail of block CTAs + hairline widgets |
-| **List** | `/documents`, `/review`, `/clients` | `pageHeader` (title + ash count + secondary + one primary) → underline `.tabs` → `.toolbar` → `.data-table` with dual-line `.entity` cells |
+| **Home** | `/` | Eyebrow greeting, 28px queue title, wash card, `.row-list`, `.ticker` band, rail of block CTAs + hairline widgets |
+| **List** | `/documents`, `/engagements`, `/clients` | `pageHeader` (title + ash count + secondary + one primary) → underline `.tabs` → `.toolbar` → `.data-table` with dual-line `.entity` cells |
 | **Inbox** | `/inbox` | `pageHeader` + `.row-list` (no tabs/table) |
 | **Settings** | `/settings` | `pageHeader` → tabs → `.definition-grid` (dt ash / dd ink) inside `.settings-block` |
 
-A new route picks one recipe. Extend `pageHeader` / `tabs` / `toolbar` / `dataTable` / `entityCell` / `renderDocumentRow` — do not fork a lookalike.
+A new route picks one recipe. Extend `pageHeader` / `tabs` / `toolbar` / `dataTable` / `entityCell` / `listRow` / `railWidget` / `pipelineChip` / `emptyState` — do not fork a lookalike.
 
 ## Primitives
 
 Buttons live in `design-system/css/base.css`: primary highlighter `0` radius `40px` (hover inverts to ink), secondary `1px --color-outline`, ghost, `32px` `.icon-btn`. Status is `--color-success` / `--color-warning` / `--color-ash` — never highlighter. Elevation is `1px --color-hairline`, not shadow.
 
+Pipeline state renders through `pipelineChip(status)`: `received` / `quality-review` / `classifying` / `extracting` are ash `.chip-processing`; `needs-review` / `unclassified` are `.chip-warning`; `trusted` is `.chip-success`; `rejected` / `failed` are `.chip-halted` (hairline fill, warning text). Extraction confidence uses `.confidence-high` / `-medium` / `-low` from `formatConfidence`. Shared furniture in `shell.css`: `.ticker` (inverted band, 10px uppercase ash labels over 14px paper values), `.modal`, `.side-panel`, `.dropzone`, `.page-skeleton`, `.load-error`.
+
 ## Anti-patterns
 
-A second sidebar. Marketing-site tokens (ink `#0c0a08`, `6px` buttons, bone canvas). Nav children without the group wash. Current child that stays hairline instead of punching out to bone. Lucide/Heroicons/inline path glyphs. Two primary CTAs. Drop shadows except `--shadow-palette` on Command K. `font-weight: 600`. A page that invents its own header/table instead of the helpers in `render.ts`.
+A second sidebar. Marketing-site tokens (ink `#0c0a08`, `6px` buttons, bone canvas). Nav children without the group wash. Current child that stays hairline instead of punching out to bone. Lucide/Heroicons/inline path glyphs. Two primary CTAs. Drop shadows except `--shadow-palette` on Command K. `font-weight: 600`. A page that invents its own header/table instead of the helpers in `render.ts`. Hardcoded counts, statuses, or fixture rows in markup. A page module that fetches outside `api.ts` or swallows an `ApiError` message. Highlighter on a status chip.

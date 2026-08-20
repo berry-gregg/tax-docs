@@ -2,6 +2,11 @@ import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { activitySchema, type Activity } from "../../shared/schemas/activity.ts";
+import {
+  engagementDetailSchema,
+  engagementListResponseSchema,
+  engagementListRowSchema,
+} from "../../shared/schemas/api.ts";
 import { clientSchema } from "../../shared/schemas/client.ts";
 import { taxDocumentSchema } from "../../shared/schemas/document.ts";
 import {
@@ -90,7 +95,7 @@ engagementRoutes.get("/", async (c) => {
       ]);
       const client = clientDoc ? fromStored(clientSchema, clientDoc) : null;
 
-      return {
+      return engagementListRowSchema.parse({
         ...engagement,
         clientName: client?.legalName ?? "Unknown client",
         docCounts: {
@@ -98,11 +103,11 @@ engagementRoutes.get("/", async (c) => {
           needsReview: needsReviewDocuments,
         },
         openItems,
-      };
+      });
     }),
   );
 
-  return c.json({ engagements });
+  return c.json(engagementListResponseSchema.parse({ engagements }));
 });
 
 engagementRoutes.post("/", async (c) => {
@@ -237,7 +242,9 @@ engagementRoutes.get("/:id", async (c) => {
   const documents = documentDocs.map((doc) => fromStored(taxDocumentSchema, doc));
   const activity = activityDocs.map((doc) => fromStored(activitySchema, doc));
 
-  return c.json({ engagement, client, requestItems, documents, activity });
+  return c.json(
+    engagementDetailSchema.parse({ engagement, client, requestItems, documents, activity }),
+  );
 });
 
 engagementRoutes.patch("/:id", async (c) => {

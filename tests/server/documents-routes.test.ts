@@ -12,6 +12,7 @@ import {
   toStored,
 } from "../../src/server/db/collections.ts";
 import { readStoredFile } from "../../src/server/files/storage.ts";
+import { documentListResponseSchema } from "../../src/shared/schemas/api.ts";
 import type { Client } from "../../src/shared/schemas/client.ts";
 import type { TaxDocument } from "../../src/shared/schemas/document.ts";
 import type { DocumentType } from "../../src/shared/schemas/document-type.ts";
@@ -276,6 +277,7 @@ describe("document routes", () => {
     const needsReview = await app.request("/api/documents?group=needs-review");
     const needsReviewBody = await needsReview.json() as { documents: Array<{ id: string }> };
     expect(needsReview.status).toBe(200);
+    expect(() => documentListResponseSchema.parse(needsReviewBody)).not.toThrow();
     expect(needsReviewBody.documents.map((row) => row.id).sort()).toEqual([
       "doc-needs-review",
       "doc-unclassified",

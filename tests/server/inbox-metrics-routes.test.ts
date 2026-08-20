@@ -11,6 +11,7 @@ import {
   toStored,
 } from "../../src/server/db/collections.ts";
 import { activitySchema } from "../../src/shared/schemas/activity.ts";
+import { inboxEntrySchema, metricsSchema } from "../../src/shared/schemas/api.ts";
 import type { Client } from "../../src/shared/schemas/client.ts";
 import {
   extractionFieldSchema,
@@ -18,8 +19,6 @@ import {
   type TaxDocument,
 } from "../../src/shared/schemas/document.ts";
 import type { Engagement } from "../../src/shared/schemas/engagement.ts";
-import { inboxEntrySchema } from "../../src/shared/schemas/inbox.ts";
-import { metricsSchema } from "../../src/shared/schemas/metrics.ts";
 import { requestItemSchema, type RequestItem } from "../../src/shared/schemas/request.ts";
 
 const iso = "2026-01-01T00:00:00.000Z";

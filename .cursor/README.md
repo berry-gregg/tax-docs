@@ -28,7 +28,7 @@ Cursor loads `.mdc` files using `globs:` and `alwaysApply:` (not Claude's `paths
 | `security.mdc` | always | Secrets, prompt fences, 404-not-403, HITL writes |
 | `testing.mdc` | tests + src | `bun:test`, real Mongo, no internal mocks, TDD |
 | `web-ui.mdc` | HTML/CSS/TS | CPA review console: states, CTAs, voice, a11y |
-| `product-shell.mdc` | `src/client/**`, `tests/client/**` | Ramp chrome composition: layout, nav nesting, page recipes |
+| `product-shell.mdc` | `src/client/**`, `tests/client/**` | Ramp chrome composition: layout, nav nesting, page recipes, API-driven page registry |
 | `design-system.mdc` | design-system + styles | Ramp tokens are the visual SSOT |
 | `agentic-systems.mdc` | agent/LLM/extract/review paths | Honest failure, evidence, autonomy vs confirm |
 

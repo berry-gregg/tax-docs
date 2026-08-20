@@ -1,9 +1,8 @@
 import { navItems } from "./nav.ts";
-import { clients, documents } from "./fixtures.ts";
 
 export type PaletteGroupId = "Actions" | "Pages" | "Documents" | "Clients";
 
-export type PaletteIcon = "inbox" | "home" | "documents" | "review" | "clients" | "settings" | "plus";
+export type PaletteIcon = "inbox" | "home" | "documents" | "engagements" | "clients" | "settings" | "plus";
 
 export type PaletteItem = {
   id: string;
@@ -18,26 +17,40 @@ export type PaletteGroup = {
   items: PaletteItem[];
 };
 
+/** Entities the shell has already fetched. The palette never fetches on its own keystroke. */
+export type PaletteEntity = {
+  id: string;
+  label: string;
+  href: string;
+};
+
+export type PaletteIndex = {
+  documents: PaletteEntity[];
+  clients: PaletteEntity[];
+};
+
+export const emptyPaletteIndex: PaletteIndex = { documents: [], clients: [] };
+
 const actions: PaletteItem[] = [
   {
-    id: "action-request",
+    id: "action-new-engagement",
     group: "Actions",
-    label: "Documents / Request documents",
-    href: "/documents",
+    label: "Engagements / New engagement",
+    href: "/engagements?new=1",
+    icon: "engagements",
+  },
+  {
+    id: "action-review-queue",
+    group: "Actions",
+    label: "Documents / Open review queue",
+    href: "/documents?tab=needs-review",
     icon: "documents",
   },
   {
-    id: "action-review",
+    id: "action-new-client",
     group: "Actions",
-    label: "Review / Open review",
-    href: "/review",
-    icon: "review",
-  },
-  {
-    id: "action-invite",
-    group: "Actions",
-    label: "Clients / Invite client",
-    href: "/clients",
+    label: "Clients / New client",
+    href: "/clients?new=1",
     icon: "clients",
   },
 ];
@@ -52,23 +65,17 @@ function pages(): PaletteItem[] {
   }));
 }
 
-function documentItems(): PaletteItem[] {
-  return documents.map((doc) => ({
-    id: `doc-${doc.id}`,
-    group: "Documents",
-    label: `${doc.type} · ${doc.client}`,
-    href: "/review",
-    icon: "documents",
-  }));
-}
-
-function clientItems(): PaletteItem[] {
-  return clients.map((client) => ({
-    id: `client-${client.id}`,
-    group: "Clients",
-    label: client.name,
-    href: "/clients",
-    icon: "clients",
+function entityItems(
+  group: Extract<PaletteGroupId, "Documents" | "Clients">,
+  entities: PaletteEntity[],
+  icon: PaletteIcon,
+): PaletteItem[] {
+  return entities.map((entity) => ({
+    id: `${group.toLowerCase()}-${entity.id}`,
+    group,
+    label: entity.label,
+    href: entity.href,
+    icon,
   }));
 }
 
@@ -90,7 +97,7 @@ function group(id: PaletteGroupId, items: PaletteItem[], query: string): Palette
   return { id, items: filtered };
 }
 
-export function searchPalette(query: string): PaletteGroup[] {
+export function searchPalette(query: string, index: PaletteIndex = emptyPaletteIndex): PaletteGroup[] {
   const trimmed = query.trim();
   const catalog: PaletteGroup[] = [];
 
@@ -107,8 +114,12 @@ export function searchPalette(query: string): PaletteGroup[] {
     return catalog;
   }
 
-  const documentGroup = group("Documents", documentItems(), trimmed);
-  const clientGroup = group("Clients", clientItems(), trimmed);
+  const documentGroup = group(
+    "Documents",
+    entityItems("Documents", index.documents, "documents"),
+    trimmed,
+  );
+  const clientGroup = group("Clients", entityItems("Clients", index.clients, "clients"), trimmed);
   if (documentGroup) {
     catalog.push(documentGroup);
   }

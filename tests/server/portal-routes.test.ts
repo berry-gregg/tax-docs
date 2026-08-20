@@ -11,6 +11,7 @@ import {
   taxDocumentsCollection,
   toStored,
 } from "../../src/server/db/collections.ts";
+import { portalStateSchema } from "../../src/shared/schemas/api.ts";
 import { requestItemSchema, type RequestItem } from "../../src/shared/schemas/request.ts";
 import type { Client } from "../../src/shared/schemas/client.ts";
 import type { TaxDocument } from "../../src/shared/schemas/document.ts";
@@ -155,6 +156,7 @@ describe("portal routes", () => {
     };
 
     expect(response.status).toBe(200);
+    expect(() => portalStateSchema.parse(body)).not.toThrow();
     expect(body).toMatchObject({
       firmName: "Tax Docs LLP",
       clientName: client.legalName,

@@ -9,16 +9,19 @@
   </head>
   <body>
     <div id="app">
+      <!-- Pre-hydration chrome only. Every number on screen comes from /api, never from markup. -->
       <div class="app" data-app-shell="true">
         <aside class="sidebar">
           <div class="sidebar-head">
             <a class="brand" href="/">Tax Docs</a>
           </div>
-          <p class="muted">Editorial finance desk for client documents.</p>
         </aside>
         <div class="workspace">
-          <p class="eyebrow">Tax Docs</p>
-          <h1 class="page-title">3 documents need review</h1>
+          <div class="page-skeleton" aria-busy="true">
+            <span class="skeleton-bar skeleton-bar-title"></span>
+            <span class="skeleton-bar skeleton-bar-wide"></span>
+            <span class="skeleton-bar skeleton-bar-row"></span>
+          </div>
         </div>
       </div>
     </div>

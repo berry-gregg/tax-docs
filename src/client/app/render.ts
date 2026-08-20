@@ -1,52 +1,56 @@
-import { greetingFor } from "./greeting.ts";
 import { brandMarkSrc } from "./brand.ts";
-import { flattenPalette, searchPalette, type PaletteGroup } from "./command-palette.ts";
+import {
+  emptyPaletteIndex,
+  flattenPalette,
+  searchPalette,
+  type PaletteGroup,
+  type PaletteIndex,
+} from "./command-palette.ts";
 import { icons, paletteIcons } from "./icons.ts";
-import { navItems, type NavItem } from "./nav.ts";
-import { pageForPath, type PageId } from "./router.ts";
-import { clients, documents, inboxItems, reviewQueue } from "./fixtures.ts";
-import type { DocumentRow } from "../../shared/schemas/shell.ts";
+import { navIdForRoute, navItems, type NavItem } from "./nav.ts";
+import { parseRoute, type Route } from "./router.ts";
+import type { TaxDocument } from "../../shared/schemas/document.ts";
 
 export type RenderInput = {
   pathname: string;
-  now?: Date;
+  /** Raw `window.location.search`, used to mark the current nav child (`?tab=needs-review`). */
+  search?: string;
+  /** Markup produced by the page module the registry resolved for this route. */
+  body: string;
+  inboxUnreadCount?: number;
+  paletteIndex?: PaletteIndex;
 };
 
 export function renderApp(input: RenderInput): string {
-  const page = pageForPath(input.pathname);
-  const now = input.now ?? new Date();
+  const route = parseRoute(input.pathname);
+
+  if (route.page === "portal") {
+    return renderChromeless(input.body);
+  }
 
   return `<div class="app" data-app-shell="true">
-    ${renderSidebar(page)}
+    ${renderSidebar(route, `${input.pathname}${input.search ?? ""}`, input.inboxUnreadCount ?? 0)}
     <div class="workspace">
-      ${renderPage(page, now)}
+      ${input.body}
     </div>
-    ${renderCommandPalette()}
+    ${renderCommandPalette(input.paletteIndex ?? emptyPaletteIndex)}
   </div>`;
 }
 
-function renderPage(page: PageId | "not-found", now: Date): string {
-  switch (page) {
-    case "home":
-      return renderHome(now);
-    case "inbox":
-      return renderInbox();
-    case "documents":
-      return renderDocuments();
-    case "review":
-      return renderReview();
-    case "clients":
-      return renderClients();
-    case "settings":
-      return renderSettings();
-    case "not-found":
-      return renderNotFound();
-  }
+/** The client portal is not part of the firm's workspace: no sidebar, no palette, no nav. */
+function renderChromeless(body: string): string {
+  return `<div class="app app-chromeless" data-app-shell="portal">
+    <div class="workspace workspace-portal">
+      ${body}
+    </div>
+  </div>`;
 }
 
-function renderSidebar(page: PageId | "not-found"): string {
+function renderSidebar(route: Route, currentHref: string, inboxUnreadCount: number): string {
+  const navId = navIdForRoute(route);
   const main = navItems.filter((item) => item.section === "main");
   const footer = navItems.filter((item) => item.section === "footer");
+  const renderItem = (item: NavItem) => renderNavItem(item, navId, currentHref, inboxUnreadCount);
 
   return `<aside class="sidebar">
     <div class="sidebar-head">
@@ -62,30 +66,38 @@ function renderSidebar(page: PageId | "not-found"): string {
       <span class="nav-search-keys"><kbd>Ctrl</kbd><kbd>K</kbd></span>
     </button>
     <nav class="nav" aria-label="Product">
-      ${main.map((item) => renderNavItem(item, page)).join("")}
+      ${main.map(renderItem).join("")}
     </nav>
     <div class="sidebar-foot">
-      ${footer.map((item) => renderNavItem(item, page)).join("")}
+      ${footer.map(renderItem).join("")}
     </div>
   </aside>`;
 }
 
-function renderNavItem(item: NavItem, page: PageId | "not-found"): string {
-  const current = item.id === page;
+function renderNavItem(
+  item: NavItem,
+  navId: string | null,
+  currentHref: string,
+  inboxUnreadCount: number,
+): string {
+  const current = item.id === navId;
   const expanded = Boolean(item.children) && current;
   const groupClass = current ? "nav-group is-active" : "nav-group";
+  const children = item.children ?? [];
+  const matchedChild = children.findIndex((child) => child.href === currentHref);
+  const currentChild = matchedChild === -1 ? 0 : matchedChild;
 
   return `<div data-nav-group="${item.id}" class="${groupClass}">
     <a class="nav-item" href="${item.href}" data-nav-link ${current ? 'aria-current="page"' : ""}>
       <span class="nav-icon">${icons[item.icon]}</span>
       <span class="nav-label">${escapeHtml(item.label)}</span>
-      ${item.badge ? `<span class="badge">${item.badge}</span>` : ""}
+      ${item.badge === "inbox-unread" ? renderInboxBadge(inboxUnreadCount) : ""}
     </a>
     ${
-      expanded && item.children
-        ? `<div class="nav-children">${item.children
+      expanded
+        ? `<div class="nav-children">${children
             .map((child, index) => {
-              const childClass = index === 0 ? "nav-child is-current" : "nav-child";
+              const childClass = index === currentChild ? "nav-child is-current" : "nav-child";
               return `<a data-nav-child="${child.id}" class="${childClass}" href="${child.href}" data-nav-link><span class="nav-icon-spacer" aria-hidden="true"></span><span class="nav-label">${escapeHtml(child.label)}</span></a>`;
             })
             .join("")}</div>`
@@ -94,179 +106,50 @@ function renderNavItem(item: NavItem, page: PageId | "not-found"): string {
   </div>`;
 }
 
-function renderHome(now: Date): string {
-  const greeting = greetingFor(now);
-  const recent = documents;
+function renderInboxBadge(count: number): string {
+  return count > 0
+    ? `<span class="badge" data-inbox-badge>${count}</span>`
+    : `<span class="badge" data-inbox-badge hidden></span>`;
+}
 
-  return `<div class="page-home">
-    <div class="home-main">
-      <p class="eyebrow">${escapeHtml(greeting)}</p>
-      <h1 class="page-title">3 documents need review</h1>
-      <div class="wash-card">
-        <p class="wash-title">W-2, 1099-NEC, and K-1 packages are waiting</p>
-        <p class="muted">Open review to confirm extracted fields before anything is marked trusted.</p>
-      </div>
-      <section class="stack">
-        <h2 class="section-title">Recent documents</h2>
-        <div class="row-list">
-          ${recent.map((doc) => renderDocumentRow(doc)).join("")}
-        </div>
-        <a class="text-link" href="/documents" data-nav-link>View all documents${icons.arrow}</a>
-      </section>
-    </div>
-    <aside class="rail">
-      <a class="btn-primary btn-block" href="/documents" data-nav-link>Request documents</a>
-      <button class="btn-secondary btn-block" type="button">Upload</button>
-      <a class="btn-secondary btn-block" href="/review" data-nav-link>Open review</a>
-      ${railWidget("Active clients", "3 engaged this week", "/clients")}
-      ${railWidget("Review queue", "3 awaiting confirmation", "/review")}
-      ${railWidget("Requests", "1 outstanding request", "/inbox")}
-    </aside>
+/**
+ * The loading state is furniture, not the word "loading" — the shell is already on screen and the
+ * skeleton keeps the layout from jumping when real rows land.
+ */
+export function renderPageSkeleton(): string {
+  return `<div class="page-skeleton" data-page-loading aria-busy="true">
+    <span class="skeleton-bar skeleton-bar-title"></span>
+    <span class="skeleton-bar skeleton-bar-wide"></span>
+    <span class="skeleton-bar skeleton-bar-row"></span>
+    <span class="skeleton-bar skeleton-bar-row"></span>
+    <span class="skeleton-bar skeleton-bar-row"></span>
   </div>`;
 }
 
-function renderDocumentRow(doc: DocumentRow): string {
-  return `<a class="list-row" href="/review" data-nav-link>
-    <span class="avatar">${escapeHtml(doc.initials)}</span>
-    <span class="list-row-body">
-      <span class="list-row-title">${escapeHtml(doc.type)} · ${escapeHtml(doc.client)}</span>
-      <span class="muted">${escapeHtml(doc.date)} · ${escapeHtml(doc.name)}</span>
-    </span>
-    <span class="status status-${doc.status}">${escapeHtml(doc.statusLabel)}</span>
-  </a>`;
+/** The real cause, verbatim. A generic apology would hide the only useful information. */
+export function renderLoadError(message: string): string {
+  return `<div class="load-error" data-load-error>
+    <h1 class="page-title">This page could not load</h1>
+    <p class="load-error-message">${escapeHtml(message)}</p>
+    <button class="btn-secondary" type="button" data-retry>Try again</button>
+  </div>`;
 }
 
-function railWidget(title: string, detail: string, href: string): string {
-  return `<a class="rail-widget" href="${href}" data-nav-link>
-    <span class="section-title">${escapeHtml(title)}</span>
-    <span class="muted">${escapeHtml(detail)}</span>
-  </a>`;
-}
-
-function renderInbox(): string {
-  return `${pageHeader("Inbox", "3", [{ href: "/documents", label: "Request documents", kind: "primary" }])}
-    <div class="row-list">
-      ${inboxItems
-        .map(
-          (item) => `<a class="list-row" href="/review" data-nav-link>
-            <span class="list-row-body">
-              <span class="list-row-title">${escapeHtml(item.title)}</span>
-              <span class="muted">${escapeHtml(item.detail)} · ${escapeHtml(item.when)}</span>
-            </span>
-          </a>`,
-        )
-        .join("")}
-    </div>`;
-}
-
-function renderDocuments(): string {
-  return `${pageHeader("Documents", String(documents.length), [
-      { href: "#", label: "Reminders 1", kind: "secondary" },
-      { href: "/documents", label: "Request documents", kind: "primary" },
-    ])}
-    ${tabs([
-      { label: "All", count: documents.length, current: true },
-      { label: "Needs review", count: 3, current: false },
-      { label: "Trusted", count: 1, current: false },
-    ])}
-    ${toolbar("Search documents…")}
-    ${dataTable(
-      ["Document", "Date", "Client", "Type", "Status"],
-      documents.map(
-        (doc) => `<tr>
-          <td>${entityCell(doc.initials, `${doc.type} · ${doc.client}`, doc.name)}</td>
-          <td>${escapeHtml(doc.date)}</td>
-          <td>${escapeHtml(doc.client)}<div class="muted">${escapeHtml(doc.clientMeta)}</div></td>
-          <td>${escapeHtml(doc.type)}</td>
-          <td><span class="status status-${doc.status}">${escapeHtml(doc.statusLabel)}</span></td>
-        </tr>`,
-      ),
-      "1–4 of 4 documents",
-    )}`;
-}
-
-function renderReview(): string {
-  return `${pageHeader("Review", String(reviewQueue.length), [
-      { href: "#", label: "Settings", kind: "secondary" },
-      { href: "/review", label: "Export selected", kind: "primary" },
-    ])}
-    ${tabs([
-      { label: "Needs review", count: 1, current: true },
-      { label: "Ready to export", count: 1, current: false },
-      { label: "Waiting for client", count: 1, current: false },
-    ])}
-    ${toolbar("Search the queue…")}
-    ${dataTable(
-      ["Document", "Date", "Client", "Category", "Extracted", "Queue"],
-      reviewQueue.map(
-        (row) => `<tr>
-          <td>${entityCell(row.type.slice(0, 2), row.name, row.type)}</td>
-          <td>${escapeHtml(row.date)}</td>
-          <td>${escapeHtml(row.client)}<div class="muted">${escapeHtml(row.clientMeta)}</div></td>
-          <td>${escapeHtml(row.category)}</td>
-          <td>${escapeHtml(row.amountLabel)}</td>
-          <td><span class="status status-${row.queue}">${escapeHtml(row.queueLabel)}</span></td>
-        </tr>`,
-      ),
-      "1–3 of 3 documents",
-    )}`;
-}
-
-function renderClients(): string {
-  return `${pageHeader("Clients", String(clients.length), [
-      { href: "#", label: "Team updates", kind: "secondary" },
-      { href: "/clients", label: "Invite client", kind: "primary" },
-    ])}
-    ${tabs([
-      { label: "All", count: clients.length, current: true },
-      { label: "Entities", count: clients.length, current: false },
-    ])}
-    ${toolbar("Filter by…")}
-    ${dataTable(
-      ["Name", "Role", "Location", "Reviewer"],
-      clients.map(
-        (row) => `<tr>
-          <td>${entityCell(row.initials, row.name, row.email)}</td>
-          <td>${escapeHtml(row.role)}</td>
-          <td>${escapeHtml(row.location)}</td>
-          <td>${escapeHtml(row.reviewer)}</td>
-        </tr>`,
-      ),
-      "1–3 of 3 clients",
-    )}`;
-}
-
-function renderSettings(): string {
-  return `${pageHeader("Company settings")}
-    ${tabs([
-      { label: "Company profile", current: true },
-      { label: "Security", current: false },
-    ])}
-    <section class="settings-block">
-      <h2 class="section-title">Company profile</h2>
-      <dl class="definition-grid">
-        <div><dt>Business legal name</dt><dd>Tax Docs LLP</dd></div>
-        <div><dt>Workspace</dt><dd>Local development</dd></div>
-        <div><dt>API</dt><dd data-api-status data-state="loading">Checking API</dd></div>
-        <div><dt>Database</dt><dd data-db-status>Unknown</dd></div>
-      </dl>
-      <button class="btn-secondary" type="button">Edit company profile</button>
-    </section>`;
-}
-
-function renderNotFound(): string {
+export function renderNotFound(): string {
   return `<div class="empty-page">
     <h1 class="page-title">Page not found</h1>
-    <p class="muted">That route is not part of the shell yet.</p>
+    <p class="muted">That route is not part of the product yet.</p>
     <a class="text-link" href="/" data-nav-link>Back to home${icons.arrow}</a>
   </div>`;
 }
 
-function pageHeader(
-  title: string,
-  count?: string,
-  actions: { href: string; label: string; kind: "primary" | "secondary" }[] = [],
-): string {
+export type PageAction = {
+  href: string;
+  label: string;
+  kind: "primary" | "secondary";
+};
+
+export function pageHeader(title: string, count?: string, actions: PageAction[] = []): string {
   return `<header class="page-header">
     <div>
       <h1 class="page-title">${escapeHtml(title)}${count ? ` <span class="count">${escapeHtml(count)}</span>` : ""}</h1>
@@ -283,18 +166,22 @@ function pageHeader(
   </header>`;
 }
 
-function tabs(items: { label: string; count?: number; current: boolean }[]): string {
+export function tabs(items: { label: string; count?: number; current: boolean; href?: string }[]): string {
   return `<div class="tabs" role="tablist">
     ${items
-      .map(
-        (item) =>
-          `<button class="tab${item.current ? " is-active" : ""}" type="button" role="tab" ${item.current ? 'aria-selected="true"' : 'aria-selected="false"'}>${escapeHtml(item.label)}${item.count !== undefined ? ` <span class="count">${item.count}</span>` : ""}</button>`,
-      )
+      .map((item) => {
+        const label = `${escapeHtml(item.label)}${item.count !== undefined ? ` <span class="count">${item.count}</span>` : ""}`;
+        const cls = `tab${item.current ? " is-active" : ""}`;
+        if (item.href) {
+          return `<a class="${cls}" role="tab" href="${item.href}" data-nav-link aria-selected="${item.current ? "true" : "false"}">${label}</a>`;
+        }
+        return `<button class="${cls}" type="button" role="tab" aria-selected="${item.current ? "true" : "false"}">${label}</button>`;
+      })
       .join("")}
   </div>`;
 }
 
-function toolbar(placeholder: string): string {
+export function toolbar(placeholder: string): string {
   return `<div class="toolbar">
     <label class="search-field">
       ${icons.search}
@@ -307,7 +194,7 @@ function toolbar(placeholder: string): string {
   </div>`;
 }
 
-function dataTable(headers: string[], rows: string[], footer: string): string {
+export function dataTable(headers: string[], rows: string[], footer: string): string {
   return `<div class="table-wrap">
     <table class="data-table">
       <thead>
@@ -323,7 +210,7 @@ function dataTable(headers: string[], rows: string[], footer: string): string {
   </div>`;
 }
 
-function entityCell(initials: string, title: string, detail: string): string {
+export function entityCell(initials: string, title: string, detail: string): string {
   return `<div class="entity">
     <span class="avatar">${escapeHtml(initials)}</span>
     <span>
@@ -333,7 +220,84 @@ function entityCell(initials: string, title: string, detail: string): string {
   </div>`;
 }
 
-function renderCommandPalette(): string {
+export function listRow(opts: {
+  href: string;
+  initials?: string;
+  title: string;
+  meta: string;
+  trailing?: string;
+}): string {
+  return `<a class="list-row" href="${opts.href}" data-nav-link>
+    ${opts.initials ? `<span class="avatar">${escapeHtml(opts.initials)}</span>` : `<span class="avatar-spacer" aria-hidden="true"></span>`}
+    <span class="list-row-body">
+      <span class="list-row-title">${escapeHtml(opts.title)}</span>
+      <span class="muted">${escapeHtml(opts.meta)}</span>
+    </span>
+    ${opts.trailing ?? ""}
+  </a>`;
+}
+
+export function railWidget(title: string, detail: string, href: string): string {
+  return `<a class="rail-widget" href="${href}" data-nav-link>
+    <span class="section-title">${escapeHtml(title)}</span>
+    <span class="muted">${escapeHtml(detail)}</span>
+  </a>`;
+}
+
+export function emptyState(message: string): string {
+  return `<div class="wash-card empty-state">
+    <p class="muted">${escapeHtml(message)}</p>
+  </div>`;
+}
+
+type PipelineStatus = TaxDocument["pipelineStatus"];
+
+const pipelineLabels: Record<PipelineStatus, string> = {
+  received: "Received",
+  "quality-review": "Quality review",
+  classifying: "Classifying",
+  extracting: "Extracting",
+  "needs-review": "Needs review",
+  unclassified: "Unclassified",
+  trusted: "Trusted",
+  rejected: "Rejected",
+  failed: "Failed",
+};
+
+/** Semantic tones only — the highlighter is reserved for actions and live counts. */
+const pipelineTones: Record<PipelineStatus, "processing" | "warning" | "success" | "halted"> = {
+  received: "processing",
+  "quality-review": "processing",
+  classifying: "processing",
+  extracting: "processing",
+  "needs-review": "warning",
+  unclassified: "warning",
+  trusted: "success",
+  rejected: "halted",
+  failed: "halted",
+};
+
+export function pipelineChip(status: PipelineStatus): string {
+  return `<span class="chip chip-${pipelineTones[status]}">${escapeHtml(pipelineLabels[status])}</span>`;
+}
+
+export function initialsFor(name: string): string {
+  const words = name
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter((word) => word.length > 0);
+
+  if (words.length === 0) {
+    return "—";
+  }
+
+  const first = words[0] as string;
+  const second = words[1];
+
+  return `${first[0] ?? ""}${second?.[0] ?? ""}`.toUpperCase() || "—";
+}
+
+function renderCommandPalette(index: PaletteIndex): string {
   return `<div class="palette" hidden data-command-palette>
     <div class="palette-panel" role="dialog" aria-modal="true" aria-label="Search Tax Docs">
       <div class="palette-header">
@@ -352,7 +316,7 @@ function renderCommandPalette(): string {
           <span class="palette-search-icon">${icons.searchLg}</span>
         </label>
       </div>
-      ${renderPaletteResults(searchPalette(""), 0)}
+      ${renderPaletteResults(searchPalette("", index), 0)}
     </div>
   </div>`;
 }
@@ -397,7 +361,7 @@ export function renderPaletteResults(groups: PaletteGroup[], activeIndex: number
   </div>`;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")

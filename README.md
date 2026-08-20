@@ -8,8 +8,8 @@ Local repository for tax documents and related files, with a Ramp-inspired desig
 - **Language:** TypeScript
 - **API:** Hono (`src/server/`)
 - **Database:** MongoDB (NoSQL) — in-memory for zero-setup dev, Docker for persistent local data
-- **Client:** Vite + TypeScript app shell (`src/client/`) — Ramp product chrome (sidebar, home, tables)
-- **Validation:** Zod shared schemas (`src/shared/schemas/`)
+- **Client:** Vite + TypeScript app (`src/client/`) — Ramp product chrome plus an API-driven page registry
+- **Validation:** Zod shared schemas (`src/shared/schemas/`), with wire shapes in `src/shared/schemas/api.ts`
 
 ## Project structure
 
@@ -17,7 +17,7 @@ Local repository for tax documents and related files, with a Ramp-inspired desig
 design-system/   Design tokens, CSS, and documentation
 src/
   server/        Hono API, config, MongoDB access
-  client/        Vite app shell (sidebar chrome, home, list pages)
+  client/        Vite app: shell chrome, param router, page registry, fetch layer
   shared/        Zod schemas shared by client and server
 scripts/         Dev orchestration
 tests/           Bun test suite

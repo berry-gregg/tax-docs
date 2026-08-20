@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { MAX_UPLOAD_BYTES } from "../../shared/constants.ts";
 import { activitySchema, type Activity } from "../../shared/schemas/activity.ts";
+import {
+  documentListResponseSchema,
+  documentListRowSchema,
+} from "../../shared/schemas/api.ts";
 import { clientSchema } from "../../shared/schemas/client.ts";
 import {
   taxDocumentSchema,
@@ -30,12 +34,6 @@ import {
 import { readStoredFile, saveUploadedFile } from "../files/storage.ts";
 import type { PipelineRunner } from "../pipeline/runner.ts";
 import { runDraftTypeStage } from "../pipeline/stages.ts";
-
-export const documentListRowSchema = taxDocumentSchema.extend({
-  clientName: z.string().min(1),
-  engagementLabel: z.string().min(1),
-  documentTypeName: z.string().min(1).optional(),
-});
 
 const groupQuerySchema = z.enum(["needs-review", "approved", "all"]);
 
@@ -234,7 +232,7 @@ export function createDocumentRoutes(runner: PipelineRunner, ai: OpenRouterClien
       .sort({ createdAt: -1 })
       .toArray();
     const documents = await toListRows(docs.map((doc) => fromStored(taxDocumentSchema, doc)));
-    return c.json({ documents });
+    return c.json(documentListResponseSchema.parse({ documents }));
   });
 
   documentRoutes.post("/", async (c) => {

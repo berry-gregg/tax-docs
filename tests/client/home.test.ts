@@ -1,0 +1,147 @@
+import { describe, expect, test } from "bun:test";
+import { homePage, renderHome, type HomeData } from "../../src/client/app/pages/home.ts";
+import { POLL_INTERVAL_MS } from "../../src/shared/constants.ts";
+import { documentListRowSchema, metricsSchema } from "../../src/shared/schemas/api.ts";
+
+const now = new Date("2026-08-19T20:00:00");
+
+const metrics = metricsSchema.parse({
+  documentsAutoProcessed: 12,
+  fieldsAwaitingReview: 7,
+  straightThroughRate: 86,
+  needsReviewCount: 3,
+  outstandingRequests: 2,
+  activeClients: 4,
+});
+
+function row(overrides: Record<string, unknown> = {}) {
+  return documentListRowSchema.parse({
+    id: "doc-1",
+    engagementId: "eng-1",
+    filename: "northwind-w2.pdf",
+    mimeType: "application/pdf",
+    size: 2048,
+    storagePath: "data/uploads/doc-1.pdf",
+    uploadedBy: "client",
+    pipelineStatus: "needs-review",
+    createdAt: "2026-08-19T18:00:00.000Z",
+    updatedAt: "2026-08-19T18:00:00.000Z",
+    clientName: "Northwind Partners LLC",
+    engagementLabel: "2025 1120-S",
+    documentTypeName: "W-2",
+    ...overrides,
+  });
+}
+
+function data(overrides: Partial<HomeData> = {}): HomeData {
+  return { metrics, recent: [row()], now, ...overrides };
+}
+
+describe("home page", () => {
+  test("headline states the live review count from /api/metrics", () => {
+    const html = renderHome(data());
+
+    expect(html).toContain("3 documents need review");
+    expect(html).toContain("Good evening");
+    expect(html).not.toContain("Welcome back");
+  });
+
+  test("recent document rows deep-link into the engagement review page", () => {
+    const html = renderHome(data());
+
+    expect(html).toContain('href="/engagements/eng-1/review/doc-1"');
+    expect(html).toContain("W-2");
+    expect(html).toContain("Northwind Partners LLC");
+    expect(html).toContain("Recent documents");
+    expect(html).toContain('href="/documents"');
+  });
+
+  test("shows at most five recent documents", () => {
+    const recent = Array.from({ length: 7 }, (_, index) =>
+      row({ id: `doc-${index}`, filename: `doc-${index}.pdf` }),
+    );
+
+    const html = renderHome(data({ recent }));
+
+    expect(html).toContain('href="/engagements/eng-1/review/doc-4"');
+    expect(html).not.toContain('href="/engagements/eng-1/review/doc-5"');
+  });
+
+  test("pipeline chips use semantic tones, never the highlighter", () => {
+    const html = renderHome(
+      data({
+        recent: [
+          row({ id: "doc-nr", pipelineStatus: "needs-review" }),
+          row({ id: "doc-trusted", pipelineStatus: "trusted" }),
+          row({ id: "doc-extracting", pipelineStatus: "extracting" }),
+          row({ id: "doc-failed", pipelineStatus: "failed" }),
+        ],
+      }),
+    );
+
+    expect(html).toContain('class="chip chip-warning"');
+    expect(html).toContain('class="chip chip-success"');
+    expect(html).toContain('class="chip chip-processing"');
+    expect(html).toContain('class="chip chip-halted"');
+    expect(html).not.toContain("highlighter");
+    expect(html).not.toContain("#e4f222");
+  });
+
+  test("ticker strip reports the three pipeline metrics", () => {
+    const html = renderHome(data());
+
+    expect(html).toContain('class="ticker"');
+    expect(html).toContain("Documents auto-processed");
+    expect(html).toContain("Fields awaiting review");
+    expect(html).toContain("Straight-through rate");
+    expect(html).toContain(">12<");
+    expect(html).toContain(">7<");
+    expect(html).toContain(">86%<");
+  });
+
+  test("rail leads with New engagement and the review-queue deep link", () => {
+    const html = renderHome(data());
+
+    expect(html).toContain("New engagement");
+    expect(html).toContain('href="/engagements?new=1"');
+    expect(html).toContain("Open review queue");
+    expect(html).toContain('href="/documents?tab=needs-review"');
+    expect(html).toContain('class="btn-primary btn-block"');
+  });
+
+  test("rail widgets carry live counts and their own deep links", () => {
+    const html = renderHome(data());
+
+    expect(html).toContain("Active clients");
+    expect(html).toContain('href="/clients"');
+    expect(html).toContain("Review queue");
+    expect(html).toContain("Outstanding requests");
+    expect(html).toContain('href="/inbox"');
+    expect(html).toContain("4");
+    expect(html).toContain("2");
+  });
+
+  test("an empty queue says so instead of showing a stale count", () => {
+    const html = renderHome(
+      data({
+        metrics: metricsSchema.parse({ ...metrics, needsReviewCount: 0, fieldsAwaitingReview: 0 }),
+        recent: [],
+      }),
+    );
+
+    expect(html).toContain("0 documents need review");
+    expect(html).toContain("Nothing is waiting on you");
+    expect(html).toContain("No documents yet");
+  });
+
+  test("client names are escaped, not injected", () => {
+    const html = renderHome(data({ recent: [row({ clientName: '<script>x</script>' })] }));
+
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  test("polls on the shared interval", () => {
+    expect(homePage.pollMs).toBe(POLL_INTERVAL_MS);
+  });
+});

@@ -259,6 +259,18 @@
   padding: var(--spacing-24) var(--spacing-32) var(--spacing-48);
 }
 
+/* The client portal runs without firm chrome: one bone column, no sidebar, no palette. */
+.app-chromeless {
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--surface-sidebar);
+}
+
+.workspace-portal {
+  display: grid;
+  justify-items: center;
+  padding: var(--spacing-48) var(--spacing-24);
+}
+
 .page-home {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--app-rail-width);
@@ -700,6 +712,247 @@
   flex-shrink: 0;
 }
 
+/* Ticker strip — the inverted band that reports pipeline throughput under Home's recent rows. */
+.ticker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-24);
+  margin-top: var(--spacing-32);
+  padding: var(--spacing-20) var(--spacing-24);
+  border-radius: var(--radius-xl);
+  background: var(--surface-inverted);
+}
+
+.ticker-item {
+  display: grid;
+  gap: var(--spacing-4);
+  min-width: 0;
+}
+
+.ticker-label {
+  color: var(--color-ash);
+  font-size: var(--text-caption);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-micro);
+  letter-spacing: var(--tracking-caption);
+  text-transform: uppercase;
+}
+
+.ticker-value {
+  color: var(--color-paper);
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+}
+
+/* Pipeline chips. Semantic tones only — the highlighter never marks a status. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  min-height: 22px;
+  padding: 0 var(--spacing-8);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-badge);
+  font-size: var(--text-micro);
+  font-weight: var(--font-weight-light);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chip-processing {
+  color: var(--color-ash);
+}
+
+.chip-warning {
+  color: var(--color-warning);
+}
+
+.chip-success {
+  color: var(--color-success);
+}
+
+.chip-halted {
+  border-color: transparent;
+  background: var(--surface-nav-active);
+  color: var(--color-warning);
+}
+
+/* Confidence badges — the extraction tiers from formatConfidence. */
+.confidence {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 var(--spacing-8);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-badge);
+  font-size: var(--text-micro);
+  font-weight: var(--font-weight-light);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.confidence-high {
+  color: var(--color-success);
+}
+
+.confidence-medium {
+  color: var(--color-warning);
+}
+
+.confidence-low {
+  color: var(--color-ash);
+}
+
+/* Modal — used for create flows and the export confirmation gate. */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgb(244 243 239 / 80%);
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-panel {
+  display: grid;
+  gap: var(--spacing-16);
+  width: min(560px, calc(100vw - var(--spacing-48)));
+  max-height: calc(100vh - var(--spacing-48));
+  overflow: auto;
+  padding: var(--spacing-24);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-cards);
+  background: var(--surface-card);
+}
+
+.modal-title {
+  font-size: var(--text-subheading);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-subheading);
+  letter-spacing: var(--tracking-subheading);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-8);
+}
+
+/* Side panel — right-anchored editor surface for the document-type schema builder. */
+.side-panel {
+  position: fixed;
+  inset-block: 0;
+  right: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(480px, 100vw);
+  border-left: 1px solid var(--color-hairline);
+  background: var(--surface-card);
+}
+
+.side-panel[hidden] {
+  display: none;
+}
+
+.side-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+  padding: var(--spacing-16) var(--spacing-24);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.side-panel-body {
+  display: grid;
+  gap: var(--spacing-16);
+  overflow: auto;
+  padding: var(--spacing-24);
+}
+
+.side-panel-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-8);
+  padding: var(--spacing-16) var(--spacing-24);
+  border-top: 1px solid var(--color-hairline);
+}
+
+/* Dropzone — upload target on the engagement workspace and the client portal. */
+.dropzone {
+  display: grid;
+  gap: var(--spacing-8);
+  place-items: center;
+  padding: var(--spacing-24);
+  border: 1px dashed var(--color-input-hairline);
+  border-radius: var(--radius-xl);
+  color: var(--color-ash);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+  text-align: center;
+}
+
+.dropzone.is-dragover {
+  border-color: var(--color-outline);
+  background: var(--surface-wash);
+  color: var(--color-ink);
+}
+
+/* Load states. The skeleton holds the layout; the error keeps the real message. */
+.page-skeleton {
+  display: grid;
+  gap: var(--spacing-12);
+}
+
+.skeleton-bar {
+  display: block;
+  height: var(--spacing-12);
+  border-radius: var(--radius-badge);
+  background: var(--surface-wash);
+}
+
+.skeleton-bar-title {
+  width: min(320px, 60%);
+  height: var(--text-heading);
+}
+
+.skeleton-bar-wide {
+  width: 100%;
+}
+
+.skeleton-bar-row {
+  height: var(--spacing-48);
+  border-radius: var(--radius-nav);
+}
+
+.load-error {
+  display: grid;
+  gap: var(--spacing-12);
+  justify-items: start;
+  padding-top: var(--spacing-48);
+}
+
+.load-error-message {
+  color: var(--color-warning);
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.empty-state {
+  margin-top: 0;
+}
+
+.avatar-spacer {
+  display: block;
+  width: 0;
+}
+
 @media (max-width: 960px) {
   .app {
     grid-template-columns: 1fr;
@@ -710,6 +963,10 @@
   }
 
   .page-home {
+    grid-template-columns: 1fr;
+  }
+
+  .ticker {
     grid-template-columns: 1fr;
   }
 

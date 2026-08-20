@@ -14,8 +14,8 @@ Invariants while editing files: `.cursor/rules/product-shell.mdc`. Token values:
 ```
 design-tokens.json  →  tokens.css  →  base.css (buttons, badge, type)
                                    →  shell.css (chrome + recipes)
-nav.ts + icons.ts + router.ts  →  render.ts (one layout tree)
-fixtures + shared/schemas/shell.ts  →  page bodies (fixture-backed until real APIs)
+nav.ts + icons.ts + router.ts  →  render.ts (shell + shared helpers)
+shared/schemas/api.ts  →  app/api.ts  →  pages/*.ts  →  pages/registry.ts  →  main.ts loop
 ```
 
 1. **Two surfaces.** Bone sidebar (`#f4f3ef`) is chrome. White workspace is work. Mixing those (bone page, white nav) reads as the marketing site.
@@ -33,11 +33,11 @@ Sample computed styles from the product app, not screenshots of ramp.com.
 
 | try.ramp.com | tax-docs | Recipe | Steal from it |
 |--------------|----------|--------|----------------|
-| `/home` | `/` | Home | Greeting, queue headline, wash card, recent rows, 298px rail |
+| `/home` | `/` | Home | Greeting, queue headline, wash card, recent rows, ticker band, 298px rail |
 | Inbox | `/inbox` | Inbox | Badge on nav, simple list |
 | `/expenses` | `/documents` | List | Header + tabs + filter bar + dual-line table |
-| `/accounting` | `/review` | List | Queue tabs, status column, export primary |
-| `/people/all` | `/clients` | List | Entity avatar + name/email, Invite primary |
+| `/accounting` | `/engagements` | List | Stage chips, progress column, export primary |
+| `/people/all` | `/clients` | List | Entity avatar + name/email, New client primary |
 | `/settings/company-settings` | `/settings` | Settings | Underline tabs, dt/dd grid, Edit secondary |
 
 Product ink is `#2e2e27`, ash `#707062`, hairline `#ebe8e5`, outline `#91917b`, success `#26763b`, warning `#876634`. Marketing ink `#0c0a08` and 6px buttons stay in DESIGN.md as history — never in `src/client/`.
@@ -46,20 +46,24 @@ Product ink is `#2e2e27`, ash `#707062`, hairline `#ebe8e5`, outline `#91917b`, 
 
 | Concern | File |
 |---------|------|
-| Routes | `src/client/app/router.ts` |
-| Nav tree / badges / nesting | `src/client/app/nav.ts` |
+| Routes (`Route` union, `parseRoute`) | `src/client/app/router.ts` |
+| Nav tree / badge source / nesting / `navIdForRoute` | `src/client/app/nav.ts` |
 | Feather marks | `src/client/app/icons.ts` (`feather-icons`, 12px nav / 16px actions) |
-| All page markup | `src/client/app/render.ts` |
+| Shell markup + shared page helpers | `src/client/app/render.ts` |
+| Page modules (`load`/`render`/`bind`/`pollMs`) | `src/client/app/pages/*.ts` |
+| Route → module resolution | `src/client/app/pages/registry.ts` |
+| Fetch seam + `ApiError` + polling | `src/client/app/api.ts` |
+| Wire shapes both ends parse | `src/shared/schemas/api.ts` |
+| Money / confidence / relative time | `src/client/app/format.ts` |
 | Chrome + recipes | `src/client/styles/shell.css` |
 | Button/badge primitives | `design-system/css/base.css` |
 | Token values | `design-system/css/tokens.css` ← `design-tokens.json` |
-| Client entry (history, collapse, palette, health) | `src/client/main.ts` |
-| Command K index + filter | `src/client/app/command-palette.ts` |
+| Client entry (paint loop, history, collapse, palette, health) | `src/client/main.ts` |
+| Command K filter (index injected by the shell) | `src/client/app/command-palette.ts` |
 | Favicon + sidebar brand | `design-system/gb-favicon.png` (`index.html` + `src/client/app/brand.ts`) |
-| Fixture rows | `src/client/app/fixtures.ts` + `src/shared/schemas/shell.ts` |
 | Shell tests | `tests/client/shell.test.ts` |
 
-Do not add a parallel component folder that reimplements `.page-header`, `.data-table`, or `.nav-group`.
+Do not add a parallel component folder that reimplements `.page-header`, `.data-table`, or `.nav-group`. There is no fixture module — a page that needs data fetches it through `api.ts`.
 
 ## Nav (the easy thing to get wrong)
 
@@ -69,9 +73,10 @@ Ramp’s sidebar is not “highlight the active `<a>`.”
 - **Expanded group:** the whole parent+children block gets `--surface-nav-active` (`#ebe8e5`) at `--radius-nav` (4px). Parent label turns ink.
 - **Current child:** bone fill (`--surface-sidebar`) punched out of that wash — not another hairline chip.
 - Nested labels share an empty `.nav-icon-spacer` (12px) so they line up under the parent text, not under the icon.
-- Children exist in `nav.ts` but only render when that group is the current page.
+- Children exist in `nav.ts` but only render when that group is the current page. The current child is the one whose `href` equals `pathname + search`, so `/documents?tab=needs-review` punches out "Needs review".
 - Settings is a footer item, same row language, Feather `settings` (the gear that looked janky was a hand path).
-- Count badges: highlighter, pill, ~22px. They are the only yellow in the nav.
+- Count badges: highlighter, pill, ~22px. They are the only yellow in the nav. The one badge is Inbox, filled from `/api/inbox/unread-count` into `[data-inbox-badge]` and hidden at zero — never a literal in `nav.ts`.
+- Engagements is Feather `briefcase`. There is no standalone Review tab: review is reached from a document row (`/engagements/:engagementId/review/:documentId`) and keeps Engagements current.
 
 Collapsed: 60px column, labels/children/badges/search keys hidden, icons at 16px (`--icon-size-nav-collapsed`). The GB mark grows to 28px (`--icon-size-brand-collapsed`) and is centered in the header slot (`justify-content: center` must override the expanded head’s `space-between`). The expand control (`data-collapse-nav`) is absolutely overlaid on that mark and stays at `opacity: 0` until `.sidebar-head:hover` or `:focus-within`. Do not stack logo and toggle as two visible rows in the rail.
 
@@ -79,7 +84,7 @@ Collapsed: 60px column, labels/children/badges/search keys hidden, icons at 16px
 
 Reuse the helpers in `render.ts` (`pageHeader`, `tabs`, `toolbar`, `dataTable`, `entityCell`, `renderDocumentRow`). Copying their markup into a new function is a fork.
 
-**Home** — scanning answer first. Time-of-day eyebrow (`greeting.ts`, never “Welcome back”). 28px/400 title with negative tracking stating the queue. Wash card (`12px`, bone fill, no border) for the one-paragraph next step. `.row-list` of dual-line rows (avatar, title, muted meta, status). Right rail: stacked `.btn-block` (one primary, rest secondary) then `.rail-widget` links separated by hairline. No table on Home.
+**Home** — scanning answer first. Time-of-day eyebrow (`greeting.ts`, never “Welcome back”). 28px/400 title with negative tracking stating the live queue count from `/api/metrics`. Wash card (`12px`, bone fill, no border) for the one-paragraph next step, with an honest empty variant when nothing is waiting. `.row-list` of dual-line rows (avatar, title, muted meta, pipeline chip) — the latest five documents, each deep-linking to its review page. `.ticker` band under them for auto-processed / awaiting-review / straight-through. Right rail: stacked `.btn-block` (one primary, rest secondary) then `.rail-widget` links separated by hairline. No table on Home.
 
 **List** — this is Expenses/Accounting/People. Title + ash count on the left; kebab + optional secondary + **one** highlighter primary on the right. Underline tabs (active = ink + 2px ink border; counts in ash). Toolbar: 10px-radius search, ghost “Add filter”, download icon at `.toolbar-end`. Table: ash 14px headers, dual-line primary cell (32px avatar + title + muted sub), hairline row rules, semantic status, “1–N of N” footer. Workspace stays full-bleed white — no card wrapping the table.
 
@@ -92,9 +97,9 @@ Unknown routes: inline empty page, not a toast.
 ## Adding a screen
 
 1. Name the Ramp analog and pick **one** recipe. If it matches none, stop — that is a new pattern; inspect `try.ramp.com` and extend the recipe list in this skill + `product-shell.mdc` in the same change.
-2. Red test in `tests/client/shell.test.ts` for the route, title, and a distinctive control.
-3. Add the path in `router.ts` and the item in `nav.ts` (children only if Ramp would nest them).
-4. Render through existing helpers. New CSS class only when no `.list-row` / `.data-table` / `.wash-card` / `.definition-grid` already does it.
+2. Red test in `tests/client/<page>.test.ts` for the rendered title, a distinctive control, and the empty/error state. Shell-level concerns (nav, chrome, load states) go in `tests/client/shell.test.ts`.
+3. Add the path in `router.ts`, the item in `nav.ts` (children only if Ramp would nest them), and a `PageModule` in `pages/registry.ts` replacing the placeholder.
+4. `render` is a pure function of loaded data — assert on the returned string. Fetch only through `api.ts` with a schema from `src/shared/schemas/api.ts`. Set `pollMs` when the page shows pipeline state. Render through existing helpers; new CSS class only when no `.list-row` / `.data-table` / `.wash-card` / `.chip` / `.definition-grid` already does it.
 5. New color/space/radius → token first (`design-tokens.json` + `tokens.css` + DESIGN.md), then class. Never a raw hex in `shell.css`.
 6. Icons: add a name in `icons.ts` via `feather.icons[name].toSvg`. Nav 12px, in-page actions 16px. Stroke 2, viewBox 24.
 7. Gate: `bun run typecheck && bun test && bun run build`.
@@ -121,6 +126,10 @@ Favicon and sidebar brand: `design-system/gb-favicon.png`. Tab icon is linked fr
 | Home is the only rail page | Matches `/home`; list pages are full-bleed | A Ramp screen we clone uses a rail |
 | Children only when group current | Matches Ramp expand/punch-out | We product-decide always-open sections |
 | Highlighter scarce | Yellow = action/live count, not status | Never for “needs review” text |
+| Page registry over a switch in `render.ts` | Each page owns its own load/render/poll; `moduleFor` is exhaustive so navigation cannot throw | A router library takes over resolution |
+| Path-only `Route` union | `?tab=` / `?new=1` are view state; putting them in the union makes every module re-parse | A query value changes which module loads |
+| Polling, not websockets | Pipeline progress is visible with one interval and no server push | Real-time volume outgrows `POLL_INTERVAL_MS` |
+| Palette index injected by the shell | Typing never fires a request; the shell fetches once on first open | Search needs server-side ranking |
 
 ## Anti-patterns
 
@@ -129,6 +138,8 @@ Favicon and sidebar brand: `design-system/gb-favicon.png`. Tab icon is linked fr
 - Active nav = yellow fill or left border. Ramp uses wash + punch-out.
 - Bone workspace or white sidebar.
 - Drop shadows, gradients, extra accent colors, bold type.
-- “Loading...” as visible copy (use a skeleton / health slot state).
+- “Loading...” as visible copy (use `renderPageSkeleton()` / a health slot state).
+- A generic error line instead of the real `ApiError.message` plus retry.
+- Hardcoded counts or a fixture module standing in for `/api`.
 - Modal for row detail; toast for field validation.
 - Skipping the recipe because “this page is different.” If it is, document the fifth recipe first.

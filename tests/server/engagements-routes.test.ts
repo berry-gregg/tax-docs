@@ -11,6 +11,10 @@ import {
   toStored,
 } from "../../src/server/db/collections.ts";
 import { seedRequestTemplates } from "../../src/server/seed/definitions.ts";
+import {
+  engagementDetailSchema,
+  engagementListResponseSchema,
+} from "../../src/shared/schemas/api.ts";
 import type { Client } from "../../src/shared/schemas/client.ts";
 
 const client: Client = {
@@ -89,6 +93,7 @@ describe("engagement routes", () => {
 
     const template = seedRequestTemplates.find((candidate) => candidate.filingType === "1120-S");
     expect(detailResponse.status).toBe(200);
+    expect(() => engagementDetailSchema.parse(detailBody)).not.toThrow();
     expect(detailBody.client.legalName).toBe(client.legalName);
     expect(detailBody.requestItems).toHaveLength(template?.items.length ?? 0);
     expect(detailBody.requestItems[0]).toMatchObject({
@@ -156,6 +161,7 @@ describe("engagement routes", () => {
     const listBody = await listResponse.json();
 
     expect(listResponse.status).toBe(200);
+    expect(() => engagementListResponseSchema.parse(listBody)).not.toThrow();
     expect(listBody.engagements).toContainEqual(
       expect.objectContaining({
         id: createBody.engagement.id,
