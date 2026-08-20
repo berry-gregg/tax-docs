@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { fenceUntrusted } from "../ai/fences.ts";
 import { pdfFilePart, type OpenRouterClient, type UserPart } from "../ai/openrouter.ts";
-import type { DocumentType } from "../../shared/schemas/document-type.ts";
-import type { FieldDef } from "../../shared/schemas/metadata.ts";
+import { documentTypeSchema, type DocumentType } from "../../shared/schemas/document-type.ts";
+import { fieldDefSchema, metadataTypeSchema, type FieldDef } from "../../shared/schemas/metadata.ts";
 
 export const qualityResultSchema = z.object({
   relevant: z.boolean(),
@@ -31,6 +31,19 @@ export const rawExtractionSchema = z.object({
 });
 export type RawExtraction = z.infer<typeof rawExtractionSchema>;
 
+/**
+ * Structure only: the model proposes a name, a description, and field definitions. `dataType`,
+ * `required`, and `regex` are the server's call, so they are absent here — see the draft-type route.
+ */
+export const draftTypeResultSchema = z.object({
+  name: documentTypeSchema.shape.name,
+  description: documentTypeSchema.shape.description,
+  fields: z
+    .array(fieldDefSchema.pick({ key: true, label: true, metadataType: true, description: true }))
+    .min(1),
+});
+export type DraftTypeResult = z.infer<typeof draftTypeResultSchema>;
+
 type StageDocument = { filename: string; bytes: Uint8Array };
 
 const QUALITY_SYSTEM =
@@ -41,6 +54,9 @@ const CLASSIFY_SYSTEM =
 
 const EXTRACT_SYSTEM =
   "Extract each listed field from the document. value must be a verbatim-groundable string from the document; use null and an empty sourceSnippet when not present — NEVER invent.";
+
+// The enum list is our own constant, so it belongs in the trusted system prompt.
+const DRAFT_TYPE_SYSTEM = `Propose a reusable document-type schema for documents like this one: a short name, a one-sentence description, and the fields a tax preparer would need from every document of this kind. Field keys must be snake_case. Choose the closest metadataType for each field from: ${metadataTypeSchema.options.join(", ")}. Describe what each field holds — do not propose values, only structure.`;
 
 function documentParts(doc: StageDocument): UserPart[] {
   return [
@@ -71,6 +87,18 @@ export async function runQualityStage(
     parts: documentParts(doc),
     schemaName: "quality_result",
     schema: qualityResultSchema,
+  });
+}
+
+export async function runDraftTypeStage(
+  ai: OpenRouterClient,
+  doc: StageDocument,
+): Promise<DraftTypeResult> {
+  return ai.completeStructured({
+    system: DRAFT_TYPE_SYSTEM,
+    parts: documentParts(doc),
+    schemaName: "draft_type_result",
+    schema: draftTypeResultSchema,
   });
 }
 

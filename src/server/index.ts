@@ -4,7 +4,8 @@ import { config } from "./config.ts";
 import { connectDb } from "./db/client.ts";
 import { createRunner } from "./pipeline/runner.ts";
 
-const app = createApp({ runner: createRunner({ ai: createOpenRouterClient() }) });
+const ai = createOpenRouterClient();
+const app = createApp({ runner: createRunner({ ai }), ai });
 
 await connectDb();
 

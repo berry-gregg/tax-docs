@@ -9,8 +9,13 @@ import {
   type ExtractionField,
   type TaxDocument,
 } from "../../shared/schemas/document.ts";
-import { documentTypeSchema } from "../../shared/schemas/document-type.ts";
+import {
+  createDocumentTypeInputSchema,
+  documentTypeSchema,
+} from "../../shared/schemas/document-type.ts";
 import { engagementSchema } from "../../shared/schemas/engagement.ts";
+import { defaultDataTypeFor } from "../../shared/schemas/metadata.ts";
+import type { OpenRouterClient } from "../ai/openrouter.ts";
 import { connectDb } from "../db/client.ts";
 import {
   activitiesCollection,
@@ -24,6 +29,7 @@ import {
 } from "../db/collections.ts";
 import { readStoredFile, saveUploadedFile } from "../files/storage.ts";
 import type { PipelineRunner } from "../pipeline/runner.ts";
+import { runDraftTypeStage } from "../pipeline/stages.ts";
 
 export const documentListRowSchema = taxDocumentSchema.extend({
   clientName: z.string().min(1),
@@ -213,7 +219,7 @@ async function toListRows(documents: TaxDocument[]) {
   });
 }
 
-export function createDocumentRoutes(runner: PipelineRunner) {
+export function createDocumentRoutes(runner: PipelineRunner, ai: OpenRouterClient) {
   const documentRoutes = new Hono();
 
   documentRoutes.get("/", async (c) => {
@@ -384,6 +390,43 @@ export function createDocumentRoutes(runner: PipelineRunner) {
     await replaceDocument(updated);
     runner.start(updated.id);
     return c.json({ document: updated });
+  });
+
+  /**
+   * Fail-soft escape hatch for the unclassified lane: the model proposes a schema, the server
+   * decides the mechanical parts, and nothing is persisted. The CPA edits the draft, POSTs it to
+   * `/api/document-types`, then reruns the document against the type they just created.
+   */
+  documentRoutes.post("/:id/draft-type", async (c) => {
+    const document = await findDocument(c.req.param("id"));
+    if (!document) {
+      return c.json({ error: "Not found" }, 404);
+    }
+    if (document.pipelineStatus !== "unclassified") {
+      return c.json({ error: "Document is not unclassified" }, 409);
+    }
+
+    try {
+      const bytes = await readStoredFile(document.storagePath);
+      const result = await runDraftTypeStage(ai, { filename: document.filename, bytes });
+      const draft = createDocumentTypeInputSchema.parse({
+        name: result.name,
+        description: result.description,
+        active: true,
+        // The model proposes structure only: the server owns dataType, and a drafted field is
+        // never required and never carries a regex until a person says so.
+        fields: result.fields.map((field) => ({
+          ...field,
+          dataType: defaultDataTypeFor(field.metadataType),
+          required: false,
+        })),
+      });
+      return c.json({ draft });
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error);
+      console.error(`Draft document type for document ${document.id} failed: ${cause}`);
+      return c.json({ error: cause }, 502);
+    }
   });
 
   return documentRoutes;

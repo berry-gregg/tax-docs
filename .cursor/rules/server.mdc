@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Server (Hono + Bun)
 
-The API is a Hono app on Bun. `createApp(opts?: { runner?: PipelineRunner })` in `src/server/app.ts` is the factory — tests call it with `app.request()`. Inject a recording `runner` in tests; omit it to use `noopRunner`. Do not add Express or Fastify.
+The API is a Hono app on Bun. `createApp(opts?: { runner?: PipelineRunner; ai?: OpenRouterClient })` in `src/server/app.ts` is the factory — tests call it with `app.request()`. Inject a recording `runner` in tests; omit it to use `noopRunner`. Inject a stub `ai` for routes that call a model inline (`POST /api/documents/:id/draft-type`); omit it and those routes reject with "No AI client was provided to createApp" rather than reaching OpenRouter. Do not add Express or Fastify.
 
 ## Routes
 
@@ -15,6 +15,7 @@ The API is a Hono app on Bun. `createApp(opts?: { runner?: PipelineRunner })` in
 - Parse JSON with Zod `safeParse`. Invalid body → `400` + `{ error: "..." }`. Do not hand a raw body to Mongo.
 - Map driver docs through the shared schema before `c.json`.
 - `app.notFound` stays JSON `404`. Do not leak stack traces to clients; log the cause server-side.
+- A route that calls a model or reads a stored file inline returns the real underlying message (`502` for an upstream failure), never a generic "something went wrong". Log it too.
 
 ## Config
 
