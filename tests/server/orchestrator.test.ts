@@ -102,6 +102,7 @@ function requestItem(partial: Partial<RequestItem> & { id: string }): RequestIte
     required: true,
     status: "open",
     matchedDocumentIds: [],
+    createdAt: "2026-02-01T00:00:00.000Z",
     ...partial,
   });
 }
@@ -246,8 +247,12 @@ afterEach(async () => {
 describe("runPipeline happy path", () => {
   test("walks received to needs-review, matching the oldest open checklist item and bumping the engagement", async () => {
     const db = await connectDb();
-    await requestItemsCollection(db).insertOne(toStored(requestItem({ id: "item-oldest" })));
-    await requestItemsCollection(db).insertOne(toStored(requestItem({ id: "item-newer" })));
+    await requestItemsCollection(db).insertOne(
+      toStored(requestItem({ id: "item-oldest", createdAt: "2026-01-05T00:00:00.000Z" })),
+    );
+    await requestItemsCollection(db).insertOne(
+      toStored(requestItem({ id: "item-newer", createdAt: "2026-02-05T00:00:00.000Z" })),
+    );
     await requestItemsCollection(db).insertOne(
       toStored(requestItem({ id: "item-other-type", documentTypeId: "dt-retired" })),
     );
@@ -356,6 +361,76 @@ describe("runPipeline happy path", () => {
       matchedDocumentIds: [document.id],
     });
     expect((await loadItem("item-untouched")).status).toBe("open");
+  });
+
+  test("matches the earliest-created open item, not whichever landed in the collection first", async () => {
+    const db = await connectDb();
+    // Inserted newest-first so a natural-order scan would pick the wrong item.
+    await requestItemsCollection(db).insertOne(
+      toStored(requestItem({ id: "item-later", createdAt: "2026-03-01T00:00:00.000Z" })),
+    );
+    await requestItemsCollection(db).insertOne(
+      toStored(requestItem({ id: "item-earlier", createdAt: "2026-01-05T00:00:00.000Z" })),
+    );
+    const document = await seedDocument({ id: "doc-oldest-wins" });
+
+    const { ai } = scriptedAi(
+      [
+        { relevant: true, legible: true, confidence: 0.9, reason: "Payroll return" },
+        { documentTypeId: form941.id, confidence: 0.9, reasoning: "Form 941" },
+        { fields: [] },
+      ],
+      document.id,
+    );
+
+    await runPipeline(document.id, { ai });
+
+    expect((await loadDocument(document.id)).requestItemId).toBe("item-earlier");
+    expect(await loadItem("item-earlier")).toMatchObject({
+      status: "received",
+      matchedDocumentIds: [document.id],
+    });
+    expect(await loadItem("item-later")).toMatchObject({
+      status: "open",
+      matchedDocumentIds: [],
+    });
+  });
+
+  test("leaves a pre-linked checklist item alone when its type does not match the classification", async () => {
+    const db = await connectDb();
+    await requestItemsCollection(db).insertOne(
+      toStored(requestItem({ id: "item-wrong-type", documentTypeId: retiredType.id })),
+    );
+    await requestItemsCollection(db).insertOne(toStored(requestItem({ id: "item-right-type" })));
+    const document = await seedDocument({
+      id: "doc-type-mismatch",
+      filename: "bank-statement.pdf",
+      requestItemId: "item-wrong-type",
+    });
+
+    const { ai } = scriptedAi(
+      [
+        { relevant: true, legible: true, confidence: 0.9, reason: "A tax document" },
+        { documentTypeId: form941.id, confidence: 0.9, reasoning: "Form 941" },
+        { fields: [] },
+      ],
+      document.id,
+    );
+
+    await runPipeline(document.id, { ai });
+
+    const finished = await loadDocument(document.id);
+    expect(finished.pipelineStatus).toBe("needs-review");
+    expect(finished.requestItemId).toBe("item-wrong-type");
+    expect(await loadItem("item-wrong-type")).toMatchObject({
+      status: "open",
+      matchedDocumentIds: [],
+    });
+    expect(await loadItem("item-right-type")).toMatchObject({
+      status: "open",
+      matchedDocumentIds: [],
+    });
+    expect(await actionsLogged()).not.toContain("checklist-item-matched");
   });
 
   test("leaves a non-collecting engagement status alone", async () => {

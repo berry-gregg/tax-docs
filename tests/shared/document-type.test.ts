@@ -3,7 +3,11 @@ import {
   createDocumentTypeInputSchema,
   documentTypeSchema,
 } from "../../src/shared/schemas/document-type.ts";
-import { requestTemplateSchema } from "../../src/shared/schemas/request.ts";
+import {
+  createRequestItemInputSchema,
+  requestItemSchema,
+  requestTemplateSchema,
+} from "../../src/shared/schemas/request.ts";
 
 const field = {
   key: "wages_tips_compensation",
@@ -51,5 +55,40 @@ describe("requestTemplate schema", () => {
     });
     expect(tpl.filingType).toBe("1120-S");
     expect(() => requestTemplateSchema.parse({ ...tpl, filingType: "1040" })).toThrow();
+  });
+});
+
+describe("requestItem schema", () => {
+  const item = {
+    id: "item-941-q1",
+    engagementId: "eng-1",
+    documentTypeId: "dt-941",
+    title: "Q1 Form 941",
+    description: "First quarter payroll return",
+    required: true,
+    status: "open",
+    matchedDocumentIds: [],
+    createdAt: "2026-01-05T00:00:00.000Z",
+  };
+
+  test("carries a createdAt so the oldest open item can be ordered", () => {
+    expect(requestItemSchema.parse(item).createdAt).toBe("2026-01-05T00:00:00.000Z");
+  });
+
+  test("rejects a missing or non-datetime createdAt", () => {
+    const { createdAt: _omitted, ...withoutCreatedAt } = item;
+    expect(() => requestItemSchema.parse(withoutCreatedAt)).toThrow();
+    expect(() => requestItemSchema.parse({ ...item, createdAt: "2026-01-05" })).toThrow();
+  });
+
+  test("create input is server-stamped, so it never accepts a caller createdAt", () => {
+    const parsed = createRequestItemInputSchema.parse({
+      documentTypeId: "dt-941",
+      title: "Q1 Form 941",
+      description: "First quarter payroll return",
+      required: true,
+      createdAt: "1999-01-01T00:00:00.000Z",
+    });
+    expect(parsed).not.toHaveProperty("createdAt");
   });
 });

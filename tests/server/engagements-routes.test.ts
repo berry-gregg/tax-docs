@@ -208,6 +208,47 @@ describe("engagement routes", () => {
     expect(itemBody.item.status).toBe("waived");
   });
 
+  test("stamps a server-owned createdAt on request items, ignoring any caller value", async () => {
+    const app = createApp();
+    const before = new Date().toISOString();
+
+    const createResponse = await app.request("/api/engagements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: client.id,
+        taxYear: 2026,
+        filingType: "1065",
+        items: [{ ...explicitItem, createdAt: "1999-01-01T00:00:00.000Z" }],
+      }),
+    });
+    const createBody = await createResponse.json();
+    expect(createResponse.status).toBe(201);
+
+    const detailResponse = await app.request(`/api/engagements/${createBody.engagement.id}`);
+    const detailBody = await detailResponse.json();
+    const templated = detailBody.requestItems[0];
+    expect(templated.createdAt >= before).toBe(true);
+
+    const addedResponse = await app.request(
+      `/api/engagements/${createBody.engagement.id}/request-items`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentTypeId: "dt-balance-sheet",
+          title: "Year-end balance sheet",
+          description: "Statement of financial position as of year end.",
+          required: true,
+          createdAt: "1999-01-01T00:00:00.000Z",
+        }),
+      },
+    );
+    const addedBody = await addedResponse.json();
+    expect(addedResponse.status).toBe(201);
+    expect(addedBody.item.createdAt >= before).toBe(true);
+  });
+
   test("creates and deletes request items scoped to the engagement", async () => {
     const app = createApp();
     const extraItem = {

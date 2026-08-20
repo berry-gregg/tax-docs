@@ -145,6 +145,7 @@ function requestItem(input: {
     required: input.required,
     status: input.status,
     matchedDocumentIds: [],
+    createdAt: "2026-02-01T00:00:00.000Z",
   });
 }
 

@@ -51,7 +51,8 @@ Seeded definitions: K-1 (1065), K-1 (1120-S), trial balance, profit & loss, bala
 Every template item references a defined `documentType`, so requested documents are always ones the pipeline can process.
 
 **`requestItems`** — the live checklist on an engagement (instantiated from the template at creation, then CPA-edited).
-`id, engagementId, documentTypeId, title, description, required, status ("open" | "received" | "needs-attention" | "waived"), matchedDocumentIds[]`
+`id, engagementId, documentTypeId, title, description, required, status ("open" | "received" | "needs-attention" | "waived"), matchedDocumentIds[], createdAt`
+`createdAt` is server-stamped and orders the checklist, so an incoming document auto-matches the *oldest* open item of its type.
 
 **`documents`** — uploaded file metadata + pipeline state. Metadata in Mongo. Seeded documents reference files in the **tracked** `demo-docs/` folder; runtime uploads land in `data/uploads/` (git-ignored).
 `id, engagementId, requestItemId?, filename, mimeType, size, storagePath, uploadedBy ("client" | "cpa"), pipelineStatus, rejection? { kind: "irrelevant" | "unreadable", reason }, classification? { documentTypeId, confidence, reasoning }, extraction? { fields[] }, createdAt, updatedAt`

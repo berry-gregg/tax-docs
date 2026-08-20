@@ -148,6 +148,7 @@ engagementRoutes.post("/", async (c) => {
       ...item,
       status: "open",
       matchedDocumentIds: [],
+      createdAt: now,
     }),
   );
   const activity: Activity = activitySchema.parse({
@@ -246,6 +247,7 @@ engagementRoutes.post("/:id/request-items", async (c) => {
     ...parsed.data,
     status: "open",
     matchedDocumentIds: [],
+    createdAt: new Date().toISOString(),
   });
 
   await requestItemsCollection(db).insertOne(toStored(item));

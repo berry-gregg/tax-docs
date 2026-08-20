@@ -26,6 +26,8 @@ export const requestItemSchema = z.object({
   required: z.boolean(),
   status: requestItemStatusSchema,
   matchedDocumentIds: z.array(z.string()),
+  /** Server-stamped. Orders the checklist so an incoming document matches the oldest open item. */
+  createdAt: z.string().datetime(),
 });
 export type RequestItem = z.infer<typeof requestItemSchema>;
 

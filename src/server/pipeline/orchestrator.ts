@@ -94,20 +94,25 @@ async function setRequestItemStatus(
   return next;
 }
 
-/**
- * Request items carry no timestamp, so the collection's natural (insertion) order is the
- * oldest-first proxy the checklist was built in.
- */
+/** `_id` breaks ties so a checklist created in one batch still resolves to a stable item. */
 async function findOldestOpenItem(
   db: Db,
   engagementId: string,
   documentTypeId: string,
 ): Promise<RequestItem | null> {
-  const stored = await requestItemsCollection(db).findOne({
-    engagementId,
-    documentTypeId,
-    status: "open",
-  });
+  const stored = await requestItemsCollection(db).findOne(
+    { engagementId, documentTypeId, status: "open" },
+    { sort: { createdAt: 1, _id: 1 } },
+  );
+  return stored ? fromStored(requestItemSchema, stored) : null;
+}
+
+async function findRequestItem(
+  db: Db,
+  itemId: string,
+  engagementId: string,
+): Promise<RequestItem | null> {
+  const stored = await requestItemsCollection(db).findOne({ _id: itemId, engagementId });
   return stored ? fromStored(requestItemSchema, stored) : null;
 }
 
@@ -167,23 +172,27 @@ async function markUnclassified(
   });
 }
 
-/** Links the document to a checklist item — the one it was uploaded against, or the oldest open match. */
+/**
+ * Links the document to a checklist item — the one it was uploaded against, or the oldest open
+ * match. A document that was uploaded against the wrong item is left for the CPA to reconcile:
+ * satisfying a "Form 941" request with a bank statement would report the checklist complete.
+ */
 async function linkChecklistItem(
   db: Db,
   document: TaxDocument,
   documentTypeId: string,
 ): Promise<TaxDocument> {
-  const itemId =
-    document.requestItemId ??
-    (await findOldestOpenItem(db, document.engagementId, documentTypeId))?.id;
-  if (!itemId) return document;
+  const candidate = document.requestItemId
+    ? await findRequestItem(db, document.requestItemId, document.engagementId)
+    : await findOldestOpenItem(db, document.engagementId, documentTypeId);
+  if (!candidate || candidate.documentTypeId !== documentTypeId) return document;
 
-  const item = await setRequestItemStatus(db, itemId, "received", document.id);
+  const item = await setRequestItemStatus(db, candidate.id, "received", document.id);
   if (!item) return document;
 
   const linked = document.requestItemId
     ? document
-    : await patchDocument(db, document, { requestItemId: itemId });
+    : await patchDocument(db, document, { requestItemId: candidate.id });
   await writeActivity(db, {
     engagementId: linked.engagementId,
     action: "checklist-item-matched",
