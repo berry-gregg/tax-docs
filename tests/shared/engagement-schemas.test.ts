@@ -53,6 +53,15 @@ describe("engagement-side schemas", () => {
     expect(a.readAt).toBeUndefined();
   });
 
+  test("activity may carry an optional documentId for inbox deep-links", () => {
+    const a = activitySchema.parse({
+      id: "a1", engagementId: "e1", actor: "agent", action: "document-extracted",
+      detail: "941-q1.pdf — 3 fields extracted", direction: "inbound", documentId: "doc-1",
+      createdAt: iso,
+    });
+    expect(a.documentId).toBe("doc-1");
+  });
+
   test("validation checks are warn-only (no fail status)", () => {
     expect(validationCheckSchema.shape.status.options).toEqual(["pass", "warn"]);
   });

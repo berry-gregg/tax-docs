@@ -175,6 +175,7 @@ describe("document routes", () => {
     expect(activity).toMatchObject({
       actor: "cpa",
       direction: "internal",
+      documentId: body.document.id,
     });
   });
 

@@ -14,8 +14,7 @@ export type InboxData = {
   now: Date;
 };
 
-const DOCUMENT_ACTIONS = new Set([
-  "document-uploaded",
+const REVIEW_ACTIONS = new Set([
   "document-extracted",
   "document-rejected",
   "document-unclassified",
@@ -26,26 +25,21 @@ function parseItemCount(detail: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
-function documentIdFromActivityId(id: string, action: string): string | null {
-  const suffix = action.replace(/^document-/, "");
-  const match = id.match(new RegExp(`^act-(.+)-${suffix}$`));
-  return match?.[1] ?? null;
-}
-
 function entryHref(entry: InboxEntry): string {
-  if (entry.action === "request-sent") {
-    return entry.portalToken ? `/portal/${entry.portalToken}` : `/engagements/${entry.engagementId}`;
-  }
-
-  if (DOCUMENT_ACTIONS.has(entry.action)) {
-    const documentId = documentIdFromActivityId(entry.id, entry.action);
-    if (documentId && entry.action !== "document-uploaded") {
-      return `/engagements/${entry.engagementId}/review/${documentId}`;
-    }
-    return `/engagements/${entry.engagementId}`;
+  if (entry.documentId && REVIEW_ACTIONS.has(entry.action)) {
+    return `/engagements/${entry.engagementId}/review/${entry.documentId}`;
   }
 
   return `/engagements/${entry.engagementId}`;
+}
+
+function renderPortalTrailing(portalHref: string): string {
+  return `<div class="portal-link-row" data-inbox-portal-controls>
+    <label class="search-field portal-link-field">
+      <input type="text" readonly value="${escapeHtml(portalHref)}" aria-label="Portal link" />
+    </label>
+    <button type="button" class="btn-secondary" data-portal-open="${escapeHtml(portalHref)}">Open portal</button>
+  </div>`;
 }
 
 function renderRequestSentEntry(entry: InboxEntry): string {
@@ -53,22 +47,12 @@ function renderRequestSentEntry(entry: InboxEntry): string {
   const title = itemCount === null ? "Request sent" : `Request sent · ${itemCount} items`;
   const portalHref = entry.portalToken ? `/portal/${entry.portalToken}` : "";
 
-  return `<article class="inbox-entry inbox-entry-outbound">
-    <div class="inbox-entry-head">
-      <p class="list-row-title">${escapeHtml(title)}</p>
-      <p class="muted">${escapeHtml(entry.clientName)}</p>
-    </div>
-    ${
-      portalHref
-        ? `<div class="portal-link-row">
-            <label class="search-field portal-link-field">
-              <input type="text" readonly value="${escapeHtml(portalHref)}" aria-label="Portal link" />
-            </label>
-            <a class="btn-secondary" href="${portalHref}" data-nav-link>Open portal</a>
-          </div>`
-        : ""
-    }
-  </article>`;
+  return listRow({
+    href: `/engagements/${entry.engagementId}`,
+    title,
+    meta: entry.clientName,
+    trailing: portalHref ? renderPortalTrailing(portalHref) : undefined,
+  });
 }
 
 function renderInboundEntry(entry: InboxEntry, now: Date): string {
@@ -108,6 +92,29 @@ export function renderInbox(data: InboxData): string {
   </div>`;
 }
 
+function bindPortalControls(root: HTMLElement, repaint: () => void): void {
+  root.querySelectorAll<HTMLElement>("[data-inbox-portal-controls]").forEach((controls) => {
+    controls.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-portal-open]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const href = button.dataset.portalOpen;
+      if (!href) {
+        return;
+      }
+
+      window.history.pushState({}, "", href);
+      repaint();
+    });
+  });
+}
+
 function bindUnreadEntries(root: HTMLElement, repaint: () => void): void {
   root.querySelectorAll<HTMLAnchorElement>('[data-inbox-entry][data-unread="true"]').forEach((link) => {
     link.addEventListener(
@@ -143,6 +150,7 @@ export const inboxPage: PageModule<InboxData> = {
   },
   render: renderInbox,
   bind(root, _data, repaint) {
+    bindPortalControls(root, repaint);
     bindUnreadEntries(root, repaint);
   },
   pollMs: POLL_INTERVAL_MS,

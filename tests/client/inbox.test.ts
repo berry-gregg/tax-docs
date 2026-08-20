@@ -26,18 +26,20 @@ function data(overrides: Partial<InboxData> = {}): InboxData {
 }
 
 describe("inbox page", () => {
-  test("request-sent entries render a copyable portal link input and Open portal button", () => {
+  test("request-sent entries use listRow with portal link input and Open portal control", () => {
     const html = renderInbox(
       data({
         entries: [entry({ id: "act-sent", action: "request-sent", direction: "outbound" })],
       }),
     );
 
+    expect(html).toContain('class="list-row"');
+    expect(html).not.toContain("inbox-entry-outbound");
     expect(html).toContain("Request sent · 3 items");
     expect(html).toContain('value="/portal/portal-token-abc"');
-    expect(html).toContain('href="/portal/portal-token-abc"');
+    expect(html).toContain('data-portal-open="/portal/portal-token-abc"');
     expect(html).toContain("Open portal");
-    expect(html).toContain('readonly');
+    expect(html).toContain("readonly");
   });
 
   test("unread dot appears only on unread inbound entries", () => {
@@ -70,14 +72,15 @@ describe("inbox page", () => {
     expect(readRow).not.toContain('class="unread-dot"');
   });
 
-  test("document-extracted entries deep-link to the engagement review page", () => {
+  test("document-extracted entries deep-link via stored documentId, not activity id shape", () => {
     const html = renderInbox(
       data({
         entries: [
           entry({
-            id: "act-doc-1-extracted",
+            id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
             action: "document-extracted",
             direction: "inbound",
+            documentId: "doc-1",
             detail: "northwind-w2.pdf — 12 fields extracted, 0 not found",
             unread: false,
           }),
@@ -86,8 +89,28 @@ describe("inbox page", () => {
     );
 
     expect(html).toContain('href="/engagements/eng-1/review/doc-1"');
+    expect(html).not.toContain("/review/f47ac10b");
     expect(html).toContain("Northwind Partners LLC");
     expect(html).toContain("2h ago");
+  });
+
+  test("document entries without documentId fall back to the engagement workspace", () => {
+    const html = renderInbox(
+      data({
+        entries: [
+          entry({
+            id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            action: "document-extracted",
+            direction: "inbound",
+            detail: "orphan activity",
+            unread: false,
+          }),
+        ],
+      }),
+    );
+
+    expect(html).toContain('href="/engagements/eng-1"');
+    expect(html).not.toContain("/review/");
   });
 
   test("header shows Inbox title and unread count", () => {

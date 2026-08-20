@@ -333,7 +333,7 @@ describe("runPipeline happy path", () => {
     const matched = activities.find((entry) => entry.action === "checklist-item-matched");
     expect(matched).toMatchObject({ actor: "agent", direction: "internal" });
     const extracted = activities.find((entry) => entry.action === "document-extracted");
-    expect(extracted).toMatchObject({ actor: "agent", direction: "inbound" });
+    expect(extracted).toMatchObject({ actor: "agent", direction: "inbound", documentId: document.id });
     expect(extracted?.detail).toContain("3");
     expect(extracted?.detail).toContain("1 not found");
   });
@@ -499,6 +499,7 @@ describe("runPipeline rejection lane", () => {
       actor: "agent",
       direction: "inbound",
       engagementId: ENGAGEMENT_ID,
+      documentId: document.id,
     });
     expect(activities[0]?.detail).toContain("A holiday photo, not a tax document");
   });
@@ -554,6 +555,7 @@ describe("runPipeline unclassified lane", () => {
       action: "document-unclassified",
       actor: "agent",
       direction: "inbound",
+      documentId: document.id,
     });
   });
 

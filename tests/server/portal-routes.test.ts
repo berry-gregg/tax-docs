@@ -224,7 +224,7 @@ describe("portal routes", () => {
       action: "document-uploaded",
       direction: "inbound",
     });
-    expect(activity).toMatchObject({ actor: "client" });
+    expect(activity).toMatchObject({ actor: "client", documentId: uploaded.document.id });
 
     const after = await app.request(`/api/portal/${engagement.portalToken}`);
     const afterBody = await after.json() as { items: Array<{ portalStatus: string }> };

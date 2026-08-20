@@ -59,7 +59,7 @@ async function patchDocument(
 
 async function writeActivity(
   db: Db,
-  entry: Pick<Activity, "engagementId" | "action" | "detail" | "direction">,
+  entry: Pick<Activity, "engagementId" | "action" | "detail" | "direction" | "documentId">,
 ): Promise<void> {
   const activity = activitySchema.parse({
     id: randomUUID(),
@@ -151,6 +151,7 @@ async function rejectDocument(
     action: "document-rejected",
     detail: `${rejected.filename} — ${reason}`,
     direction: "inbound",
+    documentId: rejected.id,
   });
 }
 
@@ -169,6 +170,7 @@ async function markUnclassified(
     // The model's reasoning is untrusted prose and stays on the document, out of the feed.
     detail: `${unclassified.filename} — no confident document type match (confidence ${classification.confidence.toFixed(2)})`,
     direction: "inbound",
+    documentId: unclassified.id,
   });
 }
 
@@ -223,6 +225,7 @@ async function extractDocument(
     action: "document-extracted",
     detail: `${reviewed.filename} — ${fields.length} fields extracted, ${notFound} not found`,
     direction: "inbound",
+    documentId: reviewed.id,
   });
   await promoteEngagementToReview(db, reviewed.engagementId);
 }

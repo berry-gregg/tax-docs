@@ -124,6 +124,7 @@ export async function ingestUploadedFile(opts: {
     action: "document-uploaded",
     detail: document.filename,
     direction: opts.direction,
+    documentId: document.id,
     createdAt: now,
   });
 

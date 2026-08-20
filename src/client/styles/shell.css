@@ -990,19 +990,6 @@
   align-self: start;
 }
 
-.inbox-entry-outbound {
-  display: grid;
-  gap: var(--spacing-12);
-  padding: var(--spacing-16);
-  border: 1px solid var(--color-hairline);
-  border-bottom-width: 0;
-  background: var(--surface-card);
-}
-
-.inbox-entry-outbound:last-child {
-  border-bottom-width: 1px;
-}
-
 .portal-link-row {
   display: flex;
   flex-wrap: wrap;
@@ -1279,5 +1266,180 @@
 
   .settings-section-head {
     display: grid;
+  }
+}
+
+/* Review split — the stored PDF beside the field panel. Hairline frame, never a shadow. */
+.review-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--spacing-24);
+  align-items: start;
+}
+
+.review-viewer {
+  position: sticky;
+  top: var(--spacing-24);
+  overflow: hidden;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-cards);
+  background: var(--surface-wash);
+}
+
+.review-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - var(--spacing-128));
+  border: 0;
+}
+
+.review-panel {
+  display: grid;
+  gap: var(--spacing-16);
+  min-width: 0;
+}
+
+.review-panel-head {
+  display: grid;
+  gap: var(--spacing-8);
+  padding-bottom: var(--spacing-16);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.review-panel-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.review-panel-title .section-title {
+  margin-bottom: 0;
+}
+
+.review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-12);
+}
+
+.review-fields {
+  display: grid;
+}
+
+.review-field {
+  display: grid;
+  gap: var(--spacing-8);
+  justify-items: start;
+  padding: var(--spacing-16) 0;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.review-field:last-child {
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.review-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.review-field-label {
+  font-size: var(--text-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-ui);
+}
+
+/* The metadataType is a caption, not a shouty label — 10px ash beside the field name. */
+.review-field-type {
+  color: var(--color-ash);
+  font-size: var(--text-caption);
+  letter-spacing: var(--tracking-caption);
+  line-height: var(--leading-caption);
+}
+
+.review-field-value {
+  font-size: var(--text-ui);
+  line-height: var(--leading-ui);
+}
+
+.review-field-note {
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.review-source {
+  margin: 0;
+  padding: var(--spacing-4) var(--spacing-12);
+  border-left: 1px solid var(--color-hairline);
+  color: var(--color-ash);
+  font-size: var(--text-micro);
+  line-height: var(--leading-micro);
+}
+
+.review-field-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.review-field-edit {
+  display: grid;
+  gap: var(--spacing-8);
+  width: 100%;
+}
+
+.review-field-edit[hidden] {
+  display: none;
+}
+
+.review-field-edit select {
+  min-height: var(--control-height);
+  padding: var(--spacing-8) var(--spacing-12);
+  border: 1px solid var(--color-input-hairline);
+  border-radius: var(--radius-inputs);
+  background: var(--surface-card);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.review-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+  padding-top: var(--spacing-16);
+  border-top: 1px solid var(--color-hairline);
+}
+
+/* A gated primary reads as unavailable rather than as a live highlighter CTA. */
+.review-foot .btn-primary:disabled {
+  border-color: var(--color-hairline);
+  background: var(--surface-nav-active);
+  color: var(--color-ash);
+  cursor: not-allowed;
+}
+
+.review-variant {
+  display: grid;
+  gap: var(--spacing-12);
+  justify-items: start;
+}
+
+@media (max-width: 960px) {
+  .review-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-viewer {
+    position: static;
+  }
+
+  .review-frame {
+    height: calc(100vh - var(--spacing-156));
   }
 }

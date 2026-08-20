@@ -133,6 +133,17 @@ describe("inboxEntrySchema", () => {
   test("rejects an entry without the unread flag", () => {
     expect(() => inboxEntrySchema.parse({ ...activity, clientName: client.legalName })).toThrow();
   });
+
+  test("passes through an optional documentId from the activity record", () => {
+    const entry = inboxEntrySchema.parse({
+      ...activity,
+      documentId: "doc-1",
+      clientName: client.legalName,
+      unread: false,
+    });
+
+    expect(entry.documentId).toBe("doc-1");
+  });
 });
 
 describe("metricsSchema", () => {

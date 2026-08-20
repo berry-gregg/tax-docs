@@ -408,6 +408,7 @@ async function buildSeedBook() {
         action: "document-uploaded",
         detail: `${document.filename} uploaded from portal`,
         direction: "inbound",
+        documentId: document.id,
         readAt: index === 0 ? SEED_CREATED_AT : undefined,
       }),
       activity({
@@ -417,6 +418,7 @@ async function buildSeedBook() {
         action: "document-extracted",
         detail: `${document.filename} — ${document.extraction?.fields.length ?? 0} fields extracted`,
         direction: "inbound",
+        documentId: document.id,
         readAt: SEED_CREATED_AT,
       }),
     ]),
@@ -437,6 +439,7 @@ async function buildSeedBook() {
         action: "document-uploaded",
         detail: `${document.filename} uploaded from portal`,
         direction: "inbound",
+        documentId: document.id,
         readAt: index < 2 ? undefined : SEED_CREATED_AT,
       }),
       activity({
@@ -446,6 +449,7 @@ async function buildSeedBook() {
         action: "document-extracted",
         detail: `${document.filename} — ${document.extraction?.fields.length ?? 0} fields extracted`,
         direction: "inbound",
+        documentId: document.id,
         readAt: document.pipelineStatus === "needs-review" ? undefined : SEED_CREATED_AT,
       }),
     ]),
