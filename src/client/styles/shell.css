@@ -669,21 +669,23 @@
   flex-shrink: 0;
 }
 
-/* Ticker strip — product hairline band under Home's recent rows. */
+/* Ticker strip — product hairline band under Home's recent rows. One single-line
+   horizontal band: label and value sit side by side, never stacked cards. */
 .ticker {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--spacing-24);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-8) var(--spacing-32);
   margin-top: var(--spacing-32);
-  padding: var(--spacing-20) 0;
+  padding: var(--spacing-12) 0;
   border-top: 1px solid var(--color-hairline);
   border-radius: 0;
   background: transparent;
 }
 
 .ticker-item {
-  display: grid;
-  gap: var(--spacing-4);
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-8);
   min-width: 0;
 }
 
@@ -913,7 +915,8 @@
   }
 
   .ticker {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    gap: var(--spacing-8);
   }
 
   .definition-grid {
@@ -1371,4 +1374,35 @@
   .review-frame {
     height: calc(100vh - var(--spacing-156));
   }
+}
+
+/*
+ * Home compaction (UX sweep) — dense single-line variant of the shared .list-row
+ * recipe for Home's recent documents, plus one token step off the Home wash card's
+ * vertical padding. Composes .list-row / .wash-card rather than forking them.
+ */
+.row-list-dense .list-row {
+  padding-block: var(--spacing-8);
+}
+
+.row-list-dense .list-row-body {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-8);
+  min-width: 0;
+}
+
+.row-list-dense .list-row-body .muted {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row-list-dense .avatar {
+  width: 24px;
+  height: 24px;
+}
+
+.page-home .wash-card {
+  padding-block: var(--spacing-20);
 }

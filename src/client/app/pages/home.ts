@@ -44,7 +44,7 @@ export function renderHome(data: HomeData): string {
         ${
           recent.length === 0
             ? emptyState("No documents yet. Uploads appear here as soon as a client sends one.")
-            : `<div class="row-list">${recent.map(renderRecentRow(data.now)).join("")}</div>`
+            : `<div class="row-list row-list-dense">${recent.map(renderRecentRow(data.now)).join("")}</div>`
         }
         <a class="text-link" href="${ALL_DOCUMENTS_HREF}" data-nav-link>View all documents${icons.arrow}</a>
       </section>

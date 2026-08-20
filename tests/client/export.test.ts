@@ -150,7 +150,8 @@ describe("export page", () => {
     const html = renderExport(data());
 
     expect(html).toContain("$512,000.00");
-    expect(html).toContain("Missing — no trusted source");
+    expect(html).toContain('<span class="muted" title="No trusted source">—</span>');
+    expect(html).not.toContain("Missing — no trusted source");
     expect(html).toContain("Salaries and wages");
     expect(html).toContain("Rents");
     expect(html).toContain("Form 1120-S");
@@ -214,10 +215,17 @@ describe("export page", () => {
   test("missing values use muted ash, not warning or inverted surfaces", () => {
     const html = renderExport(data());
 
-    expect(html).toContain('<span class="muted">Missing — no trusted source</span>');
+    expect(html).toContain('<span class="muted" title="No trusted source">—</span>');
     expect(html).not.toContain("chip-warning");
     expect(html).not.toContain("surface-inverted");
     expect(html).not.toContain("box-shadow");
+  });
+
+  test("draft confirm affordance is a compact hairline bar, not a page-header footer", () => {
+    const html = renderExport(data());
+
+    expect(html).toContain('<footer class="review-foot"');
+    expect(html).not.toContain('<footer class="page-header">');
   });
 
   test("only the confirm action uses the highlighter primary button", () => {

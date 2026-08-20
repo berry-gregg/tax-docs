@@ -28,7 +28,7 @@ function assertExportRoute(route: Route): asserts route is Extract<Route, { page
 
 export function formatLineValue(value: ExportLine["value"]): string {
   if (value === null) {
-    return `<span class="muted">Missing — no trusted source</span>`;
+    return `<span class="muted" title="No trusted source">—</span>`;
   }
 
   if (typeof value === "number") {
@@ -178,11 +178,9 @@ export function renderExport(data: ExportData): string {
     )}
     ${
       exportRecord.status === "draft"
-        ? `<footer class="page-header">
-            <div></div>
-            <div class="page-actions">
-              <button class="btn-primary" type="button" data-export-open>Confirm &amp; send to tax engine</button>
-            </div>
+        ? `<footer class="review-foot">
+            <span class="muted">Sending to the tax engine requires your confirmation.</span>
+            <button class="btn-primary" type="button" data-export-open>Confirm &amp; send to tax engine</button>
           </footer>`
         : ""
     }

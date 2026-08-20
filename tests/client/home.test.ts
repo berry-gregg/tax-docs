@@ -81,6 +81,13 @@ describe("home page", () => {
     expect(html).toContain("Recent documents");
   });
 
+  test("recent rows are dense single-line rows with the filename shown exactly once", () => {
+    const html = renderHome(data());
+
+    expect(html).toContain('class="row-list row-list-dense"');
+    expect(html.split("northwind-w2.pdf").length - 1).toBe(1);
+  });
+
   test("View all documents links to the documents all tab", () => {
     const html = renderHome(data());
 
