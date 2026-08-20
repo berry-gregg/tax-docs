@@ -452,6 +452,145 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+function unclassifiedData(): ReviewData {
+  return data({
+    documentType: null,
+    document: document({
+      pipelineStatus: "unclassified",
+      classification: {
+        documentTypeId: null,
+        confidence: 0.31,
+        reasoning: "No active document type matches a state apportionment schedule.",
+      },
+      extraction: undefined,
+    }),
+  });
+}
+
+function draftType(name: string) {
+  return {
+    name,
+    description: `${name} description.`,
+    active: true,
+    fields: [
+      {
+        key: "sales_factor",
+        label: "Sales factor",
+        metadataType: "percentage" as const,
+        dataType: "double" as const,
+        required: true,
+        description: "In-state sales ratio.",
+      },
+    ],
+  };
+}
+
+type ReviewListener = (event: { target: FakeReviewElement; preventDefault(): void }) => void;
+
+class FakeReviewElement {
+  dataset: Record<string, string | undefined> = {};
+  innerHTML = "";
+  textContent = "";
+  disabled = false;
+  private readonly listeners = new Map<string, ReviewListener[]>();
+
+  constructor(readonly selector: string) {}
+
+  addEventListener(type: string, listener: ReviewListener): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  dispatch(type: string): void {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener({ target: this, preventDefault() {} });
+    }
+  }
+
+  querySelector(selector: string): FakeReviewElement | null {
+    if (selector === ".side-panel" && this.innerHTML.includes("side-panel")) {
+      return new FakeReviewElement(".side-panel");
+    }
+    return null;
+  }
+
+  querySelectorAll(): FakeReviewElement[] {
+    return [];
+  }
+}
+
+function makeFakeReviewRoot() {
+  const define = new FakeReviewElement("[data-define-document-type]");
+  define.textContent = "Define document type";
+  const slot = new FakeReviewElement("[data-schema-panel-slot]");
+
+  return {
+    define,
+    slot,
+    querySelector(selector: string) {
+      if (selector === "[data-define-document-type]") {
+        return define;
+      }
+      if (selector === "[data-schema-panel-slot]") {
+        return slot;
+      }
+      return null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+  };
+}
+
+async function clickDefine(root: ReturnType<typeof makeFakeReviewRoot>): Promise<void> {
+  root.define.dispatch("click");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("review define-type schema builder", () => {
+  test("define document type mounts a modal wash and keeps the first draft if define is clicked again", async () => {
+    const drafts = [draftType("State apportionment"), draftType("Schedule K-1")];
+    stubFetch((url) =>
+      url.includes("/draft-type")
+        ? jsonResponse({ draft: drafts.shift() ?? draftType("fallback") })
+        : jsonResponse({}),
+    );
+    const root = makeFakeReviewRoot();
+
+    reviewPage.bind?.(root as unknown as HTMLElement, unclassifiedData(), () => {});
+    await clickDefine(root);
+
+    expect(root.slot.innerHTML).toContain('class="modal"');
+    expect(root.slot.innerHTML).toContain("data-schema-scrim");
+    expect(root.slot.innerHTML).toContain("State apportionment");
+    expect(root.slot.innerHTML).toContain("Edit schema");
+
+    await clickDefine(root);
+
+    expect(root.slot.innerHTML).toContain("State apportionment");
+    expect(root.slot.innerHTML).not.toContain("Schedule K-1");
+  });
+
+  test("closing the schema builder allows a later define to mount a new draft", async () => {
+    const drafts = [draftType("State apportionment"), draftType("Schedule K-1")];
+    stubFetch((url) =>
+      url.includes("/draft-type")
+        ? jsonResponse({ draft: drafts.shift() ?? draftType("fallback") })
+        : jsonResponse({}),
+    );
+    const root = makeFakeReviewRoot();
+
+    reviewPage.bind?.(root as unknown as HTMLElement, unclassifiedData(), () => {});
+    await clickDefine(root);
+    expect(root.slot.innerHTML).toContain("State apportionment");
+
+    root.slot.innerHTML = "";
+    await clickDefine(root);
+
+    expect(root.slot.innerHTML).toContain('class="modal"');
+    expect(root.slot.innerHTML).toContain("Schedule K-1");
+  });
+});
+
 describe("review page load", () => {
   const route: Route = { page: "review", engagementId: "eng-1", documentId: "doc-1" };
 

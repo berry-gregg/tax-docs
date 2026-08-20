@@ -518,6 +518,10 @@ function bindDefineDocumentType(root: HTMLElement, data: ReviewData, repaint: ()
   }
 
   button.addEventListener("click", () => {
+    if (slot.querySelector(".side-panel")) {
+      return;
+    }
+
     const label = button.textContent;
     button.disabled = true;
     button.textContent = "Drafting schema…";
@@ -549,7 +553,11 @@ function openSchemaBuilder(
   draft: CreateDocumentTypeInput,
   repaint: () => void,
 ): void {
-  slot.innerHTML = renderSchemaBuilder(draft);
+  if (slot.querySelector(".side-panel")) {
+    return;
+  }
+
+  slot.innerHTML = `<div class="modal" data-schema-scrim aria-hidden="true"></div>${renderSchemaBuilder(draft)}`;
   const panel = slot.querySelector<HTMLElement>(".side-panel");
   if (!panel) {
     return;
