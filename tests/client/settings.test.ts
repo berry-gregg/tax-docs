@@ -116,6 +116,48 @@ describe("settings page", () => {
       globalThis.HTMLInputElement = originalInput;
     }
   });
+
+  test("open schema builder mounts a modal wash and keeps the draft when another edit starts", () => {
+    const originalInput = globalThis.HTMLInputElement;
+    globalThis.HTMLInputElement = FakeSettingsInput as unknown as typeof HTMLInputElement;
+    const root = makeFakeSettingsRoot();
+
+    try {
+      settingsPage.bind?.(root as unknown as HTMLElement, data(), () => {});
+      root.row.dispatch("click", root.row);
+
+      expect(root.slot.innerHTML).toContain('class="modal"');
+      expect(root.slot.innerHTML).toContain("Edit schema");
+
+      root.newType.dispatch("click", root.newType);
+      root.row.dispatch("click", root.row);
+
+      expect(root.slot.innerHTML).toContain("Edit schema");
+      expect(root.slot.innerHTML).not.toContain("New schema");
+    } finally {
+      globalThis.HTMLInputElement = originalInput;
+    }
+  });
+
+  test("closing the schema builder allows a later open to mount a different draft", () => {
+    const originalInput = globalThis.HTMLInputElement;
+    globalThis.HTMLInputElement = FakeSettingsInput as unknown as typeof HTMLInputElement;
+    const root = makeFakeSettingsRoot();
+
+    try {
+      settingsPage.bind?.(root as unknown as HTMLElement, data(), () => {});
+      root.row.dispatch("click", root.row);
+      expect(root.slot.innerHTML).toContain("Edit schema");
+
+      root.slot.innerHTML = "";
+      root.newType.dispatch("click", root.newType);
+
+      expect(root.slot.innerHTML).toContain('class="modal"');
+      expect(root.slot.innerHTML).toContain("New schema");
+    } finally {
+      globalThis.HTMLInputElement = originalInput;
+    }
+  });
 });
 
 type SettingsListener = (event: {
@@ -149,7 +191,10 @@ class FakeSettingsElement {
     return null;
   }
 
-  querySelector(): FakeSettingsElement | null {
+  querySelector(selector: string): FakeSettingsElement | null {
+    if (selector === ".side-panel" && this.innerHTML.includes("side-panel")) {
+      return new FakeSettingsElement(".side-panel");
+    }
     return null;
   }
 
@@ -171,14 +216,19 @@ function makeFakeSettingsRoot() {
   const statusText = new FakeSettingsElement("span");
   statusText.parent = toggleLabel;
   const slot = new FakeSettingsElement("[data-schema-panel-slot]");
+  const newType = new FakeSettingsElement("[data-new-document-type]");
 
   return {
     row,
     slot,
     statusText,
+    newType,
     querySelector(selector: string) {
       if (selector === "[data-schema-panel-slot]") {
         return slot;
+      }
+      if (selector === "[data-new-document-type]") {
+        return newType;
       }
       return null;
     },

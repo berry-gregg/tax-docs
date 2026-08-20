@@ -198,12 +198,12 @@ function openBuilder(
   onSave: (input: CreateDocumentTypeInput) => Promise<void>,
 ): void {
   const slot = root.querySelector<HTMLElement>("[data-schema-panel-slot]");
-  if (!slot) {
+  if (!slot || slot.querySelector(".side-panel")) {
     return;
   }
 
   const input = draft ? toBuilderInput(draft) : null;
-  slot.innerHTML = renderSchemaBuilder(input);
+  slot.innerHTML = `<div class="modal" data-schema-scrim aria-hidden="true"></div>${renderSchemaBuilder(input)}`;
   const panel = slot.querySelector<HTMLElement>(".side-panel");
   if (!panel) {
     return;
